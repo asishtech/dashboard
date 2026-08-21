@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Item = {
@@ -19,7 +19,6 @@ type Registration = {
 };
 
 export default function ScannerPage() {
-
   const [registration, setRegistration] =
     useState<Registration | null>(null);
 
@@ -29,137 +28,226 @@ export default function ScannerPage() {
   const [busy, setBusy] =
     useState(false);
 
+  const scannerRef =
+    useRef<any>(null);
+
+  const clearingRef =
+    useRef(false);
+
+  const mountedRef =
+    useRef(true);
 
   useEffect(() => {
-
-    let scanner: any;
+    mountedRef.current = true;
 
     async function start() {
-
-      const {
-        Html5QrcodeScanner
-      } = await import(
-        "html5-qrcode"
-      );
-
-      scanner =
-        new Html5QrcodeScanner(
-          "qr-reader",
-          {
-            fps: 10,
-            qrbox: {
-              width: 280,
-              height: 280,
-            },
-          },
-          false
+      try {
+        const {
+          Html5QrcodeScanner,
+        } = await import(
+          "html5-qrcode"
         );
 
+        if (!mountedRef.current) {
+          return;
+        }
 
-      scanner.render(
-        async (
-          decodedText: string
-        ) => {
+        const scanner =
+          new Html5QrcodeScanner(
+            "qr-reader",
+            {
+              fps: 10,
+              qrbox: {
+                width: 280,
+                height: 280,
+              },
+            },
+            false
+          );
 
-          await scanner.clear();
+        scannerRef.current =
+          scanner;
 
-          try {
-
-            const url =
-              new URL(
-                decodedText
-              );
-
-            const parts =
-              url.pathname.split(
-                "/"
-              );
-
-            const tokenIndex =
-              parts.indexOf(
-                "claim"
-              );
-
-            const token =
-              tokenIndex >= 0
-                ? parts[
-                    tokenIndex + 1
-                  ]
-                : null;
-
-            if (!token) {
-              throw new Error(
-                "Invalid V-TAPP QR code"
-              );
+        scanner.render(
+          async (
+            decodedText: string
+          ) => {
+            /*
+             * Prevent the same QR from being
+             * processed multiple times.
+             */
+            if (
+              clearingRef.current
+            ) {
+              return;
             }
 
-            const response =
-              await fetch(
-                `/api/distribution/${token}`
-              );
+            clearingRef.current =
+              true;
 
-            const data =
-              await response.json();
+            try {
+              /*
+               * Stop the scanner safely.
+               *
+               * html5-qrcode can throw
+               * NotFoundError when clear()
+               * races with React cleanup.
+               */
+              try {
+                await scanner.clear();
+              } catch (clearError) {
+                console.warn(
+                  "QR scanner already cleared:",
+                  clearError
+                );
+              }
 
-            if (!response.ok) {
-              throw new Error(
-                data.error ||
-                  "Invalid QR"
-              );
+              if (
+                scannerRef.current ===
+                scanner
+              ) {
+                scannerRef.current =
+                  null;
+              }
+
+              /*
+               * Extract token from QR URL.
+               */
+              const url =
+                new URL(
+                  decodedText
+                );
+
+              const parts =
+                url.pathname.split(
+                  "/"
+                );
+
+              const tokenIndex =
+                parts.indexOf(
+                  "claim"
+                );
+
+              const token =
+                tokenIndex >= 0
+                  ? parts[
+                      tokenIndex + 1
+                    ]
+                  : null;
+
+              if (!token) {
+                throw new Error(
+                  "Invalid V-TAPP QR code"
+                );
+              }
+
+              /*
+               * Fetch registration.
+               */
+              const response =
+                await fetch(
+                  `/api/distribution/${token}`,
+                  {
+                    cache:
+                      "no-store",
+                  }
+                );
+
+              const data =
+                await response.json();
+
+              if (!response.ok) {
+                throw new Error(
+                  data.error ||
+                    "Invalid QR"
+                );
+              }
+
+              if (
+                mountedRef.current
+              ) {
+                setError("");
+                setRegistration(
+                  data.registration
+                );
+              }
+
+            } catch (err) {
+              if (
+                mountedRef.current
+              ) {
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : "Invalid QR"
+                );
+              }
             }
+          },
+          () => {}
+        );
 
-            setRegistration(
-              data.registration
-            );
-
-          } catch (err) {
-
-            setError(
-              err instanceof Error
-                ? err.message
-                : "Invalid QR"
-            );
-
-          }
-
-        },
-        () => {}
-      );
+      } catch (err) {
+        if (
+          mountedRef.current
+        ) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to start QR scanner"
+          );
+        }
+      }
     }
 
     start();
 
     return () => {
+      mountedRef.current =
+        false;
 
-      try {
-        scanner?.clear();
-      } catch {}
+      const scanner =
+        scannerRef.current;
 
+      scannerRef.current =
+        null;
+
+      if (!scanner) {
+        return;
+      }
+
+      /*
+       * Cleanup is deliberately
+       * fire-and-forget.
+       *
+       * Do not await clear() during
+       * React unmount.
+       */
+      Promise.resolve(
+        scanner.clear()
+      ).catch(() => {
+        // Scanner may already be cleared.
+      });
     };
-
   }, []);
 
 
   async function markGiven(
     itemId: number
   ) {
-
     setBusy(true);
     setError("");
 
     try {
-
       const response =
         await fetch(
           "/api/distribution",
           {
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json",
             },
-
             body: JSON.stringify({
               registrationItemId:
                 itemId,
@@ -182,25 +270,29 @@ export default function ScannerPage() {
       );
 
     } catch (err) {
-
       setError(
         err instanceof Error
           ? err.message
           : "Unable to distribute"
       );
-
     } finally {
-
       setBusy(false);
-
     }
   }
 
 
+  function resetScanner() {
+    setRegistration(null);
+    setError("");
+    clearingRef.current =
+      false;
+
+    window.location.reload();
+  }
+
+
   return (
-
     <main className="dashboard">
-
       <div className="container">
 
         <header className="header">
@@ -226,155 +318,203 @@ export default function ScannerPage() {
 
 
         {error && (
-
           <div className="error-banner">
-            ⚠️ {error}
+            {error}
           </div>
-
         )}
 
 
         {!registration && (
-
           <section className="sales-panel">
+
+            <h2>
+              Scan Buyer QR
+            </h2>
+
+            <p className="panel-subtitle">
+              Scan the QR code provided to
+              the buyer.
+            </p>
 
             <div
               id="qr-reader"
               style={{
-                maxWidth:
-                  "500px",
+                width: "100%",
+                maxWidth: "500px",
                 margin:
-                  "0 auto",
+                  "24px auto 0",
               }}
             />
 
           </section>
-
         )}
 
 
         {registration && (
-
           <section className="sales-panel">
-
-            <h2>
-              {registration.name}
-            </h2>
-
-            <p>
-              {registration.email}
-            </p>
-
-            <p>
-              Registration #
-              {registration.registration_id}
-            </p>
-
 
             <div
               style={{
-                marginTop:
-                  "25px",
+                display: "flex",
+                justifyContent:
+                  "space-between",
+                alignItems: "flex-start",
+                gap: "20px",
+                flexWrap: "wrap",
               }}
             >
 
-              {registration.items.map(
-                item => (
+              <div>
+                <h2>
+                  {registration.name}
+                </h2>
 
-                  <div
-                    key={
-                      item.id
-                    }
-                    style={{
-                      padding:
-                        "18px",
-                      border:
-                        "1px solid #e5e7eb",
-                      borderRadius:
-                        "12px",
-                      marginBottom:
-                        "12px",
-                      display:
-                        "flex",
-                      justifyContent:
-                        "space-between",
-                      alignItems:
-                        "center",
-                    }}
-                  >
+                <p
+                  className="panel-subtitle"
+                >
+                  {registration.email}
+                </p>
 
-                    <div>
+                <p
+                  className="panel-subtitle"
+                >
+                  Registration:{" "}
+                  {
+                    registration.registration_id
+                  }
+                </p>
+              </div>
 
-                      <strong>
-                        {item.item}
-                      </strong>
-
-                      {item.size && (
-                        <div>
-                          Size:{" "}
-                          {item.size}
-                        </div>
-                      )}
-
-                    </div>
-
-
-                    {item.status ===
-                    "GIVEN" ? (
-
-                      <span className="type-badge single">
-                        ✓ GIVEN
-                      </span>
-
-                    ) : (
-
-                      <button
-                        className="save-button"
-                        disabled={
-                          busy
-                        }
-                        onClick={() =>
-                          markGiven(
-                            item.id
-                          )
-                        }
-                      >
-                        MARK GIVEN
-                      </button>
-
-                    )}
-
-                  </div>
-
-                )
-              )}
+              <button
+                type="button"
+                className="admin-link"
+                onClick={
+                  resetScanner
+                }
+              >
+                Scan Another
+              </button>
 
             </div>
 
 
-            <button
-              className="admin-link"
+            <div
               style={{
-                marginTop:
-                  "15px",
-                border:
-                  "none",
-                cursor:
-                  "pointer",
+                marginTop: "28px",
               }}
-              onClick={() =>
-                window.location.reload()
-              }
             >
-              Scan Another QR
-            </button>
+
+              <h3>
+                Merchandise
+              </h3>
+
+
+              {registration.items.map(
+                (item) => {
+
+                  const given =
+                    item.status ===
+                    "GIVEN";
+
+                  return (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "space-between",
+                        alignItems:
+                          "center",
+                        gap: "16px",
+                        padding:
+                          "16px 0",
+                        borderBottom:
+                          "1px solid #e5e7eb",
+                        flexWrap:
+                          "wrap",
+                      }}
+                    >
+
+                      <div>
+
+                        <strong>
+                          {item.item}
+                        </strong>
+
+                        {item.size && (
+                          <div
+                            style={{
+                              color:
+                                "#64748b",
+                              fontSize:
+                                "13px",
+                              marginTop:
+                                "4px",
+                            }}
+                          >
+                            Size:{" "}
+                            {item.size}
+                          </div>
+                        )}
+
+                        {item.quantity >
+                          1 && (
+                          <div
+                            style={{
+                              color:
+                                "#64748b",
+                              fontSize:
+                                "13px",
+                              marginTop:
+                                "4px",
+                            }}
+                          >
+                            Quantity:{" "}
+                            {item.quantity}
+                          </div>
+                        )}
+
+                      </div>
+
+
+                      {given ? (
+
+                        <span
+                          className="type-badge single"
+                        >
+                          GIVEN
+                        </span>
+
+                      ) : (
+
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            markGiven(
+                              item.id
+                            )
+                          }
+                          className="qr-button"
+                        >
+                          {busy
+                            ? "Updating..."
+                            : "Mark as Given"}
+                        </button>
+
+                      )}
+
+                    </div>
+                  );
+                }
+              )}
+
+            </div>
 
           </section>
-
         )}
 
       </div>
-
     </main>
   );
 }

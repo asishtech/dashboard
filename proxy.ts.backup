@@ -70,19 +70,6 @@ export async function proxy(
 
 
   /*
-   * API routes handle their own authentication
-   * and authorization.
-   *
-   * Do NOT redirect API requests to /login.
-   * Otherwise fetch() receives a 307 redirect
-   * instead of the actual API response.
-   */
-  if (path.startsWith("/api/")) {
-    return response;
-  }
-
-
-  /*
    * Public authentication routes.
    */
   const isAuthRoute =
