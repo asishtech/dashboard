@@ -340,16 +340,6 @@ export default function AdminPage() {
     distribution.pending;
 
 
-
-  const distributionTotal =
-    Math.max(
-      givenCount + pendingCount,
-      1
-    );
-
-  const givenPercent =
-    (givenCount / distributionTotal) * 100;
-
   /*
    * Inventory chart maximum.
    */
@@ -642,208 +632,351 @@ export default function AdminPage() {
           }}
         >
 
+          {/* SALES BY MERCHANDISE */}
+
           <ChartCard
             title="Sales by Merchandise"
             description="Items sold from current inventory."
           >
 
-            {inventory.length === 0 ? (
-              <EmptyChart />
-            ) : (
-              <div
-                style={{
-                  display:
-                    "flex",
-                  flexDirection:
-                    "column",
-                  gap:
-                    "16px",
-                }}
-              >
-                {inventory.map(
-                  (item) => {
+            <div className="merch-card redesigned-sales-card">
 
-                    const sold =
-                      Number(
-                        item.sold ??
-                          0
-                      );
+              <div className="merch-card-heading">
 
-                    const width =
-                      Math.max(
-                        3,
-                        (sold /
-                          maxSold) *
-                          100
-                      );
+                <div className="merch-icon sales-icon">
+                  <span>🛒</span>
+                </div>
 
-                    return (
-                      <div
-                        key={
-                          item.id
-                        }
-                      >
+                <div>
+                  <h3>Sales by Merchandise</h3>
+                  <p>Items sold from current inventory.</p>
+                </div>
 
-                        <div
-                          style={{
-                            display:
-                              "flex",
-                            justifyContent:
-                              "space-between",
-                            fontSize:
-                              "13px",
-                            marginBottom:
-                              "6px",
-                          }}
-                        >
-                          <span>
-                            {
-                              item.item
-                            }
-                          </span>
+              </div>
+
+              <div className="merch-list">
+
+                {inventory.map((item) => {
+
+                  const sold =
+                    Math.max(
+                      Number(item.sold ?? 0),
+                      0
+                    );
+
+                  const totalSold =
+                    Math.max(
+                      inventory.reduce(
+                        (sum, current) =>
+                          sum +
+                          Math.max(
+                            Number(current.sold ?? 0),
+                            0
+                          ),
+                        0
+                      ),
+                      1
+                    );
+
+                  const soldShare =
+                    Math.round(
+                      (sold / totalSold) * 100
+                    );
+
+                  return (
+
+                    <div
+                      className="merch-row"
+                      key={`sales-${item.id}`}
+                    >
+
+                      <div className="merch-row-top">
+
+                        <span className="merch-name">
+                          {item.item}
+                        </span>
+
+                        <div className="merch-value-group">
 
                           <strong>
                             {sold}
                           </strong>
-                        </div>
 
-                        <div
-                          style={{
-                            height:
-                              "10px",
-                            background:
-                              "#e2e8f0",
-                            borderRadius:
-                              "999px",
-                            overflow:
-                              "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height:
-                                "100%",
-                              width:
-                                `${width}%`,
-                              background:
-                                "#0f172a",
-                              borderRadius:
-                                "999px",
-                              transition:
-                                "width 0.4s ease",
-                            }}
-                          />
+                          <span className="merch-percent sales-percent">
+                            {soldShare}%
+                          </span>
+
                         </div>
 
                       </div>
-                    );
-                  }
-                )}
+
+                      <div className="merch-track">
+                        <div
+                          className="merch-fill sales-fill"
+                          style={{
+                            width: `${soldShare}%`,
+                          }}
+                        />
+                      </div>
+
+                    </div>
+
+                  );
+
+                })}
+
               </div>
-            )}
+
+              <div className="merch-summary sales-summary">
+
+                <div className="summary-icon sales-summary-icon">
+                  <span>▥</span>
+                </div>
+
+                <div className="summary-stat">
+
+                  <span>Total Sold</span>
+
+                  <strong>
+                    {inventory.reduce(
+                      (sum, item) =>
+                        sum +
+                        Math.max(
+                          Number(item.sold ?? 0),
+                          0
+                        ),
+                      0
+                    )}
+                  </strong>
+
+                </div>
+
+                <div className="summary-divider" />
+
+                <div className="summary-stat">
+
+                  <span>Avg. Sell-through</span>
+
+                  <strong>
+                    {inventory.length
+                      ? Math.round(
+                          inventory.reduce(
+                            (sum, item) => {
+                              const initial =
+                                Math.max(
+                                  Number(
+                                    item.initial_stock ?? 0
+                                  ),
+                                  0
+                                );
+
+                              const sold =
+                                Math.max(
+                                  Number(
+                                    item.sold ?? 0
+                                  ),
+                                  0
+                                );
+
+                              return (
+                                sum +
+                                (initial > 0
+                                  ? (sold / initial) * 100
+                                  : 0)
+                              );
+                            },
+                            0
+                          ) /
+                            inventory.length
+                        )
+                      : 0}
+                    %
+                  </strong>
+
+                </div>
+
+              </div>
+
+            </div>
 
           </ChartCard>
 
+
+          {/* INVENTORY REMAINING */}
 
           <ChartCard
             title="Inventory Remaining"
             description="Remaining stock by merchandise."
           >
 
-            {inventory.length === 0 ? (
-              <EmptyChart />
-            ) : (
-              <div
-                style={{
-                  display:
-                    "flex",
-                  flexDirection:
-                    "column",
-                  gap:
-                    "16px",
-                }}
-              >
-                {inventory.map(
-                  (item) => {
+            <div className="merch-card redesigned-inventory-card">
 
-                    const remaining =
+              <div className="merch-card-heading">
+
+                <div className="merch-icon inventory-icon">
+                  <span>◇</span>
+                </div>
+
+                <div>
+                  <h3>Inventory Remaining</h3>
+                  <p>Remaining stock by merchandise.</p>
+                </div>
+
+              </div>
+
+              <div className="merch-list">
+
+                {inventory.map((item) => {
+
+                  const initial =
+                    Math.max(
                       Number(
-                        item.remaining ??
-                          0
-                      );
+                        item.initial_stock ?? 0
+                      ),
+                      1
+                    );
 
-                    const width =
-                      Math.max(
-                        3,
-                        (remaining /
-                          maxRemaining) *
-                          100
-                      );
+                  const remaining =
+                    Math.max(
+                      Number(
+                        item.remaining ?? 0
+                      ),
+                      0
+                    );
 
-                    return (
-                      <div
-                        key={
-                          item.id
-                        }
-                      >
+                  const remainingPercent =
+                    Math.round(
+                      (remaining / initial) * 100
+                    );
 
-                        <div
-                          style={{
-                            display:
-                              "flex",
-                            justifyContent:
-                              "space-between",
-                            fontSize:
-                              "13px",
-                            marginBottom:
-                              "6px",
-                          }}
-                        >
-                          <span>
-                            {
-                              item.item
-                            }
-                          </span>
+                  return (
+
+                    <div
+                      className="merch-row"
+                      key={`remaining-${item.id}`}
+                    >
+
+                      <div className="merch-row-top">
+
+                        <span className="merch-name">
+                          {item.item}
+                        </span>
+
+                        <div className="merch-value-group">
 
                           <strong>
                             {remaining}
                           </strong>
-                        </div>
 
-                        <div
-                          style={{
-                            height:
-                              "10px",
-                            background:
-                              "#e2e8f0",
-                            borderRadius:
-                              "999px",
-                            overflow:
-                              "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height:
-                                "100%",
-                              width:
-                                `${width}%`,
-                              background:
-                                "#475569",
-                              borderRadius:
-                                "999px",
-                              transition:
-                                "width 0.4s ease",
-                            }}
-                          />
+                          <span className="merch-percent inventory-percent">
+                            {remainingPercent}%
+                          </span>
+
                         </div>
 
                       </div>
-                    );
-                  }
-                )}
+
+                      <div className="merch-track">
+                        <div
+                          className="merch-fill inventory-fill-orange"
+                          style={{
+                            width: `${Math.min(
+                              remainingPercent,
+                              100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+
+                    </div>
+
+                  );
+
+                })}
+
               </div>
-            )}
+
+              <div className="merch-summary inventory-summary">
+
+                <div className="summary-icon inventory-summary-icon">
+                  <span>◇</span>
+                </div>
+
+                <div className="summary-stat">
+
+                  <span>Total Remaining</span>
+
+                  <strong>
+                    {inventory.reduce(
+                      (sum, item) =>
+                        sum +
+                        Math.max(
+                          Number(
+                            item.remaining ?? 0
+                          ),
+                          0
+                        ),
+                      0
+                    ).toLocaleString()}
+                  </strong>
+
+                </div>
+
+                <div className="summary-divider" />
+
+                <div className="summary-stat">
+
+                  <span>Inventory Utilization</span>
+
+                  <strong>
+                    {(() => {
+
+                      const totalInitial =
+                        inventory.reduce(
+                          (sum, item) =>
+                            sum +
+                            Math.max(
+                              Number(
+                                item.initial_stock ?? 0
+                              ),
+                              0
+                            ),
+                          0
+                        );
+
+                      const totalRemaining =
+                        inventory.reduce(
+                          (sum, item) =>
+                            sum +
+                            Math.max(
+                              Number(
+                                item.remaining ?? 0
+                              ),
+                              0
+                            ),
+                          0
+                        );
+
+                      if (!totalInitial) {
+                        return 0;
+                      }
+
+                      return Math.round(
+                        ((totalInitial -
+                          totalRemaining) /
+                          totalInitial) *
+                          100
+                      );
+
+                    })()}
+                    %
+                  </strong>
+
+                </div>
+
+              </div>
+
+            </div>
 
           </ChartCard>
 
@@ -853,79 +986,48 @@ export default function AdminPage() {
             description="Physical merchandise handover status."
           >
 
-            <div className="admin-distribution-layout">
+            <div
+              style={{
+                display:
+                  "flex",
+                gap:
+                  "30px",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
+                minHeight:
+                  "180px",
+              }}
+            >
 
-              <div
-                className="admin-distribution-pie"
-                style={{
-                  background:
-                    "conic-gradient(" +
-                    "#84cc16 0deg " +
-                    (givenPercent * 3.6) +
-                    "deg, " +
-                    "#f97316 " +
-                    (givenPercent * 3.6) +
-                    "deg 360deg)"
-                }}
-              >
-                <div className="admin-distribution-pie-inner">
+              <DistributionCircle
+                label="Given"
+                value={
+                  givenCount
+                }
+                total={
+                  givenCount +
+                  pendingCount
+                }
+                className="given"
+              />
 
-                  <strong>
-                    {givenCount + pendingCount}
-                  </strong>
-
-                  <span>
-                    TOTAL
-                  </span>
-
-                </div>
-              </div>
-
-
-              <div className="admin-distribution-stats">
-
-                <div className="admin-distribution-stat admin-given">
-
-                  <div className="admin-stat-label">
-                    <span />
-                    GIVEN
-                  </div>
-
-                  <strong>
-                    {givenCount}
-                  </strong>
-
-                  <small>
-                    {Math.round(givenPercent)}%
-                  </small>
-
-                </div>
-
-
-                <div className="admin-distribution-stat admin-pending">
-
-                  <div className="admin-stat-label">
-                    <span />
-                    PENDING
-                  </div>
-
-                  <strong>
-                    {pendingCount}
-                  </strong>
-
-                  <small>
-                    {Math.round(
-                      100 - givenPercent
-                    )}%
-                  </small>
-
-                </div>
-
-              </div>
+              <DistributionCircle
+                label="Pending"
+                value={
+                  pendingCount
+                }
+                total={
+                  givenCount +
+                  pendingCount
+                }
+                className="pending"
+              />
 
             </div>
 
-</ChartCard>
+          </ChartCard>
 
         </section>
 
@@ -942,12 +1044,6 @@ export default function AdminPage() {
             title="Registrations"
             description="View buyers, merchandise, distribution status and QR codes."
             href="/admin/registrations"
-          />
-
-          <AdminCard
-            title="User Management"
-            description="Add administrators and volunteers by Google account email."
-            href="/admin/users"
           />
 
           <AdminCard

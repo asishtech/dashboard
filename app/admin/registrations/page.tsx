@@ -1,240 +1,444 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 
-export default function AdminRegistrations() {
+type RegistrationItem = {
+  id: number;
+  item: string;
+  size: string | null;
+  quantity: number;
+  status?: string;
+};
 
-  const [records, setRecords] =
-    useState<any[]>([]);
+type Registration = {
+  registration_id: string;
+  name: string;
+  email: string;
+  total?: number | null;
+  items?: RegistrationItem[];
+};
+
+export default function RegistrationsPage() {
+  const [registrations, setRegistrations] =
+    useState<Registration[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
 
   const [search, setSearch] =
     useState("");
 
-  const [updatingItem, setUpdatingItem] =
-    useState<number | null>(null);
+  const [filter, setFilter] =
+    useState<
+      "ALL" | "GIVEN" | "PENDING"
+    >("ALL");
 
-  async function updateDistribution(
-    registrationItemId: number,
-    currentStatus: string
-  ) {
-    const nextStatus =
-      currentStatus === "GIVEN"
-        ? "PENDING"
-        : "GIVEN";
+  const [error, setError] =
+    useState("");
 
-    const confirmed =
-      window.confirm(
-        nextStatus === "GIVEN"
-          ? "Mark this item as distributed?"
-          : "Mark this item as not distributed?"
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setUpdatingItem(
-      registrationItemId
-    );
-
-    try {
-      const response =
-        await fetch(
-          "/api/distribution",
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              registrationItemId,
-              status: nextStatus,
-            }),
-          }
-        );
-
-      const result =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.error ||
-            "Failed to update distribution"
-        );
-      }
-
-      setRecords(
-        current =>
-          current.map(record => ({
-            ...record,
-
-            items:
-              record.items?.map(
-                (item: any) => {
-
-                  if (
-                    item.id !==
-                    registrationItemId
-                  ) {
-                    return item;
-                  }
-
-                  return {
-                    ...item,
-
-                    distribution: [
-                      {
-                        status:
-                          nextStatus,
-                      },
-                    ],
-
-                    status:
-                      nextStatus,
-                  };
-                }
-              ),
-          }))
-      );
-
-    } catch (error) {
-      console.error(
-        "Distribution update failed:",
-        error
-      );
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Failed to update distribution"
-      );
-
-    } finally {
-      setUpdatingItem(
-        null
-      );
-    }
-  }
-
-
-  useEffect(() => {
-
-    async function load() {
-
-      const response =
-        await fetch(
-          "/api/registrations",
-          {
-            cache: "no-store",
-          }
-        );
-
-      const data =
-        await response.json();
-
-      setRecords(
-        data.data ?? []
-      );
-    }
-
-    load();
-
-  }, []);
-
-
-  const filtered =
-    records.filter(
-      record => {
-
-        const q =
-          search
-            .toLowerCase()
-            .trim();
-
-        if (!q) {
-          return true;
+  const loadRegistrations =
+    useCallback(
+      async (
+        showLoading = false
+      ) => {
+        if (showLoading) {
+          setRefreshing(true);
         }
 
-        return JSON.stringify(
-          record
-        )
-          .toLowerCase()
-          .includes(q);
-      }
+        try {
+          setError("");
+
+          const response =
+            await fetch(
+              "/api/registrations",
+              {
+                cache: "no-store",
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                "Failed to load registrations"
+            );
+          }
+
+          setRegistrations(
+            data.data ?? []
+          );
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load registrations"
+          );
+        } finally {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      },
+      []
     );
 
+  useEffect(() => {
+    loadRegistrations();
+
+    const interval =
+      window.setInterval(() => {
+        loadRegistrations();
+      }, 60000);
+
+    return () =>
+      window.clearInterval(
+        interval
+      );
+  }, [loadRegistrations]);
+
+  const getRegistrationStatus =
+    (registration: Registration) => {
+      const items =
+        registration.items ?? [];
+
+      if (!items.length) {
+        return "PENDING";
+      }
+
+      const total = items.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.quantity ?? 1
+          ),
+        0
+      );
+
+      const given = items.reduce(
+        (sum, item) =>
+          sum +
+          (item.status === "GIVEN"
+            ? Number(
+                item.quantity ?? 1
+              )
+            : 0),
+        0
+      );
+
+      return given >= total
+        ? "GIVEN"
+        : "PENDING";
+    };
+
+  const filtered =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase();
+
+      return registrations.filter(
+        (registration) => {
+          const status =
+            getRegistrationStatus(
+              registration
+            );
+
+          const matchesFilter =
+            filter === "ALL" ||
+            status === filter;
+
+          if (!matchesFilter) {
+            return false;
+          }
+
+          if (!query) {
+            return true;
+          }
+
+          return [
+            registration.name,
+            registration.email,
+            registration.registration_id,
+          ]
+            .filter(Boolean)
+            .some((value) =>
+              value
+                .toLowerCase()
+                .includes(query)
+            );
+        }
+      );
+    }, [
+      registrations,
+      search,
+      filter,
+    ]);
+
+  const stats = useMemo(() => {
+    let revenue = 0;
+    let given = 0;
+    let pending = 0;
+
+    for (const registration of registrations) {
+      revenue += Number(
+        registration.total ?? 0
+      );
+
+      const status =
+        getRegistrationStatus(
+          registration
+        );
+
+      if (status === "GIVEN") {
+        given++;
+      } else {
+        pending++;
+      }
+    }
+
+    return {
+      buyers:
+        registrations.length,
+      revenue,
+      given,
+      pending,
+    };
+  }, [registrations]);
+
+  const formatAmount = (
+    amount: number
+  ) =>
+    new Intl.NumberFormat(
+      "en-IN",
+      {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0,
+      }
+    ).format(amount);
 
   return (
-
     <main className="dashboard">
-
       <div className="container">
+
+        {/* HEADER */}
 
         <header className="header">
 
           <div>
+
+            <div
+              style={{
+                color:
+                  "var(--vt-orange-bright)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 700,
+                letterSpacing: ".16em",
+              }}
+            >
+              [03] / REGISTRATION CONTROL
+            </div>
+
             <h1>
-              Registrations
+              Buyer Registrations
             </h1>
 
             <p>
-              Buyers and QR codes
+              Purchases, merchandise
+              and distribution records
             </p>
+
           </div>
 
           <div
             style={{
               display: "flex",
-              gap: "10px",
+              gap: "8px",
               alignItems: "center",
+              flexWrap: "wrap",
             }}
           >
+
+            <button
+              type="button"
+              onClick={() =>
+                loadRegistrations(
+                  true
+                )
+              }
+              disabled={refreshing}
+              className="admin-link"
+              style={{
+                cursor: refreshing
+                  ? "wait"
+                  : "pointer",
+              }}
+            >
+              {refreshing
+                ? "Refreshing..."
+                : "Force Refresh"}
+            </button>
+
             <Link
               href="/admin"
               className="admin-link"
             >
-              ← Admin
+              Dashboard
+            </Link>
+
+            <Link
+              href="/admin/inventory"
+              className="admin-link"
+            >
+              Inventory
             </Link>
 
             <LogoutButton />
+
           </div>
 
         </header>
 
 
-        <section className="search-panel">
+        {/* SYSTEM STATUS */}
 
-          <input
-            type="search"
-            placeholder="Search buyer, email, registration..."
-            value={search}
-            onChange={e =>
-              setSearch(
-                e.target.value
-              )
-            }
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginBottom: "24px",
+            padding: "11px 14px",
+            border:
+              "1px solid var(--vt-border)",
+            background:
+              "var(--vt-surface)",
+          }}
+        >
+
+          <span
+            style={{
+              color:
+                "var(--vt-orange-bright)",
+              fontFamily:
+                '"SFMono-Regular", Consolas, monospace',
+              fontSize: "9px",
+              fontWeight: 700,
+              letterSpacing: ".12em",
+            }}
+          >
+            ● REGISTRATION DATABASE ONLINE
+          </span>
+
+          <span
+            style={{
+              color:
+                "var(--vt-muted)",
+              fontFamily:
+                '"SFMono-Regular", Consolas, monospace',
+              fontSize: "9px",
+            }}
+          >
+            {filtered.length} /{" "}
+            {registrations.length} RECORDS
+          </span>
+
+        </div>
+
+
+        {/* OVERVIEW */}
+
+        <section>
+
+          <SectionLabel
+            number="01"
+            title="Registration Overview"
           />
+
+          <section className="stats">
+
+            <RegistrationStat
+              title="Total Buyers"
+              value={
+                loading
+                  ? "—"
+                  : stats.buyers
+              }
+              subtitle="Completed registrations"
+            />
+
+            <RegistrationStat
+              title="Revenue"
+              value={
+                loading
+                  ? "—"
+                  : formatAmount(
+                      stats.revenue
+                    )
+              }
+              subtitle="Recorded sales"
+            />
+
+            <RegistrationStat
+              title="Distributed"
+              value={
+                loading
+                  ? "—"
+                  : stats.given
+              }
+              subtitle="Completed handovers"
+            />
+
+            <RegistrationStat
+              title="Pending"
+              value={
+                loading
+                  ? "—"
+                  : stats.pending
+              }
+              subtitle="Awaiting distribution"
+            />
+
+          </section>
 
         </section>
 
 
-        <section className="table-card">
+        {/* SEARCH */}
 
-          <div className="table-header">
+        <section
+          className="inventory-panel"
+          style={{
+            marginTop: "30px",
+          }}
+        >
+
+          <div
+            className="section-header"
+          >
 
             <div>
 
-              <h2>
-                Buyers
-              </h2>
+              <SectionLabel
+                number="02"
+                title="Registration Index"
+              />
 
               <span>
-                {filtered.length}
-                {" "}
-                registrations
+                Search and filter buyer
+                records
               </span>
 
             </div>
@@ -242,236 +446,686 @@ export default function AdminRegistrations() {
           </div>
 
 
-          <div className="table-wrapper">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "minmax(240px, 1fr) auto",
+              gap: "10px",
+              marginBottom: "20px",
+            }}
+          >
 
-            <table>
-
-              <thead>
-
-                <tr>
-
-                  <th>Registration</th>
-                  <th>Buyer</th>
-                  <th>Email</th>
-                  <th>Items</th>
-                  <th>Distribution</th>
-                  <th>QR</th>
-
-                </tr>
-
-              </thead>
-
-
-              <tbody>
-
-                {filtered.map(
-                  record => {
-
-                    const items =
-                      record.items ??
-                      [];
-
-                    const given =
-                      items.filter(
-                        (item: any) =>
-                          item.distribution
-                            ?.some(
-                              (d: any) =>
-                                d.status ===
-                                "GIVEN"
-                            )
-                      ).length;
-
-                    return (
-
-                      <tr
-                        key={
-                          record.id
-                        }
-                      >
-
-                        <td>
-
-                          <span className="id-badge">
-                            {
-                              record.registration_id
-                            }
-                          </span>
-
-                        </td>
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value
+                )
+              }
+              placeholder="SEARCH NAME / EMAIL / REGISTRATION ID"
+              style={{
+                width: "100%",
+                height: "42px",
+                padding:
+                  "0 13px",
+                background:
+                  "#080a0c",
+                color:
+                  "var(--vt-white)",
+                border:
+                  "1px solid var(--vt-border)",
+                borderRadius: 0,
+                outline: "none",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                letterSpacing:
+                  ".04em",
+              }}
+            />
 
 
-                        <td>
-                          <strong>
-                            {
-                              record.name ??
-                              "—"
-                            }
-                          </strong>
-                        </td>
+            <div
+              style={{
+                display: "flex",
+                gap: "1px",
+                background:
+                  "var(--vt-border)",
+              }}
+            >
 
-
-                        <td className="email">
-                          {
-                            record.email ??
-                            "—"
-                          }
-                        </td>
-
-
-                        <td>
-
-                          {items.map(
-                            (item: any) => {
-
-                              const itemStatus =
-                                item.distribution
-                                  ?.at(0)
-                                  ?.status ??
-                                item.status ??
-                                "PENDING";
-
-                              const isUpdating =
-                                updatingItem ===
-                                item.id;
-
-                              return (
-                                <div
-                                  key={
-                                    item.id
-                                  }
-                                  style={{
-                                    display:
-                                      "flex",
-                                    alignItems:
-                                      "center",
-                                    justifyContent:
-                                      "space-between",
-                                    gap:
-                                      "12px",
-                                    marginBottom:
-                                      "8px",
-                                  }}
-                                >
-
-                                  <span>
-                                    {item.item}
-
-                                    {item.size
-                                      ? ` (${item.size})`
-                                      : ""}
-
-                                    {item.quantity > 1
-                                      ? ` × ${item.quantity}`
-                                      : ""}
-                                  </span>
-
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      isUpdating
-                                    }
-                                    onClick={() =>
-                                      updateDistribution(
-                                        item.id,
-                                        itemStatus
-                                      )
-                                    }
-                                    style={{
-                                      border:
-                                        "1px solid #d1d5db",
-                                      borderRadius:
-                                        "7px",
-                                      padding:
-                                        "4px 8px",
-                                      fontSize:
-                                        "11px",
-                                      background:
-                                        itemStatus ===
-                                        "GIVEN"
-                                          ? "#fee2e2"
-                                          : "#dcfce7",
-                                      color:
-                                        itemStatus ===
-                                        "GIVEN"
-                                          ? "#991b1b"
-                                          : "#166534",
-                                      cursor:
-                                        isUpdating
-                                          ? "wait"
-                                          : "pointer",
-                                      whiteSpace:
-                                        "nowrap",
-                                    }}
-                                  >
-                                    {isUpdating
-                                      ? "Updating..."
-                                      : itemStatus ===
-                                        "GIVEN"
-                                        ? "Set Not Distributed"
-                                        : "Set Distributed"}
-                                  </button>
-
-                                </div>
-                              );
-                            }
-                          )}
-
-                        </td>
-
-
-                        <td>
-
-                          {given ===
-                          items.length &&
-                          items.length > 0 ? (
-
-                            <span className="type-badge single">
-                              GIVEN
-                            </span>
-
-                          ) : (
-
-                            <span className="type-badge combo">
-                              {given}/
-                              {items.length}
-                            </span>
-
-                          )}
-
-                        </td>
-
-
-                        <td>
-
-                          <a
-                            href={`/claim/${record.qr_token}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="qr-button"
-                          >
-                            View QR
-                          </a>
-
-                        </td>
-
-                      </tr>
-
-                    );
-
+              {(
+                [
+                  "ALL",
+                  "GIVEN",
+                  "PENDING",
+                ] as const
+              ).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setFilter(value)
                   }
-                )}
+                  style={{
+                    minWidth: "90px",
+                    border: 0,
+                    borderRadius: 0,
+                    background:
+                      filter === value
+                        ? "var(--vt-orange)"
+                        : "var(--vt-surface-2)",
+                    color:
+                      filter === value
+                        ? "#080706"
+                        : "var(--vt-muted)",
+                    fontFamily:
+                      '"SFMono-Regular", Consolas, monospace',
+                    fontSize: "9px",
+                    fontWeight: 800,
+                    letterSpacing:
+                      ".08em",
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  {value}
+                </button>
+              ))}
 
-              </tbody>
-
-            </table>
+            </div>
 
           </div>
 
+
+          {/* TABLE */}
+
+          {error && (
+            <div
+              style={{
+                padding:
+                  "14px",
+                border:
+                  "1px solid var(--vt-red)",
+                color:
+                  "var(--vt-red)",
+                background:
+                  "rgba(220,98,98,.06)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "10px",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+
+          {loading ? (
+            <LoadingRows />
+          ) : filtered.length === 0 ? (
+            <div
+              style={{
+                padding:
+                  "60px 20px",
+                textAlign:
+                  "center",
+                border:
+                  "1px solid var(--vt-border)",
+                color:
+                  "var(--vt-muted)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "10px",
+                letterSpacing:
+                  ".08em",
+              }}
+            >
+              NO REGISTRATION RECORDS
+              FOUND
+            </div>
+          ) : (
+            <div
+              style={{
+                overflowX:
+                  "auto",
+              }}
+            >
+
+              <div
+                style={{
+                  minWidth:
+                    "900px",
+                  border:
+                    "1px solid var(--vt-border)",
+                }}
+              >
+
+                <div
+                  className="registration-row registration-header"
+                >
+                  <span>Buyer</span>
+                  <span>Registration</span>
+                  <span>Merchandise</span>
+                  <span>Amount</span>
+                  <span>Status</span>
+                </div>
+
+
+                {filtered.map(
+                  (registration) => {
+
+                    const status =
+                      getRegistrationStatus(
+                        registration
+                      );
+
+                    const items =
+                      registration.items ??
+                      [];
+
+                    const itemCount =
+                      items.reduce(
+                        (
+                          sum,
+                          item
+                        ) =>
+                          sum +
+                          Number(
+                            item.quantity ??
+                              1
+                          ),
+                        0
+                      );
+
+                    return (
+                      <Link
+                        href={`/admin/registrations/${encodeURIComponent(
+                          registration.registration_id
+                        )}`}
+                        className="registration-row"
+                        key={
+                          registration.registration_id
+                        }
+                        style={{
+                          textDecoration: "none",
+                          color: "inherit",
+                          cursor: "pointer",
+                        }}
+                      >
+
+                        {/* BUYER */}
+
+                        <div>
+                          <strong
+                            style={{
+                              display:
+                                "block",
+                              color:
+                                "var(--vt-white)",
+                              fontSize:
+                                "12px",
+                              fontWeight:
+                                600,
+                            }}
+                          >
+                            {
+                              registration.name
+                            }
+                          </strong>
+
+                          <span
+                            style={{
+                              display:
+                                "block",
+                              marginTop:
+                                "5px",
+                              color:
+                                "var(--vt-muted)",
+                              fontFamily:
+                                '"SFMono-Regular", Consolas, monospace',
+                              fontSize:
+                                "8px",
+                            }}
+                          >
+                            {
+                              registration.email
+                            }
+                          </span>
+                        </div>
+
+
+                        {/* ID */}
+
+                        <div>
+                          <span
+                            style={{
+                              color:
+                                "var(--vt-orange-light)",
+                              fontFamily:
+                                '"SFMono-Regular", Consolas, monospace',
+                              fontSize:
+                                "9px",
+                              fontWeight:
+                                700,
+                            }}
+                          >
+                            {
+                              registration.registration_id
+                            }
+                          </span>
+                        </div>
+
+
+                        {/* MERCHANDISE */}
+
+                        <div>
+
+                          <strong
+                            style={{
+                              display:
+                                "block",
+                              color:
+                                "var(--vt-white)",
+                              fontFamily:
+                                '"SFMono-Regular", Consolas, monospace',
+                              fontSize:
+                                "12px",
+                            }}
+                          >
+                            {itemCount}
+                          </strong>
+
+                          <span
+                            style={{
+                              color:
+                                "var(--vt-muted)",
+                              fontSize:
+                                "8px",
+                            }}
+                          >
+                            items
+                          </span>
+
+                        </div>
+
+
+                        {/* AMOUNT */}
+
+                        <div>
+                          <strong
+                            style={{
+                              color:
+                                "var(--vt-white)",
+                              fontFamily:
+                                '"SFMono-Regular", Consolas, monospace',
+                              fontSize:
+                                "12px",
+                            }}
+                          >
+                            {formatAmount(
+                              Number(
+                                registration.total ??
+                                  0
+                              )
+                            )}
+                          </strong>
+                        </div>
+
+
+                        {/* STATUS */}
+
+                        <div>
+
+                          <span
+                            style={{
+                              display:
+                                "inline-flex",
+                              alignItems:
+                                "center",
+                              minWidth:
+                                "72px",
+                              justifyContent:
+                                "center",
+                              padding:
+                                "7px 8px",
+                              border:
+                                `1px solid ${
+                                  status ===
+                                  "GIVEN"
+                                    ? "var(--vt-green)"
+                                    : "var(--vt-yellow)"
+                                }`,
+                              color:
+                                status ===
+                                "GIVEN"
+                                  ? "var(--vt-green)"
+                                  : "var(--vt-yellow)",
+                              background:
+                                "transparent",
+                              fontFamily:
+                                '"SFMono-Regular", Consolas, monospace',
+                              fontSize:
+                                "8px",
+                              fontWeight:
+                                800,
+                              letterSpacing:
+                                ".08em",
+                            }}
+                          >
+                            {status}
+                          </span>
+
+                        </div>
+
+                      </Link>
+                    );
+                  }
+                )}
+
+              </div>
+
+            </div>
+          )}
+
         </section>
 
+
+        {/* MERCHANDISE BREAKDOWN */}
+
+        {!loading &&
+          filtered.length > 0 && (
+            <section
+              style={{
+                marginTop: "30px",
+              }}
+            >
+
+              <SectionLabel
+                number="03"
+                title="Merchandise Breakdown"
+              />
+
+              <div
+                className="inventory-grid"
+              >
+
+                {getMerchandiseSummary(
+                  filtered
+                ).map((item) => (
+                  <div
+                    className="inventory-card"
+                    key={item.name}
+                  >
+
+                    <div
+                      className="inventory-card-header"
+                    >
+
+                      <div>
+                        <h3>
+                          {item.name}
+                        </h3>
+
+                        <span>
+                          {item.orders} orders
+                        </span>
+                      </div>
+
+                      <div
+                        className="stock-number"
+                      >
+                        {item.quantity}
+                      </div>
+
+                    </div>
+
+                    <div
+                      className="inventory-label"
+                    >
+                      units ordered
+                    </div>
+
+                    <div
+                      className="inventory-footer"
+                    >
+                      <span>
+                        {item.orders} buyers
+                      </span>
+
+                      <strong>
+                        {formatAmount(
+                          item.revenue
+                        )}
+                      </strong>
+                    </div>
+
+                  </div>
+                ))}
+
+              </div>
+
+            </section>
+          )}
+
+
+        {/* FOOTER */}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            gap: "15px",
+            flexWrap: "wrap",
+            marginTop: "28px",
+            paddingTop: "15px",
+            borderTop:
+              "1px solid var(--vt-border-soft)",
+            color:
+              "var(--vt-dim)",
+            fontFamily:
+              '"SFMono-Regular", Consolas, monospace',
+            fontSize: "8px",
+            letterSpacing:
+              ".1em",
+          }}
+        >
+
+          <span>
+            VTAAP 2026 /
+            REGISTRATION CONTROL
+          </span>
+
+          <span>
+            AUTO REFRESH / 60 SEC
+          </span>
+
+        </div>
+
+      </div>
+    </main>
+  );
+}
+
+
+/* ============================================================
+   COMPONENTS
+   ============================================================ */
+
+function SectionLabel({
+  number,
+  title,
+}: {
+  number: string;
+  title: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: "12px",
+        marginBottom: "12px",
+      }}
+    >
+      <span
+        style={{
+          color:
+            "var(--vt-orange-bright)",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "9px",
+          fontWeight: 700,
+          letterSpacing:
+            ".1em",
+        }}
+      >
+        {number}
+      </span>
+
+      <h2
+        style={{
+          margin: 0,
+          color:
+            "var(--vt-white)",
+          fontSize: "18px",
+          fontWeight: 500,
+          textTransform:
+            "uppercase",
+          letterSpacing:
+            "-.02em",
+        }}
+      >
+        {title}
+      </h2>
+    </div>
+  );
+}
+
+
+function RegistrationStat({
+  title,
+  value,
+  subtitle,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+}) {
+  return (
+    <div className="stat-card">
+
+      <div className="stat-title">
+        {title}
       </div>
 
-    </main>
+      <div className="stat-value">
+        {value}
+      </div>
+
+      <div className="stat-subtitle">
+        {subtitle}
+      </div>
+
+    </div>
+  );
+}
+
+
+function LoadingRows() {
+  return (
+    <div
+      style={{
+        border:
+          "1px solid var(--vt-border)",
+      }}
+    >
+      {[1, 2, 3, 4, 5, 6].map(
+        (row) => (
+          <div
+            key={row}
+            className="registration-row"
+          >
+            <div
+              className="skeleton skeleton-line medium"
+            />
+
+            <div
+              className="skeleton skeleton-line short"
+            />
+
+            <div
+              className="skeleton skeleton-line short"
+            />
+
+            <div
+              className="skeleton skeleton-line short"
+            />
+
+            <div
+              className="skeleton skeleton-line short"
+            />
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+
+function getMerchandiseSummary(
+  registrations: Registration[]
+) {
+  const map =
+    new Map<
+      string,
+      {
+        name: string;
+        quantity: number;
+        orders: number;
+        revenue: number;
+      }
+    >();
+
+  for (const registration of registrations) {
+    for (const item of
+      registration.items ?? []) {
+
+      const name =
+        item.item || "Unknown";
+
+      const quantity =
+        Number(
+          item.quantity ?? 1
+        );
+
+      const current =
+        map.get(name) ?? {
+          name,
+          quantity: 0,
+          orders: 0,
+          revenue: 0,
+        };
+
+      current.quantity +=
+        quantity;
+
+      current.orders += 1;
+
+      map.set(
+        name,
+        current
+      );
+    }
+  }
+
+  return Array.from(
+    map.values()
+  ).sort(
+    (a, b) =>
+      b.quantity -
+      a.quantity
   );
 }

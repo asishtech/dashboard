@@ -4,54 +4,38 @@ import { useEffect } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 export default function AuthRedirect() {
+
   useEffect(() => {
+
     async function redirect() {
+
       const supabase =
         createSupabaseBrowser();
 
       const {
-        data: { user },
+        data: {
+          user,
+        },
       } =
         await supabase.auth.getUser();
 
       if (!user) {
-        window.location.href = "/login";
+
+        window.location.href =
+          "/login";
+
         return;
       }
 
-      /*
-       * First synchronize any administrator /
-       * volunteer invitation assigned to this
-       * Google account.
-       */
-      try {
-        const response = await fetch(
-          "/api/auth/staff-sync",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error(
-            "Staff synchronization failed"
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Staff synchronization error:",
-          error
-        );
-      }
 
       /*
-       * Read the final profile after staff
-       * synchronization.
+       * The database trigger creates the profile
+       * automatically when the Auth user is created.
+       *
+       * Give Supabase a moment to expose the
+       * newly-created profile.
        */
+
       let profile = null;
 
       for (
@@ -59,6 +43,7 @@ export default function AuthRedirect() {
         attempt < 5;
         attempt++
       ) {
+
         const result =
           await supabase
             .from("profiles")
@@ -72,13 +57,15 @@ export default function AuthRedirect() {
             .maybeSingle();
 
         if (result.data) {
+
           profile =
             result.data;
+
           break;
         }
 
         await new Promise(
-          (resolve) =>
+          resolve =>
             setTimeout(
               resolve,
               300
@@ -86,7 +73,9 @@ export default function AuthRedirect() {
         );
       }
 
+
       if (!profile) {
+
         console.error(
           "Profile was not created for:",
           user.id
@@ -100,7 +89,9 @@ export default function AuthRedirect() {
         return;
       }
 
+
       if (!profile.active) {
+
         await supabase.auth.signOut();
 
         window.location.href =
@@ -109,53 +100,81 @@ export default function AuthRedirect() {
         return;
       }
 
+
       /*
-       * Role routing.
+       * Role routing
        */
 
-      if (profile.role === "admin") {
-        window.location.href = "/admin";
+      if (
+        profile.role ===
+        "admin"
+      ) {
+
+        window.location.href =
+          "/admin";
+
         return;
       }
+
 
       if (
         profile.role ===
         "volunteer"
       ) {
+
         window.location.href =
           "/volunteer";
+
         return;
       }
 
-      if (profile.role === "buyer") {
+
+      if (
+        profile.role ===
+        "buyer"
+      ) {
+
         window.location.href =
           "/buyer";
+
         return;
       }
 
+
       /*
-       * Unknown role.
+       * Unknown role
        */
+
       await supabase.auth.signOut();
 
       window.location.href =
         "/login?error=role";
     }
 
+
     redirect();
+
   }, []);
 
+
   return (
+
     <main
       style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
+        minHeight:
+          "100vh",
+        display:
+          "grid",
+        placeItems:
+          "center",
       }}
     >
+
       <p>
         Checking authorization...
       </p>
+
     </main>
+
   );
 }

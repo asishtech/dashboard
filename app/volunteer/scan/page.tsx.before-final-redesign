@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 type Item = {
   id: number;
@@ -20,8 +19,6 @@ type Registration = {
 };
 
 export default function ScannerPage() {
-  const router = useRouter();
-
   const [registration, setRegistration] =
     useState<Registration | null>(null);
 
@@ -235,82 +232,31 @@ export default function ScannerPage() {
   }, []);
 
 
-  async function resetScanner() {
-    setRegistration(null);
-    setError("");
-    setBusy(false);
-
-    /*
-     * Give React a moment to remove the
-     * previous scanner DOM before starting
-     * html5-qrcode again.
-     */
-    setTimeout(() => {
-      window.location.reload();
-    }, 50);
-  }
-
   async function markGiven(
     itemId: number
   ) {
-    if (busy) return;
-
     setBusy(true);
     setError("");
 
     try {
-      const response = await fetch(
-        "/api/distribution",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            registrationItemId:
-              itemId,
-          }),
-        }
-      );
-
-      const data =
-        await response.json();
-
-      /*
-       * 409 means the item was already
-       * distributed. Treat it as GIVEN,
-       * not as an application error.
-       */
-      if (response.status === 409) {
-        setRegistration(
-          (current) => {
-            if (!current) return current;
-
-            return {
-              ...current,
-              items:
-                current.items.map(
-                  (item) =>
-                    item.id === itemId
-                      ? {
-                          ...item,
-                          status:
-                            "GIVEN",
-                        }
-                      : item
-                ),
-            };
+      const response =
+        await fetch(
+          "/api/distribution",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              registrationItemId:
+                itemId,
+            }),
           }
         );
 
-        setTimeout(() => {
-          router.push("/volunteer");
-          router.refresh();
-        }, 700);
-
-        return;
-      }
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -319,46 +265,10 @@ export default function ScannerPage() {
         );
       }
 
-      /*
-       * API returns the refreshed
-       * registration. This immediately
-       * changes the item to GIVEN.
-       */
-      if (data.registration) {
-        setRegistration(
-          data.registration
-        );
-      } else {
-        setRegistration(
-          (current) => {
-            if (!current) return current;
+      setRegistration(
+        data.registration
+      );
 
-            return {
-              ...current,
-              items:
-                current.items.map(
-                  (item) =>
-                    item.id === itemId
-                      ? {
-                          ...item,
-                          status:
-                            "GIVEN",
-                        }
-                      : item
-                ),
-            };
-          }
-        );
-      }
-
-      /*
-       * Give the volunteer a moment to
-       * see the green GIVEN state.
-       */
-      setTimeout(() => {
-        router.push("/volunteer");
-        router.refresh();
-      }, 700);
     } catch (err) {
       setError(
         err instanceof Error
@@ -368,6 +278,16 @@ export default function ScannerPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+
+  function resetScanner() {
+    setRegistration(null);
+    setError("");
+    clearingRef.current =
+      false;
+
+    window.location.reload();
   }
 
 

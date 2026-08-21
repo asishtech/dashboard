@@ -1,0 +1,160 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const started = Date.now();
+
+  try {
+    const [
+      inventoryResult,
+      registrationsResult,
+      itemsResult,
+    ] = await Promise.all([
+      supabase
+        .from("inventory_status")
+        .select(
+          "id,item,initial_stock,sold,remaining,remaining_percentage"
+        )
+        .order("item"),
+
+      supabase
+        .from("registrations")
+        .select(
+          "registration_id,total",
+          {
+            count: "exact",
+            head: false,
+          }
+        ),
+
+      supabase
+        .from("registration_items")
+        .select(
+          "id,item,quantity,distribution:distributions(status)"
+        ),
+    ]);
+
+    if (inventoryResult.error) {
+      throw inventoryResult.error;
+    }
+
+    if (registrationsResult.error) {
+      throw registrationsResult.error;
+    }
+
+    if (itemsResult.error) {
+      throw itemsResult.error;
+    }
+
+    const registrations =
+      registrationsResult.data ?? [];
+
+    const items =
+      itemsResult.data ?? [];
+
+    let totalRevenue = 0;
+
+    for (const registration of registrations) {
+      totalRevenue += Number(
+        registration.total ?? 0
+      );
+    }
+
+    let given = 0;
+    let pending = 0;
+
+    for (const item of items) {
+      const quantity = Math.max(
+        Number(item.quantity ?? 1),
+        1
+      );
+
+      /*
+       * Supabase can return a single related
+       * distribution as an object or a
+       * one-to-many relation as an array.
+       *
+       * Normalize both shapes before counting.
+       */
+      const distributions = Array.isArray(
+        item.distribution
+      )
+        ? item.distribution
+        : item.distribution
+          ? [item.distribution]
+          : [];
+
+      const givenForItem =
+        distributions.filter(
+          (distribution: any) =>
+            distribution?.status ===
+            "GIVEN"
+        ).length;
+
+      given += Math.min(
+        givenForItem,
+        quantity
+      );
+
+      pending += Math.max(
+        quantity - givenForItem,
+        0
+      );
+    }
+
+    const duration =
+      Date.now() - started;
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        registrations:
+          registrations.length,
+
+        totalAmount:
+          totalRevenue,
+
+        inventory:
+          inventoryResult.data ?? [],
+
+        distribution: {
+          given,
+          pending,
+          total:
+            given + pending,
+        },
+
+        responseTimeMs:
+          duration,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
+
+  } catch (error) {
+    console.error(
+      "Dashboard API error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Dashboard data failed",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}

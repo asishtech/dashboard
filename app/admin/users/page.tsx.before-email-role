@@ -1,0 +1,535 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+
+type UserRecord = {
+  id: string;
+  role: "admin" | "volunteer";
+  active: boolean;
+};
+
+export default function AdminUsersPage() {
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<
+    "admin" | "volunteer"
+  >("volunteer");
+
+  async function loadUsers() {
+    try {
+      setLoading(true);
+
+      const response = await fetch(
+        "/api/admin/users",
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to load users"
+        );
+      }
+
+      setUsers(data.users ?? []);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load users"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  async function createUser(
+    event: FormEvent
+  ) {
+    event.preventDefault();
+
+    setCreating(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        "/api/admin/users",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            email,
+            password,
+            role,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to create user"
+        );
+      }
+
+      setMessage(
+        `${role === "admin" ? "Admin" : "Volunteer"} account created successfully.`
+      );
+
+      setName("");
+      setEmail("");
+      setPassword("");
+      setRole("volunteer");
+
+      await loadUsers();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to create user"
+      );
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <main className="dashboard">
+      <div className="container">
+
+        <header
+          className="header"
+          style={{
+            marginBottom: "28px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                color:
+                  "var(--vt-orange-bright)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 800,
+                letterSpacing: ".15em",
+                marginBottom: "8px",
+              }}
+            >
+              [05] / USER CONTROL
+            </div>
+
+            <h1>User Management</h1>
+
+            <p>
+              Create and manage privileged
+              dashboard accounts.
+            </p>
+          </div>
+
+          <Link
+            href="/admin"
+            className="admin-link"
+          >
+            ← Dashboard
+          </Link>
+        </header>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "minmax(0, 1fr) minmax(0, 1.3fr)",
+            gap: "1px",
+            background:
+              "var(--vt-border)",
+            border:
+              "1px solid var(--vt-border)",
+          }}
+        >
+
+          {/* CREATE USER */}
+
+          <div
+            style={{
+              background:
+                "var(--vt-surface)",
+              padding: "28px",
+            }}
+          >
+            <div
+              style={{
+                color:
+                  "var(--vt-orange-bright)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 800,
+                letterSpacing: ".12em",
+                marginBottom: "10px",
+              }}
+            >
+              CREATE ACCOUNT
+            </div>
+
+            <h2
+              style={{
+                margin: "0 0 8px",
+              }}
+            >
+              Add User
+            </h2>
+
+            <p
+              style={{
+                color:
+                  "var(--vt-muted)",
+                fontSize: "12px",
+                lineHeight: 1.6,
+                marginBottom: "24px",
+              }}
+            >
+              Admins can create volunteers
+              and additional administrators.
+              Buyer accounts are managed
+              through VTAPP.
+            </p>
+
+            <form
+              onSubmit={createUser}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px",
+              }}
+            >
+
+              <label>
+                <span className="field-label">
+                  NAME
+                </span>
+
+                <input
+                  value={name}
+                  onChange={(e) =>
+                    setName(e.target.value)
+                  }
+                  required
+                  placeholder="Full name"
+                  className="admin-input"
+                />
+              </label>
+
+              <label>
+                <span className="field-label">
+                  EMAIL
+                </span>
+
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) =>
+                    setEmail(e.target.value)
+                  }
+                  required
+                  placeholder="user@example.com"
+                  className="admin-input"
+                />
+              </label>
+
+              <label>
+                <span className="field-label">
+                  ROLE
+                </span>
+
+                <select
+                  value={role}
+                  onChange={(e) =>
+                    setRole(
+                      e.target.value as
+                        | "admin"
+                        | "volunteer"
+                    )
+                  }
+                  className="admin-input"
+                >
+                  <option value="volunteer">
+                    Volunteer
+                  </option>
+
+                  <option value="admin">
+                    Admin
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span className="field-label">
+                  TEMPORARY PASSWORD
+                </span>
+
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) =>
+                    setPassword(
+                      e.target.value
+                    )
+                  }
+                  required
+                  minLength={8}
+                  placeholder="Minimum 8 characters"
+                  className="admin-input"
+                />
+              </label>
+
+              {error && (
+                <div
+                  style={{
+                    border:
+                      "1px solid var(--vt-red)",
+                    color:
+                      "var(--vt-red)",
+                    padding: "12px",
+                    fontSize: "11px",
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+
+              {message && (
+                <div
+                  style={{
+                    border:
+                      "1px solid var(--vt-green)",
+                    color:
+                      "var(--vt-green)",
+                    padding: "12px",
+                    fontSize: "11px",
+                  }}
+                >
+                  {message}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={creating}
+                className="qr-button"
+                style={{
+                  marginTop: "6px",
+                  cursor: creating
+                    ? "not-allowed"
+                    : "pointer",
+                  opacity: creating
+                    ? 0.6
+                    : 1,
+                }}
+              >
+                {creating
+                  ? "CREATING..."
+                  : "CREATE USER"}
+              </button>
+
+            </form>
+          </div>
+
+          {/* EXISTING USERS */}
+
+          <div
+            style={{
+              background:
+                "var(--vt-surface)",
+              padding: "28px",
+            }}
+          >
+            <div
+              style={{
+                color:
+                  "var(--vt-green)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 800,
+                letterSpacing: ".12em",
+                marginBottom: "10px",
+              }}
+            >
+              PRIVILEGED ACCOUNTS
+            </div>
+
+            <h2
+              style={{
+                margin: "0 0 8px",
+              }}
+            >
+              Staff Accounts
+            </h2>
+
+            <p
+              style={{
+                color:
+                  "var(--vt-muted)",
+                fontSize: "12px",
+                marginBottom: "24px",
+              }}
+            >
+              Local administrator and
+              volunteer accounts.
+            </p>
+
+            {loading ? (
+              <div
+                style={{
+                  color:
+                    "var(--vt-muted)",
+                  fontFamily:
+                    '"SFMono-Regular", Consolas, monospace',
+                  fontSize: "10px",
+                }}
+              >
+                LOADING STAFF...
+              </div>
+            ) : users.length === 0 ? (
+              <div
+                style={{
+                  color:
+                    "var(--vt-muted)",
+                  fontSize: "12px",
+                  padding: "24px 0",
+                }}
+              >
+                No staff accounts found.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1px",
+                  background:
+                    "var(--vt-border)",
+                  border:
+                    "1px solid var(--vt-border)",
+                }}
+              >
+                {users.map((user) => (
+                  <div
+                    key={user.id}
+                    style={{
+                      background:
+                        "var(--vt-surface)",
+                      padding:
+                        "16px 18px",
+                      display: "flex",
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "space-between",
+                      gap: "20px",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            "var(--vt-white)",
+                          fontFamily:
+                            '"SFMono-Regular", Consolas, monospace',
+                          fontSize: "9px",
+                          wordBreak:
+                            "break-all",
+                        }}
+                      >
+                        {user.id}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        alignItems:
+                          "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          border:
+                            `1px solid ${
+                              user.role ===
+                              "admin"
+                                ? "var(--vt-orange-bright)"
+                                : "var(--vt-green)"
+                            }`,
+                          color:
+                            user.role ===
+                            "admin"
+                              ? "var(--vt-orange-bright)"
+                              : "var(--vt-green)",
+                          padding:
+                            "6px 9px",
+                          fontFamily:
+                            '"SFMono-Regular", Consolas, monospace',
+                          fontSize: "8px",
+                          fontWeight: 800,
+                          letterSpacing:
+                            ".08em",
+                        }}
+                      >
+                        {user.role.toUpperCase()}
+                      </span>
+
+                      <span
+                        style={{
+                          color:
+                            user.active
+                              ? "var(--vt-green)"
+                              : "var(--vt-red)",
+                          fontFamily:
+                            '"SFMono-Regular", Consolas, monospace',
+                          fontSize: "8px",
+                          fontWeight: 800,
+                        }}
+                      >
+                        {user.active
+                          ? "ACTIVE"
+                          : "DISABLED"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </section>
+
+      </div>
+    </main>
+  );
+}

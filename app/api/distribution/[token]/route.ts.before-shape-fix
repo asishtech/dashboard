@@ -67,11 +67,10 @@ export async function GET(
             ...item,
 
             status:
-              Array.isArray(item.distribution)
-                ? item.distribution[0]?.status ??
-                  "PENDING"
-                : item.distribution?.status ??
-                  "PENDING",
+              item.distribution
+                ?.at(0)
+                ?.status ??
+              "PENDING",
           })
         ),
     },

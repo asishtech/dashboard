@@ -31,21 +31,14 @@ type Distribution = {
 };
 
 type DashboardData = {
-  success?: boolean;
-
-  registrations: number;
-
-  totalAmount: number;
-
-  inventory: Inventory[];
-
-  distribution: {
-    given: number;
-    pending: number;
-    total: number;
-  };
-
-  responseTimeMs?: number;
+  data?: Registration[];
+  count?: number;
+  inventory?: Inventory[];
+  syncState?: {
+    updated_at?: string | null;
+    last_success?: boolean | null;
+    last_error?: string | null;
+  } | null;
 };
 
 export default function AdminPage() {
@@ -339,16 +332,6 @@ export default function AdminPage() {
   const pendingCount =
     distribution.pending;
 
-
-
-  const distributionTotal =
-    Math.max(
-      givenCount + pendingCount,
-      1
-    );
-
-  const givenPercent =
-    (givenCount / distributionTotal) * 100;
 
   /*
    * Inventory chart maximum.
@@ -853,79 +836,48 @@ export default function AdminPage() {
             description="Physical merchandise handover status."
           >
 
-            <div className="admin-distribution-layout">
+            <div
+              style={{
+                display:
+                  "flex",
+                gap:
+                  "30px",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
+                minHeight:
+                  "180px",
+              }}
+            >
 
-              <div
-                className="admin-distribution-pie"
-                style={{
-                  background:
-                    "conic-gradient(" +
-                    "#84cc16 0deg " +
-                    (givenPercent * 3.6) +
-                    "deg, " +
-                    "#f97316 " +
-                    (givenPercent * 3.6) +
-                    "deg 360deg)"
-                }}
-              >
-                <div className="admin-distribution-pie-inner">
+              <DistributionCircle
+                label="Given"
+                value={
+                  givenCount
+                }
+                total={
+                  givenCount +
+                  pendingCount
+                }
+                className="given"
+              />
 
-                  <strong>
-                    {givenCount + pendingCount}
-                  </strong>
-
-                  <span>
-                    TOTAL
-                  </span>
-
-                </div>
-              </div>
-
-
-              <div className="admin-distribution-stats">
-
-                <div className="admin-distribution-stat admin-given">
-
-                  <div className="admin-stat-label">
-                    <span />
-                    GIVEN
-                  </div>
-
-                  <strong>
-                    {givenCount}
-                  </strong>
-
-                  <small>
-                    {Math.round(givenPercent)}%
-                  </small>
-
-                </div>
-
-
-                <div className="admin-distribution-stat admin-pending">
-
-                  <div className="admin-stat-label">
-                    <span />
-                    PENDING
-                  </div>
-
-                  <strong>
-                    {pendingCount}
-                  </strong>
-
-                  <small>
-                    {Math.round(
-                      100 - givenPercent
-                    )}%
-                  </small>
-
-                </div>
-
-              </div>
+              <DistributionCircle
+                label="Pending"
+                value={
+                  pendingCount
+                }
+                total={
+                  givenCount +
+                  pendingCount
+                }
+                className="pending"
+              />
 
             </div>
 
-</ChartCard>
+          </ChartCard>
 
         </section>
 
@@ -942,12 +894,6 @@ export default function AdminPage() {
             title="Registrations"
             description="View buyers, merchandise, distribution status and QR codes."
             href="/admin/registrations"
-          />
-
-          <AdminCard
-            title="User Management"
-            description="Add administrators and volunteers by Google account email."
-            href="/admin/users"
           />
 
           <AdminCard

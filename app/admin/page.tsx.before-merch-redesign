@@ -945,12 +945,6 @@ export default function AdminPage() {
           />
 
           <AdminCard
-            title="User Management"
-            description="Add administrators and volunteers by Google account email."
-            href="/admin/users"
-          />
-
-          <AdminCard
             title="Volunteer Scanner"
             description="Open the merchandise distribution scanner."
             href="/volunteer"

@@ -1,0 +1,672 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import LogoutButton from "@/components/LogoutButton";
+
+type Inventory = {
+  id: number;
+  item: string;
+  initial_stock: number;
+  sold: number;
+  remaining: number;
+};
+
+type DashboardData = {
+  registrations?: number;
+  inventory?: Inventory[];
+  distribution?: {
+    given?: number;
+    pending?: number;
+    total?: number;
+  };
+};
+
+export default function VolunteerPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true);
+
+    try {
+      const response = await fetch("/api/dashboard", {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load distribution data");
+      }
+
+      const result = await response.json();
+      setData(result);
+      setError("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load dashboard"
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+
+    const timer = setInterval(() => {
+      load();
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, [load]);
+
+  const given = Number(data?.distribution?.given ?? 0);
+  const pending = Number(data?.distribution?.pending ?? 0);
+  const total = Number(
+    data?.distribution?.total ?? given + pending
+  );
+
+  const progress =
+    total > 0 ? Math.round((given / total) * 100) : 0;
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#07090b",
+        color: "#f4f7f8",
+        padding: "24px 16px 50px",
+        fontFamily:
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1050px",
+          margin: "0 auto",
+        }}
+      >
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "20px",
+            flexWrap: "wrap",
+            paddingBottom: "22px",
+            borderBottom: "1px solid #20272d",
+            marginBottom: "24px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                color: "#b7ff00",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 800,
+                letterSpacing: ".18em",
+              }}
+            >
+              V-TAPP / 2026
+            </div>
+
+            <h1
+              style={{
+                margin: "8px 0 0",
+                fontSize: "clamp(28px, 5vw, 44px)",
+                lineHeight: 1,
+                letterSpacing: "-.05em",
+                textTransform: "uppercase",
+              }}
+            >
+              Volunteer Operations
+            </h1>
+
+            <p
+              style={{
+                margin: "10px 0 0",
+                color: "#68747d",
+                fontSize: "12px",
+              }}
+            >
+              Merchandise distribution control
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => load(true)}
+              disabled={refreshing}
+              style={{
+                padding: "10px 14px",
+                border: "1px solid #2b343a",
+                background: "#0d1215",
+                color: "#dce2e5",
+                cursor: refreshing ? "wait" : "pointer",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+                fontWeight: 800,
+              }}
+            >
+              {refreshing ? "REFRESHING..." : "REFRESH"}
+            </button>
+
+            <Link
+              href="/admin"
+              style={{
+                padding: "10px 14px",
+                border: "1px solid #2b343a",
+                background: "#0d1215",
+                color: "#8c989f",
+                textDecoration: "none",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+                fontWeight: 800,
+              }}
+            >
+              ADMIN
+            </Link>
+
+            <LogoutButton />
+          </div>
+        </header>
+
+        {error && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "14px",
+              background: "#1a0e0e",
+              border: "1px solid #4a2727",
+              color: "#ff8c8c",
+              fontSize: "12px",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <section
+          style={{
+            padding: "30px",
+            background:
+              "linear-gradient(135deg,#11181c,#0b0f12)",
+            border: "1px solid #293238",
+            marginBottom: "8px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "30px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: "#69757d",
+                  fontFamily:
+                    '"SFMono-Regular", Consolas, monospace',
+                  fontSize: "8px",
+                  fontWeight: 800,
+                  letterSpacing: ".14em",
+                }}
+              >
+                DISTRIBUTION STATUS
+              </div>
+
+              <div
+                style={{
+                  marginTop: "12px",
+                  fontSize: "clamp(52px, 10vw, 88px)",
+                  fontWeight: 800,
+                  lineHeight: ".9",
+                  letterSpacing: "-.07em",
+                }}
+              >
+                {loading ? "—" : `${progress}%`}
+              </div>
+
+              <div
+                style={{
+                  marginTop: "12px",
+                  color: "#b7ff00",
+                  fontFamily:
+                    '"SFMono-Regular", Consolas, monospace',
+                  fontSize: "9px",
+                  fontWeight: 800,
+                  letterSpacing: ".12em",
+                }}
+              >
+                DISTRIBUTION PROGRESS
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(2, minmax(100px, 1fr))",
+                gap: "20px",
+              }}
+            >
+              <Metric
+                label="GIVEN"
+                value={loading ? "—" : given}
+                color="#b7ff00"
+              />
+
+              <Metric
+                label="PENDING"
+                value={loading ? "—" : pending}
+                color="#f0b84b"
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: "30px" }}>
+            <div
+              style={{
+                height: "9px",
+                background: "#20292f",
+              }}
+            >
+              <div
+                style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  background: "#b7ff00",
+                  transition: "width .4s ease",
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: "8px",
+                color: "#59656d",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+              }}
+            >
+              <span>{given} GIVEN</span>
+              <span>{total} TOTAL</span>
+            </div>
+          </div>
+        </section>
+
+        <Link
+          href="/volunteer/scan"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "24px",
+            marginBottom: "24px",
+            background: "#b7ff00",
+            color: "#07090b",
+            textDecoration: "none",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+                fontWeight: 800,
+                letterSpacing: ".15em",
+                opacity: .65,
+              }}
+            >
+              DISTRIBUTION ACTION
+            </div>
+
+            <div
+              style={{
+                marginTop: "6px",
+                fontSize: "clamp(26px, 5vw, 38px)",
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: "-.04em",
+              }}
+            >
+              Scan QR
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: "40px",
+              fontWeight: 300,
+            }}
+          >
+            →
+          </div>
+        </Link>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(190px,1fr))",
+            gap: "8px",
+            marginBottom: "30px",
+          }}
+        >
+          <MetricCard
+            label="PENDING"
+            value={loading ? "—" : pending}
+            text="Items awaiting distribution"
+            color="#f0b84b"
+          />
+
+          <MetricCard
+            label="GIVEN"
+            value={loading ? "—" : given}
+            text="Items successfully distributed"
+            color="#b7ff00"
+          />
+
+          <MetricCard
+            label="TOTAL"
+            value={loading ? "—" : total}
+            text="Current allocation"
+            color="#e4e9eb"
+          />
+
+          <MetricCard
+            label="BUYERS"
+            value={
+              loading
+                ? "—"
+                : Number(data?.registrations ?? 0)
+            }
+            text="Completed registrations"
+            color="#e4e9eb"
+          />
+        </section>
+
+        <section>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  color: "#b7ff00",
+                  fontFamily:
+                    '"SFMono-Regular", Consolas, monospace',
+                  fontSize: "9px",
+                  fontWeight: 800,
+                }}
+              >
+                01
+              </span>
+
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "18px",
+                  textTransform: "uppercase",
+                }}
+              >
+                Inventory
+              </h2>
+            </div>
+
+            <Link
+              href="/admin/inventory"
+              style={{
+                color: "#657179",
+                textDecoration: "none",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+              }}
+            >
+              VIEW →
+            </Link>
+          </div>
+
+          <div style={{ display: "grid", gap: "6px" }}>
+            {(data?.inventory ?? []).map((item) => {
+              const sold = Number(item.sold ?? 0);
+              const stock = Number(
+                item.initial_stock ?? 0
+              );
+
+              const percent =
+                stock > 0
+                  ? Math.round((sold / stock) * 100)
+                  : 0;
+
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "1fr auto",
+                    gap: "20px",
+                    alignItems: "center",
+                    padding: "17px 18px",
+                    background: "#0d1215",
+                    border: "1px solid #20282e",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        color: "#e8edef",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {item.item}
+                    </div>
+
+                    <div
+                      style={{
+                        height: "4px",
+                        background: "#20292f",
+                        marginTop: "10px",
+                        maxWidth: "500px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${percent}%`,
+                          height: "100%",
+                          background: "#b7ff00",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: "right" }}>
+                    <div
+                      style={{
+                        color: "#b7ff00",
+                        fontFamily:
+                          '"SFMono-Regular", Consolas, monospace',
+                        fontSize: "22px",
+                        fontWeight: 900,
+                      }}
+                    >
+                      {sold}
+                    </div>
+
+                    <div
+                      style={{
+                        color: "#59656d",
+                        fontFamily:
+                          '"SFMono-Regular", Consolas, monospace',
+                        fontSize: "7px",
+                        marginTop: "3px",
+                      }}
+                    >
+                      SOLD / {stock}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <footer
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+            marginTop: "35px",
+            paddingTop: "15px",
+            borderTop: "1px solid #1c2328",
+            color: "#414b52",
+            fontFamily:
+              '"SFMono-Regular", Consolas, monospace',
+            fontSize: "7px",
+            letterSpacing: ".1em",
+          }}
+        >
+          <span>VTAAP 2026</span>
+          <span>VOLUNTEER OPERATIONS</span>
+          <span>AUTO REFRESH 30S</span>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          color: "#59656d",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "8px",
+          fontWeight: 800,
+          letterSpacing: ".1em",
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          color,
+          fontSize: "38px",
+          fontWeight: 900,
+          lineHeight: 1,
+          marginTop: "7px",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  text,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  text: string;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: "20px",
+        background: "#0d1215",
+        border: "1px solid #20282e",
+      }}
+    >
+      <div
+        style={{
+          color: "#69757d",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "8px",
+          fontWeight: 800,
+          letterSpacing: ".12em",
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          color,
+          fontSize: "34px",
+          fontWeight: 900,
+          lineHeight: 1,
+          marginTop: "9px",
+        }}
+      >
+        {value}
+      </div>
+
+      <div
+        style={{
+          color: "#59656d",
+          fontSize: "9px",
+          lineHeight: 1.5,
+          marginTop: "8px",
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,1033 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
+
+type Item = {
+  id: number;
+  item: string;
+  size: string | null;
+  quantity: number;
+  status: "GIVEN" | "PENDING";
+};
+
+type Registration = {
+  registration_id: string;
+  name: string;
+  email: string;
+  total: number;
+  qr_token: string;
+  items: Item[];
+  distribution: {
+    total: number;
+    given: number;
+    pending: number;
+  };
+};
+
+export default function RegistrationDetailPage({
+  params,
+}: {
+  params: Promise<{
+    registration_id: string;
+  }>;
+}) {
+  const [registration, setRegistration] =
+    useState<Registration | null>(null);
+
+  const [qrImage, setQrImage] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const {
+          registration_id,
+        } = await params;
+
+        const response =
+          await fetch(
+            `/api/registrations/${encodeURIComponent(
+              registration_id
+            )}`,
+            {
+              cache: "no-store",
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              "Registration not found"
+          );
+        }
+
+        setRegistration(
+          data.registration
+        );
+
+        const baseUrl =
+          window.location.origin;
+
+        const claimUrl =
+          `${baseUrl}/claim/${data.registration.qr_token}`;
+
+        const qr =
+          await QRCode.toDataURL(
+            claimUrl,
+            {
+              width: 420,
+              margin: 2,
+              errorCorrectionLevel: "H",
+            }
+          );
+
+        setQrImage(qr);
+      } catch (err) {
+        console.error(err);
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load registration"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [params]);
+
+  const formatAmount = (
+    amount: number
+  ) =>
+    new Intl.NumberFormat(
+      "en-IN",
+      {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0,
+      }
+    ).format(amount);
+
+  if (loading) {
+    return (
+      <main className="dashboard">
+        <div className="container">
+          <div
+            style={{
+              padding: "80px 0",
+              color:
+                "var(--vt-muted)",
+              fontFamily:
+                '"SFMono-Regular", Consolas, monospace',
+              fontSize: "10px",
+              letterSpacing: ".1em",
+            }}
+          >
+            LOADING REGISTRATION...
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (error || !registration) {
+    return (
+      <main className="dashboard">
+        <div className="container">
+
+          <header className="header">
+            <div>
+              <div
+                style={{
+                  color:
+                    "var(--vt-orange-bright)",
+                  fontFamily:
+                    '"SFMono-Regular", Consolas, monospace',
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  letterSpacing: ".14em",
+                }}
+              >
+                [03] / REGISTRATION
+              </div>
+
+              <h1>
+                Registration Not Found
+              </h1>
+            </div>
+
+            <Link
+              href="/admin/registrations"
+              className="admin-link"
+            >
+              ← Registrations
+            </Link>
+          </header>
+
+          <div
+            style={{
+              padding: "30px",
+              border:
+                "1px solid var(--vt-border)",
+              color:
+                "var(--vt-red)",
+              background:
+                "var(--vt-surface)",
+              fontFamily:
+                '"SFMono-Regular", Consolas, monospace',
+              fontSize: "10px",
+            }}
+          >
+            {error ||
+              "Registration not found"}
+          </div>
+
+        </div>
+      </main>
+    );
+  }
+
+
+  async function reverseDistribution(
+    registrationItemId: number
+  ) {
+    try {
+      const response = await fetch(
+        "/api/distribution",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            registrationItemId,
+            status: "PENDING",
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to reverse distribution"
+        );
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error(
+        "Distribution reversal failed:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to reverse distribution"
+      );
+    }
+  }
+
+  const fullyDistributed =
+    registration.distribution.pending ===
+    0;
+
+  const claimUrl =
+    `${window.location.origin}/claim/${registration.qr_token}`;
+
+  return (
+    <main className="dashboard">
+      <div className="container">
+
+        {/* HEADER */}
+
+        <header className="header">
+
+          <div>
+
+            <div
+              style={{
+                color:
+                  "var(--vt-orange-bright)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 700,
+                letterSpacing: ".15em",
+              }}
+            >
+              [03] / REGISTRATION DETAIL
+            </div>
+
+            <h1>
+              {registration.name}
+            </h1>
+
+            <p>
+              Buyer profile and QR
+              distribution record
+            </p>
+
+          </div>
+
+          <Link
+            href="/admin/registrations"
+            className="admin-link"
+          >
+            ← All Registrations
+          </Link>
+
+        </header>
+
+
+        {/* BUYER + QR */}
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "minmax(0, 1fr) 360px",
+            gap: "1px",
+            background:
+              "var(--vt-border)",
+            border:
+              "1px solid var(--vt-border)",
+          }}
+        >
+
+          {/* BUYER INFORMATION */}
+
+          <div
+            style={{
+              padding: "30px",
+              background:
+                "var(--vt-surface)",
+            }}
+          >
+
+            <div
+              style={{
+                color:
+                  "var(--vt-orange-bright)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 800,
+                letterSpacing: ".12em",
+                marginBottom: "22px",
+              }}
+            >
+              BUYER INFORMATION
+            </div>
+
+
+            <div
+              style={{
+                marginBottom: "28px",
+              }}
+            >
+
+              <div
+                style={{
+                  color:
+                    "var(--vt-white)",
+                  fontSize: "32px",
+                  fontWeight: 700,
+                  lineHeight: 1.05,
+                  letterSpacing:
+                    "-.035em",
+                }}
+              >
+                {registration.name}
+              </div>
+
+              <div
+                style={{
+                  marginTop: "9px",
+                  color:
+                    "var(--vt-muted)",
+                  fontFamily:
+                    '"SFMono-Regular", Consolas, monospace',
+                  fontSize: "10px",
+                }}
+              >
+                {registration.email}
+              </div>
+
+            </div>
+
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(2, minmax(0, 1fr))",
+                gap: "1px",
+                background:
+                  "var(--vt-border)",
+              }}
+            >
+
+              <DetailField
+                label="REGISTRATION ID"
+                value={
+                  registration.registration_id
+                }
+              />
+
+              <DetailField
+                label="TOTAL PAID"
+                value={formatAmount(
+                  registration.total
+                )}
+                highlight
+              />
+
+              <DetailField
+                label="TOTAL ITEMS"
+                value={
+                  registration.distribution
+                    .total
+                }
+              />
+
+              <DetailField
+                label="DISTRIBUTED"
+                value={
+                  registration.distribution
+                    .given
+                }
+              />
+
+            </div>
+
+          </div>
+
+
+          {/* QR */}
+
+          <div
+            style={{
+              padding: "28px",
+              background:
+                "#080b0d",
+              display: "flex",
+              flexDirection:
+                "column",
+              alignItems: "center",
+              justifyContent:
+                "center",
+            }}
+          >
+
+            <div
+              style={{
+                alignSelf: "stretch",
+                color:
+                  "var(--vt-orange-bright)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                fontWeight: 800,
+                letterSpacing: ".12em",
+                marginBottom: "18px",
+              }}
+            >
+              QR ACCESS CODE
+            </div>
+
+            {qrImage && (
+              <div
+                style={{
+                  padding: "15px",
+                  background:
+                    "#ffffff",
+                  border:
+                    "1px solid #d7dce0",
+                }}
+              >
+                <img
+                  src={qrImage}
+                  alt={`QR code for ${registration.name}`}
+                  style={{
+                    display: "block",
+                    width: "250px",
+                    height: "250px",
+                  }}
+                />
+              </div>
+            )}
+
+            <div
+              style={{
+                marginTop: "16px",
+                color:
+                  "var(--vt-muted)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+                textAlign: "center",
+                wordBreak:
+                  "break-all",
+                lineHeight: 1.6,
+              }}
+            >
+              /claim/
+              {registration.qr_token}
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* DISTRIBUTION STATUS */}
+
+        <section
+          style={{
+            marginTop: "28px",
+          }}
+        >
+
+          <SectionTitle
+            number="01"
+            title="Distribution Status"
+          />
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(3, minmax(0, 1fr))",
+              gap: "1px",
+              background:
+                "var(--vt-border)",
+              border:
+                "1px solid var(--vt-border)",
+            }}
+          >
+
+            <StatusCard
+              label="TOTAL"
+              value={
+                registration.distribution
+                  .total
+              }
+              subtitle="Purchased units"
+            />
+
+            <StatusCard
+              label="GIVEN"
+              value={
+                registration.distribution
+                  .given
+              }
+              subtitle="Handed over"
+              positive
+            />
+
+            <StatusCard
+              label="PENDING"
+              value={
+                registration.distribution
+                  .pending
+              }
+              subtitle="Awaiting pickup"
+              warning={
+                registration.distribution
+                  .pending > 0
+              }
+            />
+
+          </div>
+
+        </section>
+
+
+        {/* PURCHASED MERCHANDISE */}
+
+        <section
+          style={{
+            marginTop: "30px",
+          }}
+        >
+
+          <SectionTitle
+            number="02"
+            title="Purchased Merchandise"
+          />
+
+          <div
+            className="registration-table"
+          >
+
+            <div
+              className="registration-row registration-header"
+              style={{
+                gridTemplateColumns:
+                  "2fr 1fr 1fr 1fr",
+              }}
+            >
+              <span>Item</span>
+              <span>Size</span>
+              <span>Quantity</span>
+              <span>Status</span>
+            </div>
+
+
+            {registration.items.map(
+              (item) => (
+                <div
+                  className="registration-row"
+                  key={item.id}
+                  style={{
+                    gridTemplateColumns:
+                      "2fr 1fr 1fr 1fr",
+                  }}
+                >
+
+                  <div>
+                    <strong
+                      style={{
+                        color:
+                          "var(--vt-white)",
+                        fontSize:
+                          "13px",
+                      }}
+                    >
+                      {item.item}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        "var(--vt-muted)",
+                      fontFamily:
+                        '"SFMono-Regular", Consolas, monospace',
+                      fontSize:
+                        "10px",
+                    }}
+                  >
+                    {item.size ||
+                      "—"}
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        "var(--vt-white)",
+                      fontFamily:
+                        '"SFMono-Regular", Consolas, monospace',
+                      fontSize:
+                        "13px",
+                      fontWeight:
+                        800,
+                    }}
+                  >
+                    {item.quantity}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display:
+                          "inline-flex",
+                        padding:
+                          "7px 10px",
+                        border:
+                          `1px solid ${
+                            item.status ===
+                            "GIVEN"
+                              ? "var(--vt-green)"
+                              : "var(--vt-yellow)"
+                          }`,
+                        color:
+                          item.status ===
+                          "GIVEN"
+                            ? "var(--vt-green)"
+                            : "var(--vt-yellow)",
+                        fontFamily:
+                          '"SFMono-Regular", Consolas, monospace',
+                        fontSize:
+                          "8px",
+                        fontWeight:
+                          800,
+                        letterSpacing:
+                          ".08em",
+                      }}
+                    >
+                      {item.status ===
+                      "GIVEN"
+                        ? "✓ GIVEN"
+                        : "● PENDING"}
+                    </span>
+
+                    {item.status ===
+                      "GIVEN" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          reverseDistribution(
+                            item.id
+                          )
+                        }
+                        style={{
+                          padding:
+                            "7px 10px",
+                          border:
+                            "1px solid var(--vt-red)",
+                          background:
+                            "transparent",
+                          color:
+                            "var(--vt-red)",
+                          fontFamily:
+                            '"SFMono-Regular", Consolas, monospace',
+                          fontSize:
+                            "7px",
+                          fontWeight:
+                            800,
+                          letterSpacing:
+                            ".06em",
+                          cursor:
+                            "pointer",
+                        }}
+                      >
+                        ↶ REVERSE
+                      </button>
+                    )}
+                  </div>
+
+                </div>
+              )
+            )}
+
+          </div>
+
+        </section>
+
+
+        {/* QR DETAILS */}
+
+        <section
+          style={{
+            marginTop: "30px",
+          }}
+        >
+
+          <SectionTitle
+            number="03"
+            title="QR Record"
+          />
+
+          <div
+            style={{
+              border:
+                "1px solid var(--vt-border)",
+              background:
+                "var(--vt-surface)",
+              padding: "22px",
+            }}
+          >
+
+            <div
+              style={{
+                color:
+                  "var(--vt-muted)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+                letterSpacing:
+                  ".1em",
+                marginBottom:
+                  "8px",
+              }}
+            >
+              CLAIM URL
+            </div>
+
+            <div
+              style={{
+                padding: "13px",
+                background:
+                  "#080b0d",
+                border:
+                  "1px solid var(--vt-border)",
+                color:
+                  "var(--vt-orange-light)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "9px",
+                wordBreak:
+                  "break-all",
+              }}
+            >
+              {claimUrl}
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "15px",
+                color:
+                  "var(--vt-dim)",
+                fontFamily:
+                  '"SFMono-Regular", Consolas, monospace',
+                fontSize: "8px",
+                lineHeight: 1.7,
+              }}
+            >
+              QR NAME:{" "}
+              {registration.name}
+              <br />
+              TOKEN:{" "}
+              {registration.qr_token}
+              <br />
+              ACCESS:{" "}
+              {fullyDistributed
+                ? "DISTRIBUTION COMPLETE"
+                : "DISTRIBUTION ACTIVE"}
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <div
+          style={{
+            marginTop: "30px",
+            paddingTop: "15px",
+            borderTop:
+              "1px solid var(--vt-border)",
+            display: "flex",
+            justifyContent:
+              "space-between",
+            gap: "15px",
+            flexWrap: "wrap",
+            color:
+              "var(--vt-dim)",
+            fontFamily:
+              '"SFMono-Regular", Consolas, monospace',
+            fontSize: "8px",
+            letterSpacing:
+              ".1em",
+          }}
+        >
+          <span>
+            VTAAP 2026 /
+            REGISTRATION DETAIL
+          </span>
+
+          <Link
+            href="/admin/registrations"
+            style={{
+              color:
+                "var(--vt-orange-bright)",
+              textDecoration:
+                "none",
+            }}
+          >
+            BACK TO REGISTRATIONS
+          </Link>
+        </div>
+
+      </div>
+    </main>
+  );
+}
+
+
+function SectionTitle({
+  number,
+  title,
+}: {
+  number: string;
+  title: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: "12px",
+        marginBottom: "12px",
+      }}
+    >
+      <span
+        style={{
+          color:
+            "var(--vt-orange-bright)",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "9px",
+          fontWeight: 800,
+        }}
+      >
+        {number}
+      </span>
+
+      <h2
+        style={{
+          margin: 0,
+          color:
+            "var(--vt-white)",
+          fontSize: "18px",
+          fontWeight: 500,
+          textTransform:
+            "uppercase",
+        }}
+      >
+        {title}
+      </h2>
+    </div>
+  );
+}
+
+
+function DetailField({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string | number;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: "18px",
+        background:
+          "var(--vt-surface-2)",
+      }}
+    >
+      <div
+        style={{
+          color:
+            "var(--vt-dim)",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "7px",
+          fontWeight: 700,
+          letterSpacing:
+            ".1em",
+          marginBottom: "7px",
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          color:
+            highlight
+              ? "var(--vt-orange-bright)"
+              : "var(--vt-white)",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "14px",
+          fontWeight: 800,
+          wordBreak:
+            "break-word",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+
+function StatusCard({
+  label,
+  value,
+  subtitle,
+  positive = false,
+  warning = false,
+}: {
+  label: string;
+  value: number;
+  subtitle: string;
+  positive?: boolean;
+  warning?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: "22px",
+        background:
+          "var(--vt-surface)",
+      }}
+    >
+      <div
+        style={{
+          color:
+            "var(--vt-dim)",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "8px",
+          fontWeight: 800,
+          letterSpacing:
+            ".1em",
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          marginTop: "8px",
+          color:
+            positive
+              ? "var(--vt-green)"
+              : warning
+                ? "var(--vt-yellow)"
+                : "var(--vt-orange-bright)",
+          fontFamily:
+            '"SFMono-Regular", Consolas, monospace',
+          fontSize: "34px",
+          fontWeight: 800,
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </div>
+
+      <div
+        style={{
+          marginTop: "7px",
+          color:
+            "var(--vt-muted)",
+          fontSize: "8px",
+        }}
+      >
+        {subtitle}
+      </div>
+    </div>
+  );
+}

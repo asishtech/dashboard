@@ -205,11 +205,13 @@ export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
-    const registrationItemId = Number(
-      body.registrationItemId
-    );
+    const registrationItemId =
+      Number(
+        body.registrationItemId
+      );
 
     if (!registrationItemId) {
       return NextResponse.json(
@@ -223,36 +225,10 @@ export async function POST(
       );
     }
 
-    /*
-     * Verify that the registration item exists.
-     */
     const {
-      data: item,
-      error: itemError,
-    } = await supabase
-      .from("registration_items")
-      .select("id,registration_id")
-      .eq("id", registrationItemId)
-      .single();
-
-    if (itemError || !item) {
-      return NextResponse.json(
-        {
-          error:
-            "Registration item not found",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    /*
-     * Find an existing distribution record.
-     */
-    const {
-      data: existing,
-      error: existingError,
+      data: distribution,
+      error:
+        distributionError,
     } = await supabase
       .from("distributions")
       .select(
@@ -262,116 +238,85 @@ export async function POST(
         "registration_item_id",
         registrationItemId
       )
-      .maybeSingle();
+      .single();
 
-    if (existingError) {
-      throw existingError;
+    if (
+      distributionError ||
+      !distribution
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Distribution record not found",
+        },
+        {
+          status: 404,
+        }
+      );
     }
 
-    let distributionId: number;
-
-    /*
-     * If no distribution row exists,
-     * create one as GIVEN.
-     */
-    if (!existing) {
-      const now =
-        new Date().toISOString();
-
-      const {
-        data: created,
-        error: createError,
-      } = await supabase
-        .from("distributions")
-        .insert({
-          registration_item_id:
-            registrationItemId,
-          status: "GIVEN",
-          given_at: now,
-          updated_at: now,
-        })
-        .select(
-          "id,status,registration_item_id"
-        )
-        .single();
-
-      if (createError) {
-        throw createError;
-      }
-
-      distributionId = created.id;
-    } else {
-      /*
-       * Prevent double distribution.
-       */
-      if (
-        existing.status ===
-        "GIVEN"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "This item has already been given.",
-          },
-          {
-            status: 409,
-          }
-        );
-      }
-
-      const now =
-        new Date().toISOString();
-
-      const {
-        data: updated,
-        error: updateError,
-      } = await supabase
-        .from("distributions")
-        .update({
-          status: "GIVEN",
-          given_at: now,
-          updated_at: now,
-        })
-        .eq(
-          "id",
-          existing.id
-        )
-        .eq(
-          "status",
-          "PENDING"
-        )
-        .select(
-          "id,status,registration_item_id"
-        )
-        .maybeSingle();
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      if (!updated) {
-        return NextResponse.json(
-          {
-            error:
-              "This item could not be marked as given.",
-          },
-          {
-            status: 409,
-          }
-        );
-      }
-
-      distributionId =
-        updated.id;
+    if (
+      distribution.status ===
+      "GIVEN"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "This item has already been given.",
+        },
+        {
+          status: 409,
+        }
+      );
     }
 
-    /*
-     * Return the complete registration
-     * so the scanner UI updates immediately.
-     */
+    const {
+      error: updateError,
+    } = await supabase
+      .from("distributions")
+      .update({
+        status: "GIVEN",
+        given_at:
+          new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        distribution.id
+      )
+      .eq(
+        "status",
+        "PENDING"
+      );
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    const {
+      data: item,
+    } = await supabase
+      .from(
+        "registration_items"
+      )
+      .select(
+        "registration_id"
+      )
+      .eq(
+        "id",
+        registrationItemId
+      )
+      .single();
+
+    if (!item) {
+      throw new Error(
+        "Registration item not found"
+      );
+    }
+
     const {
       data: registration,
-      error: registrationError,
     } = await supabase
       .from("registrations")
       .select(`
@@ -384,8 +329,7 @@ export async function POST(
           size,
           quantity,
           distribution:distributions(
-            status,
-            given_at
+            status
           )
         )
       `)
@@ -395,48 +339,31 @@ export async function POST(
       )
       .single();
 
-    if (
-      registrationError ||
-      !registration
-    ) {
-      throw (
-        registrationError ??
-        new Error(
-          "Registration could not be loaded"
-        )
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      distributionId,
       registration: {
         ...registration,
         items:
-          registration.items.map(
-            (registrationItem: any) => ({
-              ...registrationItem,
+          registration?.items.map(
+            (i: any) => ({
+              ...i,
               status:
-                registrationItem
-                  .distribution?.[0]
+                i.distribution
+                  ?.at(0)
                   ?.status ??
                 "PENDING",
             })
-          ),
+          ) ?? [],
       },
     });
-  } catch (error) {
-    console.error(
-      "Distribution POST error:",
-      error
-    );
 
+  } catch (error) {
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Unable to distribute item",
+            : "Distribution failed",
       },
       {
         status: 500,
@@ -444,4 +371,3 @@ export async function POST(
     );
   }
 }
-
