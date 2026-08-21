@@ -1,0 +1,293 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import LogoutButton from "@/components/LogoutButton";
+
+export default function AdminRegistrations() {
+
+  const [records, setRecords] =
+    useState<any[]>([]);
+
+  const [search, setSearch] =
+    useState("");
+
+  useEffect(() => {
+
+    async function load() {
+
+      const response =
+        await fetch(
+          "/api/registrations",
+          {
+            cache: "no-store",
+          }
+        );
+
+      const data =
+        await response.json();
+
+      setRecords(
+        data.data ?? []
+      );
+    }
+
+    load();
+
+  }, []);
+
+
+  const filtered =
+    records.filter(
+      record => {
+
+        const q =
+          search
+            .toLowerCase()
+            .trim();
+
+        if (!q) {
+          return true;
+        }
+
+        return JSON.stringify(
+          record
+        )
+          .toLowerCase()
+          .includes(q);
+      }
+    );
+
+
+  return (
+
+    <main className="dashboard">
+
+      <div className="container">
+
+        <header className="header">
+
+          <div>
+            <h1>
+              Registrations
+            </h1>
+
+            <p>
+              Buyers and QR codes
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+            }}
+          >
+            <Link
+              href="/admin"
+              className="admin-link"
+            >
+              ← Admin
+            </Link>
+
+            <LogoutButton />
+          </div>
+
+        </header>
+
+
+        <section className="search-panel">
+
+          <input
+            type="search"
+            placeholder="Search buyer, email, registration..."
+            value={search}
+            onChange={e =>
+              setSearch(
+                e.target.value
+              )
+            }
+          />
+
+        </section>
+
+
+        <section className="table-card">
+
+          <div className="table-header">
+
+            <div>
+
+              <h2>
+                Buyers
+              </h2>
+
+              <span>
+                {filtered.length}
+                {" "}
+                registrations
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div className="table-wrapper">
+
+            <table>
+
+              <thead>
+
+                <tr>
+
+                  <th>Registration</th>
+                  <th>Buyer</th>
+                  <th>Email</th>
+                  <th>Items</th>
+                  <th>Distribution</th>
+                  <th>QR</th>
+
+                </tr>
+
+              </thead>
+
+
+              <tbody>
+
+                {filtered.map(
+                  record => {
+
+                    const items =
+                      record.items ??
+                      [];
+
+                    const given =
+                      items.filter(
+                        (item: any) =>
+                          item.distribution
+                            ?.some(
+                              (d: any) =>
+                                d.status ===
+                                "GIVEN"
+                            )
+                      ).length;
+
+                    return (
+
+                      <tr
+                        key={
+                          record.id
+                        }
+                      >
+
+                        <td>
+
+                          <span className="id-badge">
+                            {
+                              record.registration_id
+                            }
+                          </span>
+
+                        </td>
+
+
+                        <td>
+                          <strong>
+                            {
+                              record.name ??
+                              "—"
+                            }
+                          </strong>
+                        </td>
+
+
+                        <td className="email">
+                          {
+                            record.email ??
+                            "—"
+                          }
+                        </td>
+
+
+                        <td>
+
+                          {items.map(
+                            (item: any) => (
+
+                              <div
+                                key={
+                                  item.id
+                                }
+                              >
+
+                                {item.item}
+
+                                {item.size
+                                  ? ` (${item.size})`
+                                  : ""}
+
+                              </div>
+
+                            )
+                          )}
+
+                        </td>
+
+
+                        <td>
+
+                          {given ===
+                          items.length &&
+                          items.length > 0 ? (
+
+                            <span className="type-badge single">
+                              GIVEN
+                            </span>
+
+                          ) : (
+
+                            <span className="type-badge combo">
+                              {given}/
+                              {items.length}
+                            </span>
+
+                          )}
+
+                        </td>
+
+
+                        <td>
+
+                          <a
+                            href={`/claim/${record.qr_token}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="qr-button"
+                          >
+                            View QR
+                          </a>
+
+                        </td>
+
+                      </tr>
+
+                    );
+
+                  }
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </section>
+
+      </div>
+
+    </main>
+  );
+}

@@ -1,0 +1,466 @@
+import { supabase } from "@/lib/supabase";
+import QRCode from "qrcode";
+import { notFound, redirect } from "next/navigation";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+export const dynamic = "force-dynamic";
+
+export default async function ClaimPage({
+  params,
+}: {
+  params: Promise<{
+    token: string;
+  }>;
+}) {
+
+  const { token } =
+    await params;
+
+
+  /*
+   * Get authenticated Google user.
+   */
+  const cookieStore =
+    await cookies();
+
+  const authClient =
+    createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(
+              ({
+                name,
+                value,
+                options,
+              }) => {
+                cookieStore.set(
+                  name,
+                  value,
+                  options
+                );
+              }
+            );
+          },
+        },
+      }
+    );
+
+
+  const {
+    data: {
+      user,
+    },
+  } =
+    await authClient.auth.getUser();
+
+
+  if (!user) {
+    redirect(
+      `/login?next=/claim/${token}`
+    );
+  }
+
+
+  const googleEmail =
+    user!.email
+      ?.trim()
+      .toLowerCase();
+
+
+  if (!googleEmail) {
+    notFound();
+  }
+
+
+  /*
+   * Find QR registration.
+   *
+   * We use the service-role client only
+   * after authentication, and STILL verify
+   * that the Google email matches.
+   */
+  const {
+    data: registration,
+    error,
+  } =
+    await supabase
+      .from("registrations")
+      .select(`
+        id,
+        registration_id,
+        name,
+        email,
+        ticket,
+        items:registration_items(
+          id,
+          item,
+          size,
+          quantity,
+          distribution:distributions(
+            status,
+            given_at
+          )
+        )
+      `)
+      .eq(
+        "qr_token",
+        token
+      )
+      .single();
+
+
+  if (
+    error ||
+    !registration
+  ) {
+    notFound();
+  }
+
+
+  /*
+   * SECURITY CHECK:
+   *
+   * QR token alone is NOT enough.
+   *
+   * The Google account must own
+   * this registration.
+   */
+  const registrationEmail =
+    registration.email
+      ?.trim()
+      .toLowerCase();
+
+
+  if (
+    !registrationEmail ||
+    registrationEmail !==
+      googleEmail
+  ) {
+
+    return (
+      <main
+        style={{
+          minHeight:
+            "100vh",
+          display:
+            "grid",
+          placeItems:
+            "center",
+          background:
+            "#f4f6f9",
+          padding:
+            "30px",
+        }}
+      >
+
+        <div
+          style={{
+            background:
+              "white",
+            borderRadius:
+              "18px",
+            padding:
+              "40px",
+            maxWidth:
+              "500px",
+            width:
+              "100%",
+            textAlign:
+              "center",
+            boxShadow:
+              "0 20px 50px rgba(0,0,0,.08)",
+          }}
+        >
+
+          <div
+            style={{
+              fontSize:
+                "50px",
+              marginBottom:
+                "15px",
+            }}
+          >
+            🔒
+          </div>
+
+          <h1>
+            QR Access Denied
+          </h1>
+
+          <p
+            style={{
+              color:
+                "#64748b",
+              lineHeight:
+                "1.6",
+            }}
+          >
+            This QR code belongs to a
+            different Google account.
+          </p>
+
+          <p
+            style={{
+              color:
+                "#64748b",
+              fontSize:
+                "13px",
+            }}
+          >
+            Sign in using the Google
+            account used when purchasing
+            the merchandise.
+          </p>
+
+        </div>
+
+      </main>
+    );
+  }
+
+
+  const qrUrl =
+    `${process.env.NEXT_PUBLIC_APP_URL}/claim/${token}`;
+
+
+  const qr =
+    await QRCode.toDataURL(
+      qrUrl,
+      {
+        width: 500,
+        margin: 2,
+      }
+    );
+
+
+  return (
+
+    <main
+      style={{
+        minHeight:
+          "100vh",
+        background:
+          "#f4f6f9",
+        display:
+          "flex",
+        justifyContent:
+          "center",
+        alignItems:
+          "center",
+        padding:
+          "30px",
+      }}
+    >
+
+      <div
+        style={{
+          width:
+            "100%",
+          maxWidth:
+            "520px",
+          background:
+            "white",
+          borderRadius:
+            "20px",
+          padding:
+            "35px",
+          boxShadow:
+            "0 20px 50px rgba(0,0,0,.08)",
+          textAlign:
+            "center",
+        }}
+      >
+
+        <h1>
+          V-TAPP Merchandise
+        </h1>
+
+        <p>
+          Registration #
+          <strong>
+            {" "}
+            {registration.registration_id}
+          </strong>
+        </p>
+
+
+        <div
+          style={{
+            margin:
+              "30px auto",
+          }}
+        >
+
+          <img
+            src={qr}
+            alt="V-TAPP QR"
+            style={{
+              width:
+                "300px",
+              maxWidth:
+                "100%",
+            }}
+          />
+
+        </div>
+
+
+        <h2>
+          {registration.name}
+        </h2>
+
+
+        <p
+          style={{
+            color:
+              "#64748b",
+          }}
+        >
+          {registration.email}
+        </p>
+
+
+        <div
+          style={{
+            textAlign:
+              "left",
+            marginTop:
+              "30px",
+          }}
+        >
+
+          <h3>
+            Your Merchandise
+          </h3>
+
+
+          {(registration.items ?? []).map(
+            (item: any) => {
+
+              const distribution =
+                Array.isArray(
+                  item.distribution
+                )
+                  ? item.distribution
+                  : item.distribution
+                    ? [item.distribution]
+                    : [];
+
+
+              const given =
+                distribution.some(
+                  (d: any) =>
+                    d.status ===
+                    "GIVEN"
+                );
+
+
+              return (
+
+                <div
+                  key={
+                    item.id
+                  }
+                  style={{
+                    padding:
+                      "16px",
+                    border:
+                      "1px solid #e5e7eb",
+                    borderRadius:
+                      "12px",
+                    marginBottom:
+                      "10px",
+                    display:
+                      "flex",
+                    justifyContent:
+                      "space-between",
+                    alignItems:
+                      "center",
+                    gap:
+                      "15px",
+                  }}
+                >
+
+                  <div>
+
+                    <strong>
+                      {item.item}
+                    </strong>
+
+                    {item.size && (
+
+                      <div
+                        style={{
+                          color:
+                            "#64748b",
+                          marginTop:
+                            "4px",
+                        }}
+                      >
+                        Size:{" "}
+                        {item.size}
+                      </div>
+
+                    )}
+
+                  </div>
+
+
+                  <strong
+                    style={{
+                      whiteSpace:
+                        "nowrap",
+                      color:
+                        given
+                          ? "#16a34a"
+                          : "#d97706",
+                    }}
+                  >
+                    {given
+                      ? "✓ GIVEN"
+                      : "PENDING"}
+                  </strong>
+
+                </div>
+
+              );
+
+            }
+          )}
+
+        </div>
+
+
+        <div
+          style={{
+            marginTop:
+              "25px",
+            padding:
+              "15px",
+            background:
+              "#f8fafc",
+            borderRadius:
+              "10px",
+            color:
+              "#64748b",
+            fontSize:
+              "13px",
+          }}
+        >
+          Show this QR code to a
+          V-TAPP merchandise volunteer.
+        </div>
+
+      </div>
+
+    </main>
+  );
+}
