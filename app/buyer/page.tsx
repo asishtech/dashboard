@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import LogoutButton from "@/components/LogoutButton";
@@ -26,7 +27,7 @@ type Registration = {
 export default function BuyerPage() {
 
   const [user, setUser] =
-    useState<any>(null);
+    useState<User | null>(null);
 
   const [registrations, setRegistrations] =
     useState<Registration[]>([]);
@@ -182,7 +183,7 @@ export default function BuyerPage() {
             </h2>
 
             <p className="panel-subtitle">
-              We couldn't find any V-TAPP
+              We couldn&apos;t find any V-TAPP
               merchandise associated with
               your Google account.
             </p>

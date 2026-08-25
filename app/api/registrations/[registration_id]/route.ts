@@ -1,35 +1,52 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+type ItemRow = {
+  id: number;
+  item: string;
+  size: string | null;
+  quantity: number | string | null;
+  distribution:
+    | { status: string | null }[]
+    | { status: string | null }
+    | null;
+};
+
+function toArray(distribution: ItemRow["distribution"]) {
+  if (Array.isArray(distribution)) {
+    return distribution;
+  }
+
+  return distribution ? [distribution] : [];
+}
+
 export async function GET(
   request: Request,
-  {
-    params,
-  }: {
-    params: Promise<{
-      registration_id: string;
-    }>;
-  }
+  { params }: { params: Promise<{ registration_id: string }> }
 ) {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
   try {
     const { registration_id } = await params;
 
     if (!registration_id) {
       return NextResponse.json(
-        {
-          error: "Registration ID is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Registration ID is required" },
+        { status: 400 }
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin()
       .from("registrations")
-      .select(`
+      .select(
+        `
         registration_id,
         name,
         email,
@@ -40,111 +57,71 @@ export async function GET(
           item,
           size,
           quantity,
-          distribution:distributions(
-            status
-          )
+          distribution:distributions(status)
         )
-      `)
+      `
+      )
       .eq("registration_id", registration_id)
-      .single();
+      .maybeSingle();
+
+    if (error) {
+      console.error("Registration lookup error:", error);
+    }
 
     if (error || !data) {
-      console.error(
-        "Registration lookup error:",
-        error
-      );
-
       return NextResponse.json(
-        {
-          error: "Registration not found",
-        },
-        {
-          status: 404,
-        }
+        { error: "Registration not found" },
+        { status: 404 }
       );
     }
 
-    const items = (data.items ?? []).map(
-      (item: any) => {
-        const distributions =
-          Array.isArray(item.distribution)
-            ? item.distribution
-            : [];
+    let totalItems = 0;
+    let givenItems = 0;
 
-        const given =
-          distributions.filter(
-            (distribution: any) =>
-              distribution.status === "GIVEN"
-          ).length;
+    const items = ((data.items ?? []) as ItemRow[]).map((item) => {
+      const quantity = Math.max(Number(item.quantity ?? 1), 1);
 
-        return {
-          id: item.id,
-          item: item.item,
-          size: item.size,
-          quantity: Number(
-            item.quantity ?? 1
-          ),
-          status:
-            given >=
-            Number(item.quantity ?? 1)
-              ? "GIVEN"
-              : "PENDING",
-        };
+      const given = toArray(item.distribution).filter(
+        (distribution) => distribution?.status === "GIVEN"
+      ).length;
+
+      const status = given >= quantity ? "GIVEN" : "PENDING";
+
+      totalItems += quantity;
+
+      if (status === "GIVEN") {
+        givenItems += quantity;
       }
-    );
 
-    const totalItems = items.reduce(
-      (sum, item) =>
-        sum + Number(item.quantity ?? 0),
-      0
-    );
-
-    const givenItems = items.reduce(
-      (sum, item) =>
-        sum +
-        (item.status === "GIVEN"
-          ? Number(item.quantity ?? 0)
-          : 0),
-      0
-    );
+      return {
+        id: item.id,
+        item: item.item,
+        size: item.size,
+        quantity,
+        status,
+      };
+    });
 
     return NextResponse.json({
       success: true,
 
       registration: {
-        registration_id:
-          data.registration_id,
-
+        registration_id: data.registration_id,
         name: data.name,
-
         email: data.email,
-
-        total: Number(
-          data.total ?? 0
-        ),
-
-        qr_token:
-          data.qr_token,
-
+        total: Number(data.total ?? 0),
+        qr_token: data.qr_token,
         items,
 
         distribution: {
           total: totalItems,
           given: givenItems,
-          pending:
-            Math.max(
-              totalItems -
-                givenItems,
-              0
-            ),
+          pending: Math.max(totalItems - givenItems, 0),
         },
       },
     });
   } catch (error) {
-    console.error(
-      "Registration detail API error:",
-      error
-    );
+    console.error("Registration detail API error:", error);
 
     return NextResponse.json(
       {
@@ -153,9 +130,7 @@ export async function GET(
             ? error.message
             : "Failed to load registration",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

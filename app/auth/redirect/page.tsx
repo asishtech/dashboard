@@ -24,6 +24,9 @@ export default function AuthRedirect() {
        * volunteer invitation assigned to this
        * Google account.
        */
+      let syncedRole: string | null =
+        null;
+
       try {
         const response = await fetch(
           "/api/auth/staff-sync",
@@ -36,7 +39,23 @@ export default function AuthRedirect() {
           }
         );
 
-        if (!response.ok) {
+        if (response.ok) {
+          const result =
+            await response.json();
+
+          /*
+           * Staff sync just wrote the profile and
+           * tells us the role it assigned, so for
+           * admins and volunteers there is nothing
+           * left to wait for.
+           */
+          if (
+            result?.active !== false
+          ) {
+            syncedRole =
+              result?.role ?? null;
+          }
+        } else {
           console.error(
             "Staff synchronization failed"
           );
@@ -51,12 +70,24 @@ export default function AuthRedirect() {
       /*
        * Read the final profile after staff
        * synchronization.
+       *
+       * Only buyers reach the retry loop: their
+       * profile is created by the database, which
+       * can lag slightly behind first sign-in.
        */
-      let profile = null;
+      let profile: {
+        role: string;
+        active: boolean;
+      } | null = syncedRole
+        ? {
+            role: syncedRole,
+            active: true,
+          }
+        : null;
 
       for (
         let attempt = 0;
-        attempt < 5;
+        !profile && attempt < 5;
         attempt++
       ) {
         const result =

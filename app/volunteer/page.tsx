@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import { usePoll } from "@/lib/use-poll";
 
 type InventoryItem = {
   id: number;
@@ -34,11 +35,18 @@ export default function VolunteerPage() {
     useState(false);
 
   const loadDashboard = useCallback(
-    async (silent = false) => {
+    async (
+      mode: "initial" | "silent" | "manual" = "manual"
+    ) => {
       try {
-        if (silent) {
+        /*
+         * The first load leaves the state alone: `loading`
+         * already starts true, and setting it again from the
+         * mount effect forces an extra render pass.
+         */
+        if (mode === "silent") {
           setRefreshing(true);
-        } else {
+        } else if (mode === "manual") {
           setLoading(true);
         }
 
@@ -95,15 +103,13 @@ export default function VolunteerPage() {
   );
 
   useEffect(() => {
-    loadDashboard();
-
-    const interval = setInterval(
-      () => loadDashboard(true),
-      30000
-    );
-
-    return () => clearInterval(interval);
+    loadDashboard("initial");
   }, [loadDashboard]);
+
+  usePoll(
+    () => loadDashboard("silent"),
+    30_000
+  );
 
   async function logout() {
     const supabase =
@@ -164,7 +170,7 @@ export default function VolunteerPage() {
             <button
               className="volunteer-small-button"
               onClick={() =>
-                loadDashboard(true)
+                loadDashboard("silent")
               }
               disabled={refreshing}
             >

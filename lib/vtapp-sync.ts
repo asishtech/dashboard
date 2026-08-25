@@ -1,4 +1,5 @@
-import { supabase } from "./supabase";
+import { vtappApi } from "./env";
+import { supabaseAdmin } from "./supabase";
 
 type Field = {
   field_name?: string;
@@ -555,361 +556,319 @@ function parseItems(
  * ============================================================
  */
 
-export async function syncVtapp() {
+type PreparedRegistration = {
+  registrationId: string;
+  row: Record<string, unknown>;
+  items: ParsedItem[];
+};
 
-  const apiUrl =
-    process.env.VTAPP_API_URL;
+const CHUNK = 500;
 
-  const apiKey =
-    process.env.VTAPP_API_KEY;
+function chunk<T>(values: T[], size = CHUNK): T[][] {
+  const chunks: T[][] = [];
 
-
-  if (
-    !apiUrl ||
-    !apiKey
-  ) {
-
-    throw new Error(
-      "V-TAPP API configuration missing."
-    );
-
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
   }
 
+  return chunks;
+}
 
-  const response =
-    await fetch(
-      apiUrl,
-      {
-        method: "GET",
+/*
+ * Stable identity for a registration's merchandise.
+ *
+ * Two syncs that parse to the same set of items produce the same
+ * signature, which lets the sync leave those rows (and the
+ * distribution records pointing at them) completely alone.
+ */
+function itemsSignature(
+  items: { item: string; size: string | null; quantity: number }[]
+) {
+  return items
+    .map(
+      (item) =>
+        `${item.item} ${item.size ?? ""} ${Number(
+          item.quantity ?? 1
+        )}`
+    )
+    .sort()
+    .join("");
+}
 
-        headers: {
-          "X-API-KEY":
-            apiKey,
+function prepare(
+  record: Registration
+): PreparedRegistration | null {
+  if (
+    record.registration_id === undefined ||
+    record.registration_id === null
+  ) {
+    return null;
+  }
 
-          Accept:
-            "application/json",
-        },
+  const registrationId = String(record.registration_id);
+  const ticket = getTicket(record.product_meta);
+  const size = getSize(record.field_values);
 
-        cache:
-          "no-store",
-      }
-    );
+  return {
+    registrationId,
 
+    row: {
+      registration_id: registrationId,
+      event_id:
+        record.event_id != null ? String(record.event_id) : null,
+      name: record.name ?? null,
+      email: record.email ?? null,
+      event_date: record.event_date ?? null,
+      order_id: record.order_id ?? null,
+      receipt_id: record.receipt_id ?? null,
+      product: record.product ?? null,
+      product_meta: record.product_meta ?? null,
+      payment_date: record.payment_date ?? null,
+      invoice_number: record.invoice_number ?? null,
+      total: record.total != null ? Number(record.total) : null,
+      ticket,
+      sale_type: getSaleType(ticket),
+      raw_data: record,
+    },
+
+    items: parseItems(ticket, size),
+  };
+}
+
+async function recordSyncState(
+  success: boolean,
+  message: string | null
+) {
+  const now = new Date().toISOString();
+
+  await supabaseAdmin().from("sync_state").upsert({
+    id: 1,
+    last_sync_at: now,
+    last_success: success,
+    last_error: message,
+    updated_at: now,
+  });
+}
+
+export async function syncVtapp() {
+  try {
+    return await runSync();
+  } catch (error) {
+    /*
+     * Record the failure before rethrowing. Previously
+     * `sync_state` was only written on success, so `last_success`
+     * could never actually become false.
+     */
+    await recordSyncState(
+      false,
+      error instanceof Error ? error.message : "Sync failed"
+    ).catch((stateError) => {
+      console.error(
+        "Unable to record sync failure:",
+        stateError
+      );
+    });
+
+    throw error;
+  }
+}
+
+async function runSync() {
+  const { url, key } = vtappApi();
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-API-KEY": key,
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
 
   if (!response.ok) {
-
-    throw new Error(
-      `V-TAPP returned HTTP ${response.status}`
-    );
-
+    throw new Error(`V-TAPP returned HTTP ${response.status}`);
   }
 
+  const payload = await response.json();
 
-  const payload =
-    await response.json();
+  const records: Registration[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : [];
 
+  /*
+   * Later records win, matching the previous behaviour of
+   * upserting duplicates one after another.
+   */
+  const prepared = new Map<string, PreparedRegistration>();
 
-  const records:
-    Registration[] =
-      Array.isArray(payload)
-        ? payload
-        : Array.isArray(
-            payload?.data
-          )
-          ? payload.data
-          : [];
+  for (const record of records) {
+    const entry = prepare(record);
 
+    if (entry) {
+      prepared.set(entry.registrationId, entry);
+    }
+  }
+
+  const entries = [...prepared.values()];
+
+  if (entries.length === 0) {
+    await recordSyncState(true, null);
+
+    return { fetched: records.length, created: 0, updated: 0 };
+  }
+
+  const db = supabaseAdmin();
+
+  /*
+   * 1. Upsert every registration in batches.
+   *
+   *    This replaces one round-trip per record.
+   */
+  const idByRegistrationId = new Map<string, number>();
+
+  for (const batch of chunk(entries)) {
+    const { data, error } = await db
+      .from("registrations")
+      .upsert(
+        batch.map((entry) => entry.row),
+        { onConflict: "registration_id" }
+      )
+      .select("id,registration_id");
+
+    if (error) {
+      throw error;
+    }
+
+    for (const row of data ?? []) {
+      idByRegistrationId.set(
+        String(row.registration_id),
+        row.id
+      );
+    }
+  }
+
+  const registrationIds = [...idByRegistrationId.values()];
+
+  /*
+   * 2. Read the existing items for every registration at once.
+   */
+  const existingByRegistration = new Map<
+    number,
+    { item: string; size: string | null; quantity: number }[]
+  >();
+
+  for (const batch of chunk(registrationIds)) {
+    const { data, error } = await db
+      .from("registration_items")
+      .select("registration_id,item,size,quantity")
+      .in("registration_id", batch);
+
+    if (error) {
+      throw error;
+    }
+
+    for (const row of data ?? []) {
+      const bucket =
+        existingByRegistration.get(row.registration_id) ?? [];
+
+      bucket.push({
+        item: row.item,
+        size: row.size,
+        quantity: Number(row.quantity ?? 1),
+      });
+
+      existingByRegistration.set(row.registration_id, bucket);
+    }
+  }
+
+  /*
+   * 3. Only rewrite items for registrations whose merchandise
+   *    actually changed.
+   *
+   *    The previous implementation deleted and re-inserted every
+   *    registration's items on every sync. Because `distributions`
+   *    reference `registration_items`, that threw away the record
+   *    of what had already been handed out.
+   */
+  const staleRegistrationIds: number[] = [];
+
+  const itemsToInsert: {
+    registration_id: number;
+    item: string;
+    size: string | null;
+    quantity: number;
+  }[] = [];
 
   let created = 0;
   let updated = 0;
 
-
-  for (
-    const record
-    of records
-  ) {
-
-    if (
-      record.registration_id ===
-        undefined ||
-      record.registration_id ===
-        null
-    ) {
-
-      continue;
-
-    }
-
-
-    const registrationId =
-      String(
-        record.registration_id
-      );
-
-
-    const ticket =
-      getTicket(
-        record.product_meta
-      );
-
-
-    const saleType =
-      getSaleType(
-        ticket
-      );
-
-
-    const size =
-      getSize(
-        record.field_values
-      );
-
-
-    /*
-     * Expand combo/single into
-     * physical merchandise.
-     */
-    const items =
-      parseItems(
-        ticket,
-        size
-      );
-
-
-    /*
-     * Upsert registration.
-     */
-
-    const {
-      data: registration,
-      error,
-    } =
-      await supabase
-        .from(
-          "registrations"
-        )
-        .upsert(
-          {
-            registration_id:
-              registrationId,
-
-            event_id:
-              record.event_id !=
-              null
-                ? String(
-                    record.event_id
-                  )
-                : null,
-
-            name:
-              record.name ??
-              null,
-
-            email:
-              record.email ??
-              null,
-
-            event_date:
-              record.event_date ??
-              null,
-
-            order_id:
-              record.order_id ??
-              null,
-
-            receipt_id:
-              record.receipt_id ??
-              null,
-
-            product:
-              record.product ??
-              null,
-
-            product_meta:
-              record.product_meta ??
-              null,
-
-            payment_date:
-              record.payment_date ??
-              null,
-
-            invoice_number:
-              record.invoice_number ??
-              null,
-
-            total:
-              record.total !=
-              null
-                ? Number(
-                    record.total
-                  )
-                : null,
-
-            ticket,
-
-            sale_type:
-              saleType,
-
-            raw_data:
-              record,
-          },
-
-          {
-            onConflict:
-              "registration_id",
-          }
-        )
-        .select()
-        .single();
-
-
-    if (error) {
-
-      throw error;
-
-    }
-
-
-    /*
-     * Check whether this registration
-     * already existed.
-     */
-    const {
-      data:
-        existingItems,
-    } =
-      await supabase
-        .from(
-          "registration_items"
-        )
-        .select(
-          "id"
-        )
-        .eq(
-          "registration_id",
-          registration.id
-        );
-
-
-    /*
-     * Replace registration items.
-     *
-     * Distribution records are preserved
-     * only when the item identity remains
-     * compatible.
-     */
-    if (
-      existingItems &&
-      existingItems.length >
-        0
-    ) {
-
-      await supabase
-        .from(
-          "registration_items"
-        )
-        .delete()
-        .eq(
-          "registration_id",
-          registration.id
-        );
-
-    }
-
-
-    /*
-     * Insert expanded physical items.
-     */
-    if (
-      items.length > 0
-    ) {
-
-      const {
-        error:
-          itemsError,
-      } =
-        await supabase
-          .from(
-            "registration_items"
-          )
-          .insert(
-            items.map(
-              item => ({
-                registration_id:
-                  registration.id,
-
-                item:
-                  item.item,
-
-                size:
-                  item.size,
-
-                quantity:
-                  item.quantity,
-              })
-            )
-          );
-
-
-      if (itemsError) {
-
-        throw itemsError;
-
-      }
-
-    }
-
-
-    /*
-     * Track sync statistics.
-     */
-    if (
-      existingItems &&
-      existingItems.length >
-        0
-    ) {
-
-      updated++;
-
-    } else {
-
-      created++;
-
-    }
-
-  }
-
-
-  /*
-   * Update sync state.
-   */
-  await supabase
-    .from("sync_state")
-    .upsert(
-      {
-        id: 1,
-
-        last_sync_at:
-          new Date().toISOString(),
-
-        last_success:
-          true,
-
-        last_error:
-          null,
-
-        updated_at:
-          new Date().toISOString(),
-      }
+  for (const entry of entries) {
+    const registrationId = idByRegistrationId.get(
+      entry.registrationId
     );
 
+    if (registrationId === undefined) {
+      continue;
+    }
+
+    const existing = existingByRegistration.get(registrationId);
+
+    if (existing && existing.length > 0) {
+      updated++;
+    } else {
+      created++;
+    }
+
+    if (
+      itemsSignature(existing ?? []) ===
+      itemsSignature(entry.items)
+    ) {
+      continue;
+    }
+
+    if (existing && existing.length > 0) {
+      staleRegistrationIds.push(registrationId);
+    }
+
+    for (const item of entry.items) {
+      itemsToInsert.push({
+        registration_id: registrationId,
+        item: item.item,
+        size: item.size,
+        quantity: item.quantity,
+      });
+    }
+  }
+
+  for (const batch of chunk(staleRegistrationIds)) {
+    const { error } = await db
+      .from("registration_items")
+      .delete()
+      .in("registration_id", batch);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  for (const batch of chunk(itemsToInsert)) {
+    const { error } = await db
+      .from("registration_items")
+      .insert(batch);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  await recordSyncState(true, null);
 
   return {
-    fetched:
-      records.length,
-
+    fetched: records.length,
     created,
-
     updated,
+    itemsRewritten: itemsToInsert.length,
   };
 }

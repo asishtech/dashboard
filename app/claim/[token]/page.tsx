@@ -1,10 +1,54 @@
-import { supabase } from "@/lib/supabase";
 import QRCode from "qrcode";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createSupabaseServer } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+
+type ClaimDistribution = {
+  status: string | null;
+  given_at?: string | null;
+};
+
+type ClaimItem = {
+  id: number;
+  item: string;
+  size: string | null;
+  quantity: number | string | null;
+  distribution:
+    | ClaimDistribution[]
+    | ClaimDistribution
+    | null;
+};
+
+function quantityOf(item: ClaimItem) {
+  return Math.max(
+    Number(item.quantity ?? 1),
+    1
+  );
+}
+
+/*
+ * How many units of this line item have been handed over.
+ *
+ * Supabase returns the embedded relation as an array or as a
+ * single object depending on the inferred cardinality.
+ */
+function givenCount(item: ClaimItem) {
+  const distributions = Array.isArray(
+    item.distribution
+  )
+    ? item.distribution
+    : item.distribution
+      ? [item.distribution]
+      : [];
+
+  return distributions.filter(
+    (distribution) =>
+      distribution?.status === "GIVEN"
+  ).length;
+}
 
 export default async function ClaimPage({
   params,
@@ -21,38 +65,8 @@ export default async function ClaimPage({
   /*
    * Get authenticated Google user.
    */
-  const cookieStore =
-    await cookies();
-
   const authClient =
-    createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(
-              ({
-                name,
-                value,
-                options,
-              }) => {
-                cookieStore.set(
-                  name,
-                  value,
-                  options
-                );
-              }
-            );
-          },
-        },
-      }
-    );
-
+    await createSupabaseServer();
 
   const {
     data: {
@@ -70,34 +84,9 @@ export default async function ClaimPage({
 
 
   const googleEmail =
-    user!.email
+    user.email
       ?.trim()
       .toLowerCase();
-
-  /*
-   * Load the authenticated user's profile.
-   *
-   * Admins and volunteers are allowed to
-   * access any QR code.
-   */
-
-  const {
-    data: profile,
-    error: profileError,
-  } = await supabase
-    .from("profiles")
-    .select("role, active")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    console.error(
-      "Profile lookup failed:",
-      profileError
-    );
-  }
-
-
 
   if (!googleEmail) {
     notFound();
@@ -105,17 +94,31 @@ export default async function ClaimPage({
 
 
   /*
-   * Find QR registration.
+   * The profile lookup and the QR lookup do not depend on each
+   * other, so issue them together instead of back to back.
    *
-   * We use the service-role client only
-   * after authentication, and STILL verify
-   * that the Google email matches.
+   * The service-role client is used only after authentication,
+   * and the buyer's email is STILL verified below.
    */
-  const {
-    data: registration,
-    error,
-  } =
-    await supabase
+  const db = supabaseAdmin();
+
+  const [
+    {
+      data: profile,
+      error: profileError,
+    },
+    {
+      data: registration,
+      error,
+    },
+  ] = await Promise.all([
+    db
+      .from("profiles")
+      .select("role,active")
+      .eq("id", user.id)
+      .maybeSingle(),
+
+    db
       .from("registrations")
       .select(`
         id,
@@ -138,7 +141,15 @@ export default async function ClaimPage({
         "qr_token",
         token
       )
-      .single();
+      .maybeSingle(),
+  ]);
+
+  if (profileError) {
+    console.error(
+      "Profile lookup failed:",
+      profileError
+    );
+  }
 
 
   if (
@@ -160,8 +171,9 @@ export default async function ClaimPage({
    */
 
   const isPrivileged =
-    profile?.role === "admin" ||
-    profile?.role === "volunteer";
+    profile?.active === true &&
+    (profile.role === "admin" ||
+      profile.role === "volunteer");
 
   const registrationEmail =
     registration.email
@@ -260,8 +272,21 @@ export default async function ClaimPage({
   }
 
 
+  /*
+   * Fall back to the request's own origin so an unset
+   * NEXT_PUBLIC_APP_URL cannot bake "undefined/claim/..."
+   * into a printed QR code.
+   */
+  const requestHeaders = await headers();
+
+  const origin =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    `${requestHeaders.get("x-forwarded-proto") ?? "https"}://${
+      requestHeaders.get("host") ?? ""
+    }`;
+
   const qrUrl =
-    `${process.env.NEXT_PUBLIC_APP_URL}/claim/${token}`;
+    `${origin}/claim/${token}`;
 
   const qr =
     await QRCode.toDataURL(
@@ -274,45 +299,24 @@ export default async function ClaimPage({
     );
 
   const items =
-    registration.items ?? [];
+    (registration.items ??
+      []) as ClaimItem[];
 
   const totalItems =
     items.reduce(
-      (sum: number, item: any) =>
-        sum +
-        Number(
-          item.quantity ?? 1
-        ),
+      (sum, item) =>
+        sum + quantityOf(item),
       0
     );
 
   const givenItems =
     items.reduce(
-      (sum: number, item: any) => {
-        const distributions =
-          Array.isArray(
-            item.distribution
-          )
-            ? item.distribution
-            : [];
-
-        const given =
-          distributions.filter(
-            (distribution: any) =>
-              distribution.status ===
-              "GIVEN"
-          ).length;
-
-        return (
-          sum +
-          Math.min(
-            given,
-            Number(
-              item.quantity ?? 1
-            )
-          )
-        );
-      },
+      (sum, item) =>
+        sum +
+        Math.min(
+          givenCount(item),
+          quantityOf(item)
+        ),
       0
     );
 
@@ -729,29 +733,14 @@ export default async function ClaimPage({
           >
 
             {items.map(
-              (item: any) => {
-
-                const distributions =
-                  Array.isArray(
-                    item.distribution
-                  )
-                    ? item.distribution
-                    : [];
-
-                const given =
-                  distributions.filter(
-                    (distribution: any) =>
-                      distribution.status ===
-                      "GIVEN"
-                  ).length;
+              (item) => {
 
                 const quantity =
-                  Number(
-                    item.quantity ?? 1
-                  );
+                  quantityOf(item);
 
                 const itemGiven =
-                  given >= quantity;
+                  givenCount(item) >=
+                  quantity;
 
                 return (
                   <div

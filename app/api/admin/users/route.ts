@@ -1,85 +1,28 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { supabase } from "@/lib/supabase";
+import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
-  const cookieStore = await cookies();
-
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(
-              ({ name, value, options }) =>
-                cookieStore.set(
-                  name,
-                  value,
-                  options
-                )
-            );
-          } catch {}
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await authClient.auth.getUser();
-
-  if (!user) return null;
-
-  const { data: profile } =
-    await supabase
-      .from("profiles")
-      .select("role, active")
-      .eq("id", user.id)
-      .maybeSingle();
-
-  if (
-    profile?.role !== "admin" ||
-    profile?.active !== true
-  ) {
-    return null;
-  }
-
-  return user;
-}
+const STAFF_COLUMNS = "id,email,role,active,created_at";
 
 /*
  * GET
  *
- * Show configured privileged emails.
+ * List the configured privileged emails.
  */
 export async function GET() {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
   try {
-    const admin = await requireAdmin();
-
-    if (!admin) {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 }
-      );
-    }
-
-    const { data, error } =
-      await supabase
-        .from("staff_invites")
-        .select(
-          "id,email,role,active,created_at"
-        )
-        .order("created_at", {
-          ascending: false,
-        });
+    const { data, error } = await supabaseAdmin()
+      .from("staff_invites")
+      .select(STAFF_COLUMNS)
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
 
@@ -88,10 +31,7 @@ export async function GET() {
       users: data ?? [],
     });
   } catch (error) {
-    console.error(
-      "Admin users GET error:",
-      error
-    );
+    console.error("Admin users GET error:", error);
 
     return NextResponse.json(
       {
@@ -108,28 +48,19 @@ export async function GET() {
 /*
  * POST
  *
- * Admin only.
+ * Authorize a Google account as staff.
  *
- * We only store:
- *   email
- *   role
- *
- * The actual Google user/profile is
- * resolved when the person signs in.
+ * Only the email and role are stored; the matching profile is
+ * created by /api/auth/staff-sync when the person first signs in.
  */
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
   try {
-    const admin = await requireAdmin();
-
-    if (!admin) {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 }
-      );
-    }
-
     const body = await request.json();
 
     const email =
@@ -144,49 +75,37 @@ export async function POST(
           ? "volunteer"
           : null;
 
-    if (!email) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
-        { error: "Email is required" },
+        { error: "A valid email is required" },
         { status: 400 }
       );
     }
 
     if (!role) {
       return NextResponse.json(
-        {
-          error:
-            "Role must be admin or volunteer",
-        },
+        { error: "Role must be admin or volunteer" },
         { status: 400 }
       );
     }
 
-    const {
-      data: existing,
-      error: existingError,
-    } = await supabase
+    const db = supabaseAdmin();
+
+    const { data: existing, error: existingError } = await db
       .from("staff_invites")
-      .select("id,email,role,active")
+      .select("id")
       .eq("email", email)
       .maybeSingle();
 
-    if (existingError) {
-      throw existingError;
-    }
+    if (existingError) throw existingError;
 
     if (existing) {
-      const { data, error } =
-        await supabase
-          .from("staff_invites")
-          .update({
-            role,
-            active: true,
-          })
-          .eq("id", existing.id)
-          .select(
-            "id,email,role,active,created_at"
-          )
-          .single();
+      const { data, error } = await db
+        .from("staff_invites")
+        .update({ role, active: true })
+        .eq("id", existing.id)
+        .select(STAFF_COLUMNS)
+        .single();
 
       if (error) throw error;
 
@@ -197,33 +116,20 @@ export async function POST(
       });
     }
 
-    const { data, error } =
-      await supabase
-        .from("staff_invites")
-        .insert({
-          email,
-          role,
-          active: true,
-        })
-        .select(
-          "id,email,role,active,created_at"
-        )
-        .single();
+    const { data, error } = await db
+      .from("staff_invites")
+      .insert({ email, role, active: true })
+      .select(STAFF_COLUMNS)
+      .single();
 
     if (error) throw error;
 
     return NextResponse.json(
-      {
-        success: true,
-        user: data,
-      },
+      { success: true, user: data },
       { status: 201 }
     );
   } catch (error) {
-    console.error(
-      "Admin users POST error:",
-      error
-    );
+    console.error("Admin users POST error:", error);
 
     return NextResponse.json(
       {
@@ -231,6 +137,72 @@ export async function POST(
           error instanceof Error
             ? error.message
             : "Unable to add staff member",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/*
+ * PATCH
+ *
+ * Activate or deactivate a staff invite.
+ *
+ * The staff list already called this endpoint, but no handler
+ * existed, so the enable/disable button returned 405.
+ *
+ * NOTE: this revokes the invite, not an already-provisioned
+ * profile. Someone who has signed in keeps their role until
+ * `profiles.active` is cleared for their user id as well.
+ */
+export async function PATCH(request: Request) {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
+  try {
+    const body = await request.json();
+
+    const id = Number(body.id);
+    const active = body.active;
+
+    if (!Number.isFinite(id) || typeof active !== "boolean") {
+      return NextResponse.json(
+        { error: "id and active are required" },
+        { status: 400 }
+      );
+    }
+
+    const db = supabaseAdmin();
+
+    const { data, error } = await db
+      .from("staff_invites")
+      .update({ active })
+      .eq("id", id)
+      .select(STAFF_COLUMNS)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return NextResponse.json(
+        { error: "Staff account not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, user: data });
+  } catch (error) {
+    console.error("Admin users PATCH error:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to update staff member",
       },
       { status: 500 }
     );

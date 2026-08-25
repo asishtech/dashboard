@@ -32,7 +32,9 @@ export default function ScannerPage() {
     useState(false);
 
   const scannerRef =
-    useRef<any>(null);
+    useRef<{
+      clear: () => Promise<void>;
+    } | null>(null);
 
   const clearingRef =
     useRef(false);

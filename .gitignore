@@ -40,3 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env.local
+
+# editor / ad-hoc snapshots (use git branches instead)
+*.backup
+*.backup[0-9]
+*.before-*
+*.orig
+*.rej

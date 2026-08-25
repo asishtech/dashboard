@@ -282,7 +282,7 @@ export default function AdminUsersPage() {
               }}
             >
               Enter the Google account email
-              and assign its role. The user's
+              and assign its role. The user&apos;s
               profile details are resolved
               automatically when they sign in.
             </p>

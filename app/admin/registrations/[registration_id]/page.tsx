@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 
 type Item = {
   id: number;
@@ -81,6 +80,14 @@ export default function RegistrationDetailPage({
 
         const claimUrl =
           `${baseUrl}/claim/${data.registration.qr_token}`;
+
+        /*
+         * Loaded on demand: the encoder is only needed once the
+         * registration resolves, so it stays out of the initial
+         * page bundle.
+         */
+        const { default: QRCode } =
+          await import("qrcode");
 
         const qr =
           await QRCode.toDataURL(

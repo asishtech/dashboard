@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import { usePoll } from "@/lib/use-poll";
 
 type RegistrationItem = {
   id: number;
@@ -90,17 +91,12 @@ export default function RegistrationsPage() {
 
   useEffect(() => {
     loadRegistrations();
-
-    const interval =
-      window.setInterval(() => {
-        loadRegistrations();
-      }, 60000);
-
-    return () =>
-      window.clearInterval(
-        interval
-      );
   }, [loadRegistrations]);
+
+  usePoll(
+    () => loadRegistrations(),
+    60_000
+  );
 
   const getRegistrationStatus =
     (registration: Registration) => {

@@ -1,88 +1,77 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { supabase } from "@/lib/supabase";
+import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
 
-async function getAdmin() {
-  const cookieStore = await cookies();
+export const dynamic = "force-dynamic";
 
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(
-              ({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Server component/cookie restrictions can be ignored here.
-          }
-        },
-      },
-    }
-  );
+const REGISTRATION_SELECT = `
+  registration_id,
+  name,
+  email,
+  items:registration_items(
+    id,
+    item,
+    size,
+    quantity,
+    distribution:distributions(status,given_at)
+  )
+`;
 
-  const {
-    data: { user },
-  } = await authClient.auth.getUser();
+type ItemRow = {
+  id: number;
+  item: string;
+  size: string | null;
+  quantity: number | string | null;
+  distribution:
+    | { status: string | null }[]
+    | { status: string | null }
+    | null;
+};
 
-  if (!user) {
-    return null;
+function toArray(distribution: ItemRow["distribution"]) {
+  if (Array.isArray(distribution)) {
+    return distribution;
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, active")
-    .eq("id", user.id)
-    .single();
-
-  if (
-    profile?.role !== "admin" ||
-    profile?.active !== true
-  ) {
-    return null;
-  }
-
-  return user;
+  return distribution ? [distribution] : [];
 }
 
+function withStatus(registration: {
+  items?: ItemRow[] | null;
+}) {
+  return {
+    ...registration,
+    items: (registration.items ?? []).map((item) => ({
+      ...item,
+      status:
+        toArray(item.distribution).find(
+          (distribution) => distribution?.status === "GIVEN"
+        )
+          ? "GIVEN"
+          : "PENDING",
+    })),
+  };
+}
 
 /*
- * ADMIN:
+ * ADMIN
  *
- * Toggle a merchandise item:
+ * Reverse or re-apply a distribution:
  *
  * GIVEN   -> PENDING
  * PENDING -> GIVEN
  */
-export async function PATCH(
-  request: Request
-) {
+export async function PATCH(request: Request) {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
   try {
-    const admin = await getAdmin();
-
-    if (!admin) {
-      return NextResponse.json(
-        {
-          error: "Admin access required",
-        },
-        {
-          status: 403,
-        }
-      );
-    }
-
     const body = await request.json();
 
-    const registrationItemId = Number(
-      body.registrationItemId
-    );
+    const registrationItemId = Number(body.registrationItemId);
 
     const status =
       body.status === "GIVEN"
@@ -91,95 +80,54 @@ export async function PATCH(
           ? "PENDING"
           : null;
 
-    if (
-      !registrationItemId ||
-      !status
-    ) {
+    if (!Number.isFinite(registrationItemId) || !status) {
       return NextResponse.json(
         {
           error:
             "registrationItemId and valid status are required",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    const {
-      data: distribution,
-      error: distributionError,
-    } = await supabase
-      .from("distributions")
-      .select(
-        "id,status,registration_item_id"
-      )
-      .eq(
-        "registration_item_id",
-        registrationItemId
-      )
-      .single();
+    const now = new Date().toISOString();
 
-    if (
-      distributionError ||
-      !distribution
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Distribution record not found",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    const updateData: Record<
-      string,
-      unknown
-    > = {
-      status,
-      updated_at:
-        new Date().toISOString(),
-    };
-
-    if (status === "GIVEN") {
-      updateData.given_at =
-        new Date().toISOString();
-    } else {
-      updateData.given_at = null;
-    }
-
-    const {
-      data: updated,
-      error: updateError,
-    } = await supabase
-      .from("distributions")
-      .update(updateData)
-      .eq(
-        "id",
-        distribution.id
-      )
-      .select(
-        "id,status,registration_item_id,given_at,updated_at"
-      )
-      .single();
+    /*
+     * Update by foreign key directly. The previous read-then-write
+     * pair was an extra round-trip and left room for a race
+     * between the two statements.
+     */
+    const { data: updated, error: updateError } =
+      await supabaseAdmin()
+        .from("distributions")
+        .update({
+          status,
+          updated_at: now,
+          given_at: status === "GIVEN" ? now : null,
+        })
+        .eq("registration_item_id", registrationItemId)
+        .select(
+          "id,status,registration_item_id,given_at,updated_at"
+        )
+        .maybeSingle();
 
     if (updateError) {
       throw updateError;
+    }
+
+    if (!updated) {
+      return NextResponse.json(
+        { error: "Distribution record not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
       success: true,
       distribution: updated,
     });
-
   } catch (error) {
-    console.error(
-      "Admin distribution update failed:",
-      error
-    );
+    console.error("Admin distribution update failed:", error);
 
     return NextResponse.json(
       {
@@ -188,111 +136,110 @@ export async function PATCH(
             ? error.message
             : "Distribution update failed",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
 
-
 /*
- * VOLUNTEER:
+ * VOLUNTEER
  *
- * Existing distribution action.
+ * Hand an item over to the buyer.
  */
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
+  const auth = await requireRole("volunteer", "admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
   try {
     const body = await request.json();
 
-    const registrationItemId = Number(
-      body.registrationItemId
-    );
+    const registrationItemId = Number(body.registrationItemId);
 
-    if (!registrationItemId) {
+    if (!Number.isFinite(registrationItemId)) {
       return NextResponse.json(
-        {
-          error:
-            "Registration item is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Registration item is required" },
+        { status: 400 }
       );
     }
 
-    /*
-     * Verify that the registration item exists.
-     */
-    const {
-      data: item,
-      error: itemError,
-    } = await supabase
+    const db = supabaseAdmin();
+
+    const { data: item, error: itemError } = await db
       .from("registration_items")
       .select("id,registration_id")
       .eq("id", registrationItemId)
-      .single();
+      .maybeSingle();
 
-    if (itemError || !item) {
+    if (itemError) {
+      throw itemError;
+    }
+
+    if (!item) {
       return NextResponse.json(
-        {
-          error:
-            "Registration item not found",
-        },
-        {
-          status: 404,
-        }
+        { error: "Registration item not found" },
+        { status: 404 }
       );
     }
 
+    const now = new Date().toISOString();
+
     /*
-     * Find an existing distribution record.
+     * Claim the row by moving it out of PENDING in a single
+     * conditional update. Two volunteers scanning the same QR
+     * at once means exactly one of them matches the filter.
      */
-    const {
-      data: existing,
-      error: existingError,
-    } = await supabase
+    const { data: claimed, error: claimError } = await db
       .from("distributions")
-      .select(
-        "id,status,registration_item_id"
-      )
-      .eq(
-        "registration_item_id",
-        registrationItemId
-      )
+      .update({
+        status: "GIVEN",
+        given_at: now,
+        updated_at: now,
+      })
+      .eq("registration_item_id", registrationItemId)
+      .eq("status", "PENDING")
+      .select("id")
       .maybeSingle();
 
-    if (existingError) {
-      throw existingError;
+    if (claimError) {
+      throw claimError;
     }
 
-    let distributionId: number;
+    let distributionId = claimed?.id ?? null;
 
-    /*
-     * If no distribution row exists,
-     * create one as GIVEN.
-     */
-    if (!existing) {
-      const now =
-        new Date().toISOString();
+    if (!distributionId) {
+      /*
+       * Nothing moved: either the row is already GIVEN, or no
+       * distribution row exists for this item yet.
+       */
+      const { data: existing, error: existingError } = await db
+        .from("distributions")
+        .select("id,status")
+        .eq("registration_item_id", registrationItemId)
+        .maybeSingle();
 
-      const {
-        data: created,
-        error: createError,
-      } = await supabase
+      if (existingError) {
+        throw existingError;
+      }
+
+      if (existing) {
+        return NextResponse.json(
+          { error: "This item has already been given." },
+          { status: 409 }
+        );
+      }
+
+      const { data: created, error: createError } = await db
         .from("distributions")
         .insert({
-          registration_item_id:
-            registrationItemId,
+          registration_item_id: registrationItemId,
           status: "GIVEN",
           given_at: now,
           updated_at: now,
         })
-        .select(
-          "id,status,registration_item_id"
-        )
+        .select("id")
         .single();
 
       if (createError) {
@@ -300,136 +247,35 @@ export async function POST(
       }
 
       distributionId = created.id;
-    } else {
-      /*
-       * Prevent double distribution.
-       */
-      if (
-        existing.status ===
-        "GIVEN"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "This item has already been given.",
-          },
-          {
-            status: 409,
-          }
-        );
-      }
-
-      const now =
-        new Date().toISOString();
-
-      const {
-        data: updated,
-        error: updateError,
-      } = await supabase
-        .from("distributions")
-        .update({
-          status: "GIVEN",
-          given_at: now,
-          updated_at: now,
-        })
-        .eq(
-          "id",
-          existing.id
-        )
-        .eq(
-          "status",
-          "PENDING"
-        )
-        .select(
-          "id,status,registration_item_id"
-        )
-        .maybeSingle();
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      if (!updated) {
-        return NextResponse.json(
-          {
-            error:
-              "This item could not be marked as given.",
-          },
-          {
-            status: 409,
-          }
-        );
-      }
-
-      distributionId =
-        updated.id;
     }
 
     /*
-     * Return the complete registration
-     * so the scanner UI updates immediately.
+     * Return the whole registration so the scanner UI can
+     * repaint without a second request.
      */
-    const {
-      data: registration,
-      error: registrationError,
-    } = await supabase
-      .from("registrations")
-      .select(`
-        registration_id,
-        name,
-        email,
-        items:registration_items(
-          id,
-          item,
-          size,
-          quantity,
-          distribution:distributions(
-            status,
-            given_at
-          )
-        )
-      `)
-      .eq(
-        "id",
-        item.registration_id
-      )
-      .single();
+    const { data: registration, error: registrationError } =
+      await db
+        .from("registrations")
+        .select(REGISTRATION_SELECT)
+        .eq("id", item.registration_id)
+        .single();
 
-    if (
-      registrationError ||
-      !registration
-    ) {
+    if (registrationError || !registration) {
       throw (
         registrationError ??
-        new Error(
-          "Registration could not be loaded"
-        )
+        new Error("Registration could not be loaded")
       );
     }
 
     return NextResponse.json({
       success: true,
       distributionId,
-      registration: {
-        ...registration,
-        items:
-          registration.items.map(
-            (registrationItem: any) => ({
-              ...registrationItem,
-              status:
-                registrationItem
-                  .distribution?.[0]
-                  ?.status ??
-                "PENDING",
-            })
-          ),
-      },
+      registration: withStatus(
+        registration as { items?: ItemRow[] | null }
+      ),
     });
   } catch (error) {
-    console.error(
-      "Distribution POST error:",
-      error
-    );
+    console.error("Distribution POST error:", error);
 
     return NextResponse.json(
       {
@@ -438,10 +284,7 @@ export async function POST(
             ? error.message
             : "Unable to distribute item",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
-

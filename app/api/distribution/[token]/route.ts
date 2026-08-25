@@ -1,26 +1,51 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+
+export const dynamic = "force-dynamic";
+
+type ItemRow = {
+  id: number;
+  item: string;
+  size: string | null;
+  quantity: number | string | null;
+  distribution:
+    | { status: string | null }[]
+    | { status: string | null }
+    | null;
+};
+
+function toArray(distribution: ItemRow["distribution"]) {
+  if (Array.isArray(distribution)) {
+    return distribution;
+  }
+
+  return distribution ? [distribution] : [];
+}
 
 export async function GET(
   request: Request,
-  {
-    params,
-  }: {
-    params: Promise<{
-      token: string;
-    }>;
-  }
+  { params }: { params: Promise<{ token: string }> }
 ) {
+  const auth = await requireRole("volunteer", "admin");
 
-  const { token } =
-    await params;
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
 
-  const {
-    data: registration,
-    error,
-  } = await supabase
+  const { token } = await params;
+
+  if (!token) {
+    return NextResponse.json(
+      { error: "QR code not found" },
+      { status: 404 }
+    );
+  }
+
+  const { data: registration, error } = await supabaseAdmin()
     .from("registrations")
-    .select(`
+    .select(
+      `
       registration_id,
       name,
       email,
@@ -29,51 +54,34 @@ export async function GET(
         item,
         size,
         quantity,
-        distribution:distributions(
-          status
-        )
+        distribution:distributions(status)
       )
-    `)
-    .eq(
-      "qr_token",
-      token
+    `
     )
-    .single();
+    .eq("qr_token", token)
+    .maybeSingle();
 
-  if (
-    error ||
-    !registration
-  ) {
-
+  if (error || !registration) {
     return NextResponse.json(
-      {
-        error:
-          "QR code not found",
-      },
-      {
-        status: 404,
-      }
+      { error: "QR code not found" },
+      { status: 404 }
     );
-
   }
 
   return NextResponse.json({
     registration: {
       ...registration,
-
-      items:
-        registration.items.map(
-          (item: any) => ({
-            ...item,
-
-            status:
-              Array.isArray(item.distribution)
-                ? item.distribution[0]?.status ??
-                  "PENDING"
-                : item.distribution?.status ??
-                  "PENDING",
-          })
-        ),
+      items: ((registration.items ?? []) as ItemRow[]).map(
+        (item) => ({
+          ...item,
+          status:
+            toArray(item.distribution).find(
+              (distribution) => distribution?.status === "GIVEN"
+            )
+              ? "GIVEN"
+              : "PENDING",
+        })
+      ),
     },
   });
 }

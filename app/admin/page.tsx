@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import { usePoll } from "@/lib/use-poll";
 
 type Inventory = {
   id: number;
@@ -12,22 +13,6 @@ type Inventory = {
   sold: number;
   remaining: number;
   remaining_percentage: number;
-};
-
-type Registration = {
-  total?: number | string | null;
-  items?: RegistrationItem[];
-};
-
-type RegistrationItem = {
-  item?: string;
-  quantity?: number | string | null;
-  status?: string | null;
-  distribution?: Distribution[] | null;
-};
-
-type Distribution = {
-  status?: string | null;
 };
 
 type DashboardData = {
@@ -158,6 +143,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     async function initialise() {
+      /*
+       * The dashboard request no longer waits on the auth
+       * round-trip. The proxy has already established that a
+       * signed-in admin is here; the identity lookup only
+       * supplies the greeting, so the two run side by side.
+       */
+      const dashboard = loadDashboard(true);
+
       try {
         const supabase =
           createSupabaseBrowser();
@@ -179,17 +172,14 @@ export default function AdminPage() {
             user.email ||
             "Administrator"
         );
-
-        await loadDashboard(true);
-
       } catch (error) {
         console.error(
           "Admin initialization error:",
           error
         );
-
-        setLoading(false);
       }
+
+      await dashboard;
     }
 
     initialise();
@@ -197,23 +187,16 @@ export default function AdminPage() {
 
 
   /*
-   * Refresh the dashboard every 60 seconds.
+   * Refresh the dashboard every 60 seconds while the tab is
+   * visible.
    *
    * This only reads Supabase.
    * It does NOT call the V-TAPP API.
    */
-  useEffect(() => {
-    const interval =
-      window.setInterval(() => {
-        loadDashboard(false);
-      }, 60_000);
-
-    return () => {
-      window.clearInterval(
-        interval
-      );
-    };
-  }, [loadDashboard]);
+  usePoll(
+    () => loadDashboard(false),
+    60_000
+  );
 
 
   /*
@@ -1161,96 +1144,6 @@ function EmptyChart() {
   );
 }
 
-
-function DistributionCircle({
-  label,
-  value,
-  total,
-  className,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  className: string;
-}) {
-  const percentage =
-    total > 0
-      ? Math.round(
-          (value / total) *
-            100
-        )
-      : 0;
-
-  return (
-    <div
-      style={{
-        textAlign:
-          "center",
-      }}
-    >
-      <div
-        style={{
-          width:
-            "110px",
-          height:
-            "110px",
-          borderRadius:
-            "50%",
-          display:
-            "grid",
-          placeItems:
-            "center",
-          border:
-            `10px solid ${
-              className ===
-              "given"
-                ? "#0f172a"
-                : "#cbd5e1"
-            }`,
-          background:
-            "#ffffff",
-        }}
-      >
-        <div>
-          <strong
-            style={{
-              display:
-                "block",
-              fontSize:
-                "22px",
-            }}
-          >
-            {value}
-          </strong>
-
-          <span
-            style={{
-              fontSize:
-                "12px",
-              color:
-                "#64748b",
-            }}
-          >
-            {percentage}%
-          </span>
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginTop:
-            "8px",
-          fontSize:
-            "13px",
-          fontWeight:
-            600,
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-}
 
 
 function Stat({
