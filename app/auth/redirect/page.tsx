@@ -177,16 +177,14 @@ export default function AuthRedirect() {
   }, []);
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-      }}
-    >
-      <p>
-        Checking authorization...
-      </p>
+    <main className="app loading-screen">
+      <div className="loading-card">
+        <div className="loading-spinner" />
+
+        <h2>Checking authorization</h2>
+
+        <p>Matching your account to a role...</p>
+      </div>
     </main>
   );
 }

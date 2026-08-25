@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import {
+  AlertIcon,
+  BoxIcon,
+  CheckIcon,
+} from "@/components/icons";
 
 type InventoryItem = {
   id: number;
@@ -180,797 +185,279 @@ export default function InventoryPage() {
     }
   }
 
+  const isError = /cannot|failed|unable|invalid/i.test(message);
+
+  const dirty = inventory.some(
+    (item) =>
+      Number(draft[item.id] ?? item.initial_stock) !==
+      Number(item.initial_stock)
+  );
+
   return (
-    <main className="dashboard">
+    <main className="app">
       <div className="container">
 
-        {/* HEADER */}
-
-        <header className="header">
-
+        <header className="page-header">
           <div>
-            <div
-              style={{
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 700,
-                letterSpacing: ".16em",
-              }}
-            >
-              [02] / INVENTORY CONTROL
-            </div>
+            <span className="page-eyebrow">
+              V-TAPP / Inventory
+            </span>
 
-            <h1>
-              Merchandise Inventory
-            </h1>
+            <h1 className="page-title">Stock Control</h1>
 
-            <p>
-              Stock configuration and
-              availability monitoring
+            <p className="page-subtitle">
+              Configured capacity for each merchandise item
             </p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-
-            <Link
-              href="/admin"
-              className="admin-link"
-            >
+          <div className="header-actions">
+            <Link href="/admin" className="btn btn-ghost btn-sm">
               Dashboard
             </Link>
 
             <Link
               href="/admin/registrations"
-              className="admin-link"
+              className="btn btn-ghost btn-sm"
             >
               Registrations
             </Link>
 
-            <Link
-              href="/volunteer"
-              className="admin-link"
-            >
-              Volunteer
-            </Link>
-
             <LogoutButton />
-
           </div>
-
         </header>
 
 
-        {/* STATUS */}
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-            gap: "12px",
-            flexWrap: "wrap",
-            marginBottom: "24px",
-            padding: "11px 14px",
-            border:
-              "1px solid var(--vt-border)",
-            background:
-              "var(--vt-surface)",
-          }}
-        >
-
-          <span
-            style={{
-              color:
-                "var(--vt-orange-bright)",
-              fontFamily:
-                '"SFMono-Regular", Consolas, monospace',
-              fontSize: "9px",
-              fontWeight: 700,
-              letterSpacing: ".12em",
-            }}
-          >
-            ● INVENTORY SYSTEM ONLINE
-          </span>
-
-          <span
-            style={{
-              color:
-                "var(--vt-muted)",
-              fontFamily:
-                '"SFMono-Regular", Consolas, monospace',
-              fontSize: "9px",
-            }}
-          >
-            {inventory.length} PRODUCTS INDEXED
-          </span>
-
-        </div>
-
-
-        {/* OVERVIEW */}
-
-        <section>
-
+        {message && (
           <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: "12px",
-              marginBottom: "12px",
-            }}
+            className={`banner ${
+              isError ? "banner-danger" : "banner-success"
+            }`}
+            role={isError ? "alert" : "status"}
+            aria-live="polite"
           >
+            {isError ? (
+              <AlertIcon size={18} />
+            ) : (
+              <CheckIcon size={18} />
+            )}
+            <span>{message}</span>
+          </div>
+        )}
 
-            <span
-              style={{
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 700,
-              }}
-            >
-              01
-            </span>
 
-            <h2
-              style={{
-                margin: 0,
-                color:
-                  "var(--vt-white)",
-                fontSize: "18px",
-                fontWeight: 500,
-                textTransform:
-                  "uppercase",
-              }}
-            >
-              Inventory Overview
-            </h2>
+        <section className="stat-grid">
+          <div className="stat">
+            <span className="stat-label">Configured stock</span>
 
+            <strong className="stat-value">
+              {loading ? "—" : totals.stock}
+            </strong>
+
+            <span className="stat-meta">Across all items</span>
           </div>
 
+          <div className="stat">
+            <span className="stat-label">Sold</span>
 
-          <section className="stats">
+            <strong className="stat-value">
+              {loading ? "—" : totals.sold}
+            </strong>
 
-            <InventoryStat
-              title="Total Stock"
-              value={
-                loading
-                  ? "—"
-                  : totals.stock
-              }
-              subtitle="Configured capacity"
-            />
+            <span className="stat-meta">
+              {loading ? " " : `${Math.round(utilization)}% of stock`}
+            </span>
+          </div>
 
-            <InventoryStat
-              title="Sold"
-              value={
-                loading
-                  ? "—"
-                  : totals.sold
-              }
-              subtitle="Physical items"
-            />
+          <div className="stat">
+            <span className="stat-label">Remaining</span>
 
-            <InventoryStat
-              title="Remaining"
-              value={
-                loading
-                  ? "—"
-                  : totals.remaining
-              }
-              subtitle="Available now"
-            />
+            <strong className="stat-value stat-success">
+              {loading ? "—" : totals.remaining}
+            </strong>
 
-            <InventoryStat
-              title="Utilization"
-              value={
-                loading
-                  ? "—"
-                  : `${utilization.toFixed(1)}%`
-              }
-              subtitle="Stock consumed"
-            />
-
-          </section>
-
+            <span className="stat-meta">Available to sell</span>
+          </div>
         </section>
 
 
-        {/* INVENTORY STATUS */}
-
-        <section
-          style={{
-            marginTop: "30px",
-          }}
-        >
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: "12px",
-              marginBottom: "12px",
-            }}
-          >
-
-            <span
-              style={{
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 700,
-              }}
-            >
-              02
-            </span>
-
-            <h2
-              style={{
-                margin: 0,
-                color:
-                  "var(--vt-white)",
-                fontSize: "18px",
-                fontWeight: 500,
-                textTransform:
-                  "uppercase",
-              }}
-            >
-              Inventory Status
-            </h2>
-
-          </div>
-
-
-          <div
-            className="inventory-grid"
-          >
-
-            {loading
-              ? [1, 2, 3, 4, 5].map(
-                  (id) => (
-                    <div
-                      className="inventory-card"
-                      key={id}
-                    >
-                      <div
-                        className="skeleton skeleton-line medium"
-                      />
-
-                      <div
-                        className="skeleton skeleton-line short"
-                        style={{
-                          marginTop: "18px",
-                        }}
-                      />
-
-                      <div
-                        className="skeleton skeleton-card"
-                        style={{
-                          marginTop: "22px",
-                        }}
-                      />
-                    </div>
-                  )
-                )
-              : inventory.map(
-                  (item) => {
-
-                    const sold =
-                      Number(
-                        item.sold ?? 0
-                      );
-
-                    const remaining =
-                      Number(
-                        item.remaining ?? 0
-                      );
-
-                    const stock =
-                      Number(
-                        item.initial_stock ?? 0
-                      );
-
-                    const percentage =
-                      stock > 0
-                        ? (remaining /
-                            stock) *
-                          100
-                        : 0;
-
-                    return (
-                      <div
-                        className="inventory-card"
-                        key={item.id}
-                      >
-
-                        <div
-                          className="inventory-card-header"
-                        >
-
-                          <div>
-                            <h3>
-                              {item.item}
-                            </h3>
-
-                            <span>
-                              Capacity:{" "}
-                              {stock}
-                            </span>
-                          </div>
-
-                          <div
-                            className="stock-number"
-                          >
-                            {remaining}
-                          </div>
-
-                        </div>
-
-
-                        <div
-                          className="inventory-label"
-                        >
-                          remaining
-                        </div>
-
-
-                        <div
-                          className="inventory-track"
-                        >
-                          <div
-                            className="inventory-fill"
-                            style={{
-                              width:
-                                `${Math.max(
-                                  0,
-                                  Math.min(
-                                    100,
-                                    percentage
-                                  )
-                                )}%`,
-                            }}
-                          />
-                        </div>
-
-
-                        <div
-                          className="inventory-footer"
-                        >
-
-                          <span>
-                            {sold} sold
-                          </span>
-
-                          <strong>
-                            {percentage.toFixed(
-                              1
-                            )}
-                            % left
-                          </strong>
-
-                        </div>
-
-                      </div>
-                    );
-                  }
-                )}
-
-          </div>
-
-        </section>
-
-
-        {/* STOCK CONFIGURATION */}
-
-        <section
-          className="inventory-panel"
-          style={{
-            marginTop: "30px",
-          }}
-        >
-
-          <div
-            className="section-header"
-          >
-
+        <section className="panel">
+          <div className="panel-header">
             <div>
+              <h2 className="panel-title">Adjust stock</h2>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems:
-                    "baseline",
-                  gap: "12px",
-                }}
-              >
-
-                <span
-                  style={{
-                    color:
-                      "var(--vt-orange-bright)",
-                    fontFamily:
-                      '"SFMono-Regular", Consolas, monospace',
-                    fontSize: "9px",
-                    fontWeight: 700,
-                  }}
-                >
-                  03
-                </span>
-
-                <h2>
-                  Stock Configuration
-                </h2>
-
-              </div>
-
-              <span>
-                Update available
-                merchandise quantities
-              </span>
-
+              <p className="panel-subtitle">
+                Stock cannot be set below the quantity already sold.
+              </p>
             </div>
-
-          </div>
-
-
-          {message && (
-            <div
-              style={{
-                marginBottom: "18px",
-                padding:
-                  "11px 14px",
-                border:
-                  "1px solid var(--vt-border)",
-                background:
-                  "var(--vt-surface-2)",
-                color:
-                  message
-                    .toLowerCase()
-                    .includes("success")
-                    ? "var(--vt-orange-bright)"
-                    : "var(--vt-red)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "10px",
-              }}
-            >
-              {message}
-            </div>
-          )}
-
-
-          <div
-            style={{
-              overflowX: "auto",
-            }}
-          >
-
-            <div
-              style={{
-                minWidth: "650px",
-              }}
-            >
-
-              {/* TABLE HEADER */}
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "2fr 1fr 1fr 1fr",
-                  gap: "20px",
-                  padding:
-                    "10px 14px",
-                  borderBottom:
-                    "1px solid var(--vt-border)",
-                  color:
-                    "var(--vt-dim)",
-                  fontFamily:
-                    '"SFMono-Regular", Consolas, monospace',
-                  fontSize: "8px",
-                  fontWeight: 700,
-                  letterSpacing: ".12em",
-                  textTransform:
-                    "uppercase",
-                }}
-              >
-
-                <span>Product</span>
-                <span>Sold</span>
-                <span>Remaining</span>
-                <span>New Stock</span>
-
-              </div>
-
-
-              {inventory.map(
-                (item) => {
-
-                  const sold =
-                    Number(
-                      item.sold ?? 0
-                    );
-
-                  const remaining =
-                    Number(
-                      item.remaining ?? 0
-                    );
-
-                  return (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "2fr 1fr 1fr 1fr",
-                        gap: "20px",
-                        alignItems:
-                          "center",
-                        padding:
-                          "16px 14px",
-                        borderBottom:
-                          "1px solid var(--vt-border-soft)",
-                      }}
-                    >
-
-                      <div>
-                        <strong
-                          style={{
-                            display:
-                              "block",
-                            color:
-                              "var(--vt-white)",
-                            fontSize:
-                              "12px",
-                            fontWeight:
-                              600,
-                            textTransform:
-                              "uppercase",
-                          }}
-                        >
-                          {item.item}
-                        </strong>
-
-                        <span
-                          style={{
-                            display:
-                              "block",
-                            marginTop:
-                              "5px",
-                            color:
-                              "var(--vt-dim)",
-                            fontFamily:
-                              '"SFMono-Regular", Consolas, monospace',
-                            fontSize:
-                              "8px",
-                          }}
-                        >
-                          ID: {item.id}
-                        </span>
-                      </div>
-
-
-                      <span
-                        style={{
-                          color:
-                            "var(--vt-text)",
-                          fontFamily:
-                            '"SFMono-Regular", Consolas, monospace',
-                          fontSize:
-                            "12px",
-                        }}
-                      >
-                        {sold}
-                      </span>
-
-
-                      <span
-                        style={{
-                          color:
-                            "var(--vt-orange-bright)",
-                          fontFamily:
-                            '"SFMono-Regular", Consolas, monospace',
-                          fontSize:
-                            "13px",
-                          fontWeight:
-                            700,
-                        }}
-                      >
-                        {remaining}
-                      </span>
-
-
-                      <input
-                        type="number"
-                        min={sold}
-                        value={
-                          draft[item.id] ??
-                          ""
-                        }
-                        onChange={(event) =>
-                          updateDraft(
-                            item.id,
-                            event.target.value
-                          )
-                        }
-                        style={{
-                          width: "100%",
-                          minWidth: "90px",
-                          height: "38px",
-                          padding:
-                            "0 10px",
-                          background:
-                            "#080a0c",
-                          color:
-                            "var(--vt-white)",
-                          border:
-                            "1px solid var(--vt-border)",
-                          borderRadius: "0",
-                          outline: "none",
-                          fontFamily:
-                            '"SFMono-Regular", Consolas, monospace',
-                          fontSize: "12px",
-                        }}
-                      />
-
-                    </div>
-                  );
-                }
-              )}
-
-            </div>
-
-          </div>
-
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent:
-                "space-between",
-              alignItems: "center",
-              gap: "15px",
-              flexWrap: "wrap",
-              marginTop: "20px",
-            }}
-          >
-
-            <span
-              style={{
-                color:
-                  "var(--vt-dim)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-              }}
-            >
-              STOCK CANNOT BE SET
-              BELOW SOLD QUANTITY
-            </span>
 
             <button
               type="button"
               onClick={saveInventory}
-              disabled={
-                saving || loading
-              }
-              style={{
-                minHeight: "40px",
-                padding:
-                  "0 20px",
-                background:
-                  saving
-                    ? "#5b3219"
-                    : "var(--vt-orange)",
-                color:
-                  "#080706",
-                border:
-                  "1px solid var(--vt-orange)",
-                borderRadius: "0",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 800,
-                letterSpacing:
-                  ".1em",
-                textTransform:
-                  "uppercase",
-                cursor:
-                  saving
-                    ? "wait"
-                    : "pointer",
-              }}
+              disabled={saving || loading || !dirty}
+              className="btn btn-primary btn-sm"
             >
+              {saving && <span className="btn-spinner" />}
               {saving
-                ? "Saving..."
-                : "Save Inventory"}
+                ? "Saving"
+                : dirty
+                  ? "Save changes"
+                  : "No changes"}
             </button>
-
           </div>
 
+          {loading ? (
+            <div className="panel-body stack">
+              {[1, 2, 3, 4, 5].map((row) => (
+                <div key={row}>
+                  <div className="skeleton skeleton-line" />
+                  <div className="skeleton meter-track" />
+                </div>
+              ))}
+            </div>
+          ) : inventory.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon">
+                <BoxIcon size={22} />
+              </div>
+
+              <p className="empty-title">No inventory configured</p>
+
+              <p className="empty-body">
+                Items appear here once they exist in Supabase.
+              </p>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <caption className="sr-only">
+                  Merchandise stock levels, editable
+                </caption>
+
+                <thead>
+                  <tr>
+                    <th scope="col">Item</th>
+                    <th scope="col" className="table-num">
+                      Sold
+                    </th>
+                    <th scope="col" className="table-num">
+                      Remaining
+                    </th>
+                    <th scope="col" style={{ width: "34%" }}>
+                      Level
+                    </th>
+                    <th scope="col" style={{ width: 140 }}>
+                      Stock
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {inventory.map((item) => {
+                    const stock = Number(item.initial_stock ?? 0);
+                    const sold = Number(item.sold ?? 0);
+                    const remaining = Number(item.remaining ?? 0);
+
+                    const percent =
+                      stock > 0
+                        ? Math.max(
+                            0,
+                            Math.min(100, (remaining / stock) * 100)
+                          )
+                        : 0;
+
+                    const level =
+                      percent <= 15
+                        ? "meter-fill-danger"
+                        : percent <= 40
+                          ? "meter-fill-warning"
+                          : "meter-fill-success";
+
+                    const value = draft[item.id] ?? stock;
+                    const invalid = value < sold;
+
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="row-title">
+                            {item.item}
+                          </div>
+                        </td>
+
+                        <td className="table-num">{sold}</td>
+
+                        <td className="table-num">{remaining}</td>
+
+                        <td>
+                          <div
+                            className="meter-track"
+                            role="progressbar"
+                            aria-valuenow={Math.round(percent)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={`${item.item} stock remaining`}
+                          >
+                            <div
+                              className={`meter-fill ${level}`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+
+                          <div className="meter-foot">
+                            <span>{Math.round(percent)}% left</span>
+                          </div>
+                        </td>
+
+                        <td>
+                          <label
+                            className="sr-only"
+                            htmlFor={`stock-${item.id}`}
+                          >
+                            Stock for {item.item}
+                          </label>
+
+                          <input
+                            id={`stock-${item.id}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={sold}
+                            className={`input input-num${
+                              invalid ? " input-invalid" : ""
+                            }`}
+                            value={value}
+                            aria-invalid={invalid}
+                            aria-describedby={
+                              invalid
+                                ? `stock-error-${item.id}`
+                                : undefined
+                            }
+                            onChange={(event) =>
+                              updateDraft(
+                                item.id,
+                                event.target.value
+                              )
+                            }
+                            disabled={saving}
+                          />
+
+                          {invalid && (
+                            <span
+                              id={`stock-error-${item.id}`}
+                              className="field-error"
+                            >
+                              Min {sold}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
-
-
-        {/* FOOTER */}
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            gap: "15px",
-            flexWrap: "wrap",
-            marginTop: "25px",
-            paddingTop: "15px",
-            borderTop:
-              "1px solid var(--vt-border-soft)",
-            color:
-              "var(--vt-dim)",
-            fontFamily:
-              '"SFMono-Regular", Consolas, monospace',
-            fontSize: "8px",
-            letterSpacing: ".1em",
-          }}
-        >
-
-          <span>
-            VTAAP 2026 / INVENTORY CONTROL
-          </span>
-
-          <Link
-            href="/admin"
-            style={{
-              color:
-                "var(--vt-orange-bright)",
-            }}
-          >
-            ← RETURN TO CONTROL CENTER
-          </Link>
-
-        </div>
 
       </div>
     </main>
-  );
-}
-
-
-function InventoryStat({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-}) {
-  return (
-    <div className="stat-card">
-      <div className="stat-title">
-        {title}
-      </div>
-
-      <div className="stat-value">
-        {value}
-      </div>
-
-      <div className="stat-subtitle">
-        {subtitle}
-      </div>
-    </div>
   );
 }

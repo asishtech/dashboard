@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <main className="loading-screen">
+    <main className="app loading-screen">
       <div className="loading-card">
         <div className="loading-spinner" />
 

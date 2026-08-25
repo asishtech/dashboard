@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import LogoutButton from "@/components/LogoutButton";
+import { AlertIcon, BoxIcon } from "@/components/icons";
 
 type Item = {
   id: number;
@@ -128,86 +130,6 @@ export default function RegistrationDetailPage({
       }
     ).format(amount);
 
-  if (loading) {
-    return (
-      <main className="dashboard">
-        <div className="container">
-          <div
-            style={{
-              padding: "80px 0",
-              color:
-                "var(--vt-muted)",
-              fontFamily:
-                '"SFMono-Regular", Consolas, monospace',
-              fontSize: "10px",
-              letterSpacing: ".1em",
-            }}
-          >
-            LOADING REGISTRATION...
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  if (error || !registration) {
-    return (
-      <main className="dashboard">
-        <div className="container">
-
-          <header className="header">
-            <div>
-              <div
-                style={{
-                  color:
-                    "var(--vt-orange-bright)",
-                  fontFamily:
-                    '"SFMono-Regular", Consolas, monospace',
-                  fontSize: "9px",
-                  fontWeight: 700,
-                  letterSpacing: ".14em",
-                }}
-              >
-                [03] / REGISTRATION
-              </div>
-
-              <h1>
-                Registration Not Found
-              </h1>
-            </div>
-
-            <Link
-              href="/admin/registrations"
-              className="admin-link"
-            >
-              ← Registrations
-            </Link>
-          </header>
-
-          <div
-            style={{
-              padding: "30px",
-              border:
-                "1px solid var(--vt-border)",
-              color:
-                "var(--vt-red)",
-              background:
-                "var(--vt-surface)",
-              fontFamily:
-                '"SFMono-Regular", Consolas, monospace',
-              fontSize: "10px",
-            }}
-          >
-            {error ||
-              "Registration not found"}
-          </div>
-
-        </div>
-      </main>
-    );
-  }
-
-
   async function reverseDistribution(
     registrationItemId: number
   ) {
@@ -252,789 +174,246 @@ export default function RegistrationDetailPage({
     }
   }
 
-  const fullyDistributed =
-    registration.distribution.pending ===
-    0;
 
-  const claimUrl =
-    `${window.location.origin}/claim/${registration.qr_token}`;
+  if (loading) {
+    return (
+      <main className="app">
+        <div className="container container-narrow">
+          <div className="skeleton skeleton-title" />
 
-  return (
-    <main className="dashboard">
-      <div className="container">
-
-        {/* HEADER */}
-
-        <header className="header">
-
-          <div>
-
-            <div
-              style={{
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 700,
-                letterSpacing: ".15em",
-              }}
-            >
-              [03] / REGISTRATION DETAIL
+          <section className="panel">
+            <div className="panel-body stack">
+              <div className="skeleton skeleton-line" />
+              <div
+                className="skeleton skeleton-line"
+                style={{ width: "60%" }}
+              />
+              <div className="skeleton skeleton-card" />
             </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
-            <h1>
-              {registration.name}
-            </h1>
-
-            <p>
-              Buyer profile and QR
-              distribution record
-            </p>
-
+  if (error || !registration) {
+    return (
+      <main className="app center-screen">
+        <div className="center-card center-card-wide">
+          <div className="brand-mark">
+            <AlertIcon size={24} />
           </div>
+
+          <h1 className="page-title">Registration not found</h1>
+
+          <p className="page-subtitle">
+            {error || "This registration could not be loaded."}
+          </p>
 
           <Link
             href="/admin/registrations"
-            className="admin-link"
+            className="btn btn-block mt-8"
           >
-            ← All Registrations
+            Back to registrations
           </Link>
+        </div>
+      </main>
+    );
+  }
 
+  const fullyDistributed =
+    registration.distribution.pending === 0;
+
+  return (
+    <main className="app">
+      <div className="container container-narrow">
+
+        <header className="page-header">
+          <div>
+            <span className="page-eyebrow">
+              V-TAPP / Registration
+            </span>
+
+            <h1 className="page-title">{registration.name}</h1>
+
+            <p className="page-subtitle">{registration.email}</p>
+          </div>
+
+          <div className="header-actions">
+            <Link
+              href="/admin/registrations"
+              className="btn btn-ghost btn-sm"
+            >
+              All registrations
+            </Link>
+
+            <LogoutButton />
+          </div>
         </header>
 
 
-        {/* BUYER + QR */}
+        <section className="stat-grid">
+          <div className="stat">
+            <span className="stat-label">Registration</span>
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "minmax(0, 1fr) 360px",
-            gap: "1px",
-            background:
-              "var(--vt-border)",
-            border:
-              "1px solid var(--vt-border)",
-          }}
-        >
-
-          {/* BUYER INFORMATION */}
-
-          <div
-            style={{
-              padding: "30px",
-              background:
-                "var(--vt-surface)",
-            }}
-          >
-
-            <div
-              style={{
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 800,
-                letterSpacing: ".12em",
-                marginBottom: "22px",
-              }}
-            >
-              BUYER INFORMATION
-            </div>
-
-
-            <div
-              style={{
-                marginBottom: "28px",
-              }}
-            >
-
-              <div
-                style={{
-                  color:
-                    "var(--vt-white)",
-                  fontSize: "32px",
-                  fontWeight: 700,
-                  lineHeight: 1.05,
-                  letterSpacing:
-                    "-.035em",
-                }}
-              >
-                {registration.name}
-              </div>
-
-              <div
-                style={{
-                  marginTop: "9px",
-                  color:
-                    "var(--vt-muted)",
-                  fontFamily:
-                    '"SFMono-Regular", Consolas, monospace',
-                  fontSize: "10px",
-                }}
-              >
-                {registration.email}
-              </div>
-
-            </div>
-
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(2, minmax(0, 1fr))",
-                gap: "1px",
-                background:
-                  "var(--vt-border)",
-              }}
-            >
-
-              <DetailField
-                label="REGISTRATION ID"
-                value={
-                  registration.registration_id
-                }
-              />
-
-              <DetailField
-                label="TOTAL PAID"
-                value={formatAmount(
-                  registration.total
-                )}
-                highlight
-              />
-
-              <DetailField
-                label="TOTAL ITEMS"
-                value={
-                  registration.distribution
-                    .total
-                }
-              />
-
-              <DetailField
-                label="DISTRIBUTED"
-                value={
-                  registration.distribution
-                    .given
-                }
-              />
-
-            </div>
-
+            <strong className="stat-value stat-value-sm mono">
+              #{registration.registration_id}
+            </strong>
           </div>
 
+          <div className="stat">
+            <span className="stat-label">Order total</span>
 
-          {/* QR */}
+            <strong className="stat-value stat-value-sm">
+              {formatAmount(registration.total)}
+            </strong>
+          </div>
 
-          <div
-            style={{
-              padding: "28px",
-              background:
-                "#080b0d",
-              display: "flex",
-              flexDirection:
-                "column",
-              alignItems: "center",
-              justifyContent:
-                "center",
-            }}
-          >
+          <div className="stat">
+            <span className="stat-label">Distribution</span>
 
-            <div
-              style={{
-                alignSelf: "stretch",
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 800,
-                letterSpacing: ".12em",
-                marginBottom: "18px",
-              }}
+            <strong
+              className={`stat-value stat-value-sm ${
+                fullyDistributed ? "stat-success" : "stat-warning"
+              }`}
             >
-              QR ACCESS CODE
+              {registration.distribution.given} /{" "}
+              {registration.distribution.total}
+            </strong>
+
+            <span className="stat-meta">
+              {fullyDistributed
+                ? "All items handed over"
+                : `${registration.distribution.pending} still pending`}
+            </span>
+          </div>
+        </section>
+
+
+        <div className="grid grid-main">
+
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Merchandise</h2>
+
+                <p className="panel-subtitle">
+                  Reversing an item makes it collectable again.
+                </p>
+              </div>
             </div>
 
-            {qrImage && (
-              <div
-                style={{
-                  padding: "15px",
-                  background:
-                    "#ffffff",
-                  border:
-                    "1px solid #d7dce0",
-                }}
-              >
-                <img
-                  src={qrImage}
-                  alt={`QR code for ${registration.name}`}
+            <div className="panel-body stack-tight stack">
+              {registration.items.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-icon">
+                    <BoxIcon size={22} />
+                  </div>
+
+                  <p className="empty-title">No items</p>
+
+                  <p className="empty-body">
+                    This registration has no merchandise attached.
+                  </p>
+                </div>
+              ) : (
+                registration.items.map((item) => {
+                  const given = item.status === "GIVEN";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`scan-item${
+                        given ? " scan-item-given" : ""
+                      }`}
+                    >
+                      <div>
+                        <div className="scan-item-name">
+                          {item.item}
+                        </div>
+
+                        <div className="scan-item-meta">
+                          {item.size ? `Size ${item.size}` : "One size"}
+                          {item.quantity > 1
+                            ? ` · Qty ${item.quantity}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      <div className="header-actions">
+                        <span
+                          className={`badge ${
+                            given ? "badge-success" : "badge-warning"
+                          }`}
+                        >
+                          {given ? "Given" : "Pending"}
+                        </span>
+
+                        {given && (
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            onClick={() =>
+                              reverseDistribution(item.id)
+                            }
+                          >
+                            Reverse
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Collection QR</h2>
+
+                <p className="panel-subtitle">
+                  Scanned by a volunteer at handover.
+                </p>
+              </div>
+            </div>
+
+            <div className="panel-body">
+              {qrImage ? (
+                <span className="qr-frame">
+                  {/* Generated client-side as a data URL, so
+                      next/image would add no value here. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrImage}
+                    alt={`Collection QR code for registration ${registration.registration_id}`}
+                    width={420}
+                    height={420}
+                  />
+                </span>
+              ) : (
+                <div
+                  className="skeleton"
                   style={{
-                    display: "block",
-                    width: "250px",
-                    height: "250px",
+                    aspectRatio: "1",
+                    maxWidth: 260,
+                    margin: "0 auto",
+                    borderRadius: "var(--radius-lg)",
                   }}
                 />
-              </div>
-            )}
+              )}
 
-            <div
-              style={{
-                marginTop: "16px",
-                color:
-                  "var(--vt-muted)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "8px",
-                textAlign: "center",
-                wordBreak:
-                  "break-all",
-                lineHeight: 1.6,
-              }}
-            >
-              /claim/
-              {registration.qr_token}
+              <p className="help mt-4" style={{ textAlign: "center" }}>
+                Token{" "}
+                <span className="mono">{registration.qr_token}</span>
+              </p>
             </div>
-
-          </div>
-
-        </section>
-
-
-        {/* DISTRIBUTION STATUS */}
-
-        <section
-          style={{
-            marginTop: "28px",
-          }}
-        >
-
-          <SectionTitle
-            number="01"
-            title="Distribution Status"
-          />
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(3, minmax(0, 1fr))",
-              gap: "1px",
-              background:
-                "var(--vt-border)",
-              border:
-                "1px solid var(--vt-border)",
-            }}
-          >
-
-            <StatusCard
-              label="TOTAL"
-              value={
-                registration.distribution
-                  .total
-              }
-              subtitle="Purchased units"
-            />
-
-            <StatusCard
-              label="GIVEN"
-              value={
-                registration.distribution
-                  .given
-              }
-              subtitle="Handed over"
-              positive
-            />
-
-            <StatusCard
-              label="PENDING"
-              value={
-                registration.distribution
-                  .pending
-              }
-              subtitle="Awaiting pickup"
-              warning={
-                registration.distribution
-                  .pending > 0
-              }
-            />
-
-          </div>
-
-        </section>
-
-
-        {/* PURCHASED MERCHANDISE */}
-
-        <section
-          style={{
-            marginTop: "30px",
-          }}
-        >
-
-          <SectionTitle
-            number="02"
-            title="Purchased Merchandise"
-          />
-
-          <div
-            className="registration-table"
-          >
-
-            <div
-              className="registration-row registration-header"
-              style={{
-                gridTemplateColumns:
-                  "2fr 1fr 1fr 1fr",
-              }}
-            >
-              <span>Item</span>
-              <span>Size</span>
-              <span>Quantity</span>
-              <span>Status</span>
-            </div>
-
-
-            {registration.items.map(
-              (item) => (
-                <div
-                  className="registration-row"
-                  key={item.id}
-                  style={{
-                    gridTemplateColumns:
-                      "2fr 1fr 1fr 1fr",
-                  }}
-                >
-
-                  <div>
-                    <strong
-                      style={{
-                        color:
-                          "var(--vt-white)",
-                        fontSize:
-                          "13px",
-                      }}
-                    >
-                      {item.item}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        "var(--vt-muted)",
-                      fontFamily:
-                        '"SFMono-Regular", Consolas, monospace',
-                      fontSize:
-                        "10px",
-                    }}
-                  >
-                    {item.size ||
-                      "—"}
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        "var(--vt-white)",
-                      fontFamily:
-                        '"SFMono-Regular", Consolas, monospace',
-                      fontSize:
-                        "13px",
-                      fontWeight:
-                        800,
-                    }}
-                  >
-                    {item.quantity}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display:
-                          "inline-flex",
-                        padding:
-                          "7px 10px",
-                        border:
-                          `1px solid ${
-                            item.status ===
-                            "GIVEN"
-                              ? "var(--vt-green)"
-                              : "var(--vt-yellow)"
-                          }`,
-                        color:
-                          item.status ===
-                          "GIVEN"
-                            ? "var(--vt-green)"
-                            : "var(--vt-yellow)",
-                        fontFamily:
-                          '"SFMono-Regular", Consolas, monospace',
-                        fontSize:
-                          "8px",
-                        fontWeight:
-                          800,
-                        letterSpacing:
-                          ".08em",
-                      }}
-                    >
-                      {item.status ===
-                      "GIVEN"
-                        ? "✓ GIVEN"
-                        : "● PENDING"}
-                    </span>
-
-                    {item.status ===
-                      "GIVEN" && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          reverseDistribution(
-                            item.id
-                          )
-                        }
-                        style={{
-                          padding:
-                            "7px 10px",
-                          border:
-                            "1px solid var(--vt-red)",
-                          background:
-                            "transparent",
-                          color:
-                            "var(--vt-red)",
-                          fontFamily:
-                            '"SFMono-Regular", Consolas, monospace',
-                          fontSize:
-                            "7px",
-                          fontWeight:
-                            800,
-                          letterSpacing:
-                            ".06em",
-                          cursor:
-                            "pointer",
-                        }}
-                      >
-                        ↶ REVERSE
-                      </button>
-                    )}
-                  </div>
-
-                </div>
-              )
-            )}
-
-          </div>
-
-        </section>
-
-
-        {/* QR DETAILS */}
-
-        <section
-          style={{
-            marginTop: "30px",
-          }}
-        >
-
-          <SectionTitle
-            number="03"
-            title="QR Record"
-          />
-
-          <div
-            style={{
-              border:
-                "1px solid var(--vt-border)",
-              background:
-                "var(--vt-surface)",
-              padding: "22px",
-            }}
-          >
-
-            <div
-              style={{
-                color:
-                  "var(--vt-muted)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "8px",
-                letterSpacing:
-                  ".1em",
-                marginBottom:
-                  "8px",
-              }}
-            >
-              CLAIM URL
-            </div>
-
-            <div
-              style={{
-                padding: "13px",
-                background:
-                  "#080b0d",
-                border:
-                  "1px solid var(--vt-border)",
-                color:
-                  "var(--vt-orange-light)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                wordBreak:
-                  "break-all",
-              }}
-            >
-              {claimUrl}
-            </div>
-
-            <div
-              style={{
-                marginTop:
-                  "15px",
-                color:
-                  "var(--vt-dim)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "8px",
-                lineHeight: 1.7,
-              }}
-            >
-              QR NAME:{" "}
-              {registration.name}
-              <br />
-              TOKEN:{" "}
-              {registration.qr_token}
-              <br />
-              ACCESS:{" "}
-              {fullyDistributed
-                ? "DISTRIBUTION COMPLETE"
-                : "DISTRIBUTION ACTIVE"}
-            </div>
-
-          </div>
-
-        </section>
-
-
-        <div
-          style={{
-            marginTop: "30px",
-            paddingTop: "15px",
-            borderTop:
-              "1px solid var(--vt-border)",
-            display: "flex",
-            justifyContent:
-              "space-between",
-            gap: "15px",
-            flexWrap: "wrap",
-            color:
-              "var(--vt-dim)",
-            fontFamily:
-              '"SFMono-Regular", Consolas, monospace',
-            fontSize: "8px",
-            letterSpacing:
-              ".1em",
-          }}
-        >
-          <span>
-            VTAAP 2026 /
-            REGISTRATION DETAIL
-          </span>
-
-          <Link
-            href="/admin/registrations"
-            style={{
-              color:
-                "var(--vt-orange-bright)",
-              textDecoration:
-                "none",
-            }}
-          >
-            BACK TO REGISTRATIONS
-          </Link>
+          </section>
         </div>
 
       </div>
     </main>
-  );
-}
-
-
-function SectionTitle({
-  number,
-  title,
-}: {
-  number: string;
-  title: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: "12px",
-        marginBottom: "12px",
-      }}
-    >
-      <span
-        style={{
-          color:
-            "var(--vt-orange-bright)",
-          fontFamily:
-            '"SFMono-Regular", Consolas, monospace',
-          fontSize: "9px",
-          fontWeight: 800,
-        }}
-      >
-        {number}
-      </span>
-
-      <h2
-        style={{
-          margin: 0,
-          color:
-            "var(--vt-white)",
-          fontSize: "18px",
-          fontWeight: 500,
-          textTransform:
-            "uppercase",
-        }}
-      >
-        {title}
-      </h2>
-    </div>
-  );
-}
-
-
-function DetailField({
-  label,
-  value,
-  highlight = false,
-}: {
-  label: string;
-  value: string | number;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        padding: "18px",
-        background:
-          "var(--vt-surface-2)",
-      }}
-    >
-      <div
-        style={{
-          color:
-            "var(--vt-dim)",
-          fontFamily:
-            '"SFMono-Regular", Consolas, monospace',
-          fontSize: "7px",
-          fontWeight: 700,
-          letterSpacing:
-            ".1em",
-          marginBottom: "7px",
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          color:
-            highlight
-              ? "var(--vt-orange-bright)"
-              : "var(--vt-white)",
-          fontFamily:
-            '"SFMono-Regular", Consolas, monospace',
-          fontSize: "14px",
-          fontWeight: 800,
-          wordBreak:
-            "break-word",
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-
-function StatusCard({
-  label,
-  value,
-  subtitle,
-  positive = false,
-  warning = false,
-}: {
-  label: string;
-  value: number;
-  subtitle: string;
-  positive?: boolean;
-  warning?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        padding: "22px",
-        background:
-          "var(--vt-surface)",
-      }}
-    >
-      <div
-        style={{
-          color:
-            "var(--vt-dim)",
-          fontFamily:
-            '"SFMono-Regular", Consolas, monospace',
-          fontSize: "8px",
-          fontWeight: 800,
-          letterSpacing:
-            ".1em",
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          marginTop: "8px",
-          color:
-            positive
-              ? "var(--vt-green)"
-              : warning
-                ? "var(--vt-yellow)"
-                : "var(--vt-orange-bright)",
-          fontFamily:
-            '"SFMono-Regular", Consolas, monospace',
-          fontSize: "34px",
-          fontWeight: 800,
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-
-      <div
-        style={{
-          marginTop: "7px",
-          color:
-            "var(--vt-muted)",
-          fontSize: "8px",
-        }}
-      >
-        {subtitle}
-      </div>
-    </div>
   );
 }

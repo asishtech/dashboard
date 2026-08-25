@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import { usePoll } from "@/lib/use-poll";
+import {
+  AlertIcon,
+  InboxIcon,
+  SearchIcon,
+} from "@/components/icons";
 
 type RegistrationItem = {
   id: number;
@@ -221,907 +226,280 @@ export default function RegistrationsPage() {
     ).format(amount);
 
   return (
-    <main className="dashboard">
+    <main className="app">
       <div className="container">
 
-        {/* HEADER */}
-
-        <header className="header">
-
+        <header className="page-header">
           <div>
+            <span className="page-eyebrow">
+              V-TAPP / Registrations
+            </span>
 
-            <div
-              style={{
-                color:
-                  "var(--vt-orange-bright)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                fontWeight: 700,
-                letterSpacing: ".16em",
-              }}
-            >
-              [03] / REGISTRATION CONTROL
-            </div>
+            <h1 className="page-title">Buyer Registrations</h1>
 
-            <h1>
-              Buyer Registrations
-            </h1>
-
-            <p>
-              Purchases, merchandise
-              and distribution records
+            <p className="page-subtitle">
+              Purchases, merchandise and distribution records
             </p>
-
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-
+          <div className="header-actions">
             <button
               type="button"
-              onClick={() =>
-                loadRegistrations(
-                  true
-                )
-              }
+              onClick={() => loadRegistrations(true)}
               disabled={refreshing}
-              className="admin-link"
-              style={{
-                cursor: refreshing
-                  ? "wait"
-                  : "pointer",
-              }}
+              className="btn btn-ghost btn-sm"
             >
-              {refreshing
-                ? "Refreshing..."
-                : "Force Refresh"}
+              {refreshing && <span className="btn-spinner" />}
+              {refreshing ? "Refreshing" : "Refresh"}
             </button>
 
-            <Link
-              href="/admin"
-              className="admin-link"
-            >
+            <Link href="/admin" className="btn btn-ghost btn-sm">
               Dashboard
             </Link>
 
             <Link
               href="/admin/inventory"
-              className="admin-link"
+              className="btn btn-ghost btn-sm"
             >
               Inventory
             </Link>
 
             <LogoutButton />
-
           </div>
-
         </header>
 
 
-        {/* SYSTEM STATUS */}
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-            gap: "12px",
-            flexWrap: "wrap",
-            marginBottom: "24px",
-            padding: "11px 14px",
-            border:
-              "1px solid var(--vt-border)",
-            background:
-              "var(--vt-surface)",
-          }}
-        >
-
-          <span
-            style={{
-              color:
-                "var(--vt-orange-bright)",
-              fontFamily:
-                '"SFMono-Regular", Consolas, monospace',
-              fontSize: "9px",
-              fontWeight: 700,
-              letterSpacing: ".12em",
-            }}
-          >
-            ● REGISTRATION DATABASE ONLINE
-          </span>
-
-          <span
-            style={{
-              color:
-                "var(--vt-muted)",
-              fontFamily:
-                '"SFMono-Regular", Consolas, monospace',
-              fontSize: "9px",
-            }}
-          >
-            {filtered.length} /{" "}
-            {registrations.length} RECORDS
-          </span>
-
-        </div>
+        {error && (
+          <div className="banner banner-danger" role="alert">
+            <AlertIcon size={18} />
+            <span>{error}</span>
+          </div>
+        )}
 
 
-        {/* OVERVIEW */}
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Revenue</span>
 
-        <section>
+            <strong className="stat-value">
+              {loading ? "—" : formatAmount(stats.revenue)}
+            </strong>
 
-          <SectionLabel
-            number="01"
-            title="Registration Overview"
-          />
+            <span className="stat-meta">Across all buyers</span>
+          </div>
 
-          <section className="stats">
+          <div className="stat">
+            <span className="stat-label">Buyers</span>
 
-            <RegistrationStat
-              title="Total Buyers"
-              value={
-                loading
-                  ? "—"
-                  : stats.buyers
-              }
-              subtitle="Completed registrations"
-            />
+            <strong className="stat-value">
+              {loading ? "—" : stats.buyers}
+            </strong>
 
-            <RegistrationStat
-              title="Revenue"
-              value={
-                loading
-                  ? "—"
-                  : formatAmount(
-                      stats.revenue
-                    )
-              }
-              subtitle="Recorded sales"
-            />
+            <span className="stat-meta">Registrations synced</span>
+          </div>
 
-            <RegistrationStat
-              title="Distributed"
-              value={
-                loading
-                  ? "—"
-                  : stats.given
-              }
-              subtitle="Completed handovers"
-            />
+          <div className="stat">
+            <span className="stat-label">Fully given</span>
 
-            <RegistrationStat
-              title="Pending"
-              value={
-                loading
-                  ? "—"
-                  : stats.pending
-              }
-              subtitle="Awaiting distribution"
-            />
+            <strong className="stat-value stat-success">
+              {loading ? "—" : stats.given}
+            </strong>
 
-          </section>
+            <span className="stat-meta">All items handed over</span>
+          </div>
 
+          <div className="stat">
+            <span className="stat-label">Outstanding</span>
+
+            <strong className="stat-value stat-warning">
+              {loading ? "—" : stats.pending}
+            </strong>
+
+            <span className="stat-meta">Items still to collect</span>
+          </div>
         </section>
 
 
-        {/* SEARCH */}
-
-        <section
-          className="inventory-panel"
-          style={{
-            marginTop: "30px",
-          }}
-        >
-
-          <div
-            className="section-header"
-          >
-
-            <div>
-
-              <SectionLabel
-                number="02"
-                title="Registration Index"
-              />
-
-              <span>
-                Search and filter buyer
-                records
+        <section className="panel">
+          <div className="panel-header">
+            <div className="search" style={{ flex: "1 1 260px" }}>
+              <span className="search-icon">
+                <SearchIcon size={16} />
               </span>
 
+              <label className="sr-only" htmlFor="registration-search">
+                Search registrations
+              </label>
+
+              <input
+                id="registration-search"
+                type="search"
+                className="input"
+                placeholder="Search name, email or ID"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </div>
 
-          </div>
-
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "minmax(240px, 1fr) auto",
-              gap: "10px",
-              marginBottom: "20px",
-            }}
-          >
-
-            <input
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Filter by distribution status"
+            >
+              {(["ALL", "GIVEN", "PENDING"] as const).map(
+                (option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className="segmented-item"
+                    aria-pressed={filter === option}
+                    onClick={() => setFilter(option)}
+                  >
+                    {option === "ALL"
+                      ? "All"
+                      : option === "GIVEN"
+                        ? "Given"
+                        : "Pending"}
+                  </button>
                 )
-              }
-              placeholder="SEARCH NAME / EMAIL / REGISTRATION ID"
-              style={{
-                width: "100%",
-                height: "42px",
-                padding:
-                  "0 13px",
-                background:
-                  "#080a0c",
-                color:
-                  "var(--vt-white)",
-                border:
-                  "1px solid var(--vt-border)",
-                borderRadius: 0,
-                outline: "none",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "9px",
-                letterSpacing:
-                  ".04em",
-              }}
-            />
-
-
-            <div
-              style={{
-                display: "flex",
-                gap: "1px",
-                background:
-                  "var(--vt-border)",
-              }}
-            >
-
-              {(
-                [
-                  "ALL",
-                  "GIVEN",
-                  "PENDING",
-                ] as const
-              ).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() =>
-                    setFilter(value)
-                  }
-                  style={{
-                    minWidth: "90px",
-                    border: 0,
-                    borderRadius: 0,
-                    background:
-                      filter === value
-                        ? "var(--vt-orange)"
-                        : "var(--vt-surface-2)",
-                    color:
-                      filter === value
-                        ? "#080706"
-                        : "var(--vt-muted)",
-                    fontFamily:
-                      '"SFMono-Regular", Consolas, monospace',
-                    fontSize: "9px",
-                    fontWeight: 800,
-                    letterSpacing:
-                      ".08em",
-                    cursor:
-                      "pointer",
-                  }}
-                >
-                  {value}
-                </button>
-              ))}
-
+              )}
             </div>
-
           </div>
-
-
-          {/* TABLE */}
-
-          {error && (
-            <div
-              style={{
-                padding:
-                  "14px",
-                border:
-                  "1px solid var(--vt-red)",
-                color:
-                  "var(--vt-red)",
-                background:
-                  "rgba(220,98,98,.06)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "10px",
-              }}
-            >
-              {error}
-            </div>
-          )}
-
 
           {loading ? (
-            <LoadingRows />
+            <div className="panel-body stack">
+              {[1, 2, 3, 4, 5].map((row) => (
+                <div key={row}>
+                  <div className="skeleton skeleton-line" />
+                  <div
+                    className="skeleton skeleton-line"
+                    style={{ width: "40%" }}
+                  />
+                </div>
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
-            <div
-              style={{
-                padding:
-                  "60px 20px",
-                textAlign:
-                  "center",
-                border:
-                  "1px solid var(--vt-border)",
-                color:
-                  "var(--vt-muted)",
-                fontFamily:
-                  '"SFMono-Regular", Consolas, monospace',
-                fontSize: "10px",
-                letterSpacing:
-                  ".08em",
-              }}
-            >
-              NO REGISTRATION RECORDS
-              FOUND
+            <div className="empty">
+              <div className="empty-icon">
+                <InboxIcon size={22} />
+              </div>
+
+              <p className="empty-title">
+                {registrations.length === 0
+                  ? "No registrations yet"
+                  : "Nothing matches this view"}
+              </p>
+
+              <p className="empty-body">
+                {registrations.length === 0
+                  ? "Run a V-TAPP sync from the dashboard to pull in buyers."
+                  : "Try a different search term or clear the status filter."}
+              </p>
             </div>
           ) : (
-            <div
-              style={{
-                overflowX:
-                  "auto",
-              }}
-            >
+            <div className="table-wrap">
+              <table className="table">
+                <caption className="sr-only">
+                  Buyer registrations with merchandise and
+                  distribution status
+                </caption>
 
-              <div
-                style={{
-                  minWidth:
-                    "900px",
-                  border:
-                    "1px solid var(--vt-border)",
-                }}
-              >
+                <thead>
+                  <tr>
+                    <th scope="col">Buyer</th>
+                    <th scope="col">Registration</th>
+                    <th scope="col">Items</th>
+                    <th scope="col" className="table-num">
+                      Total
+                    </th>
+                    <th scope="col">Status</th>
+                    <th scope="col">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
 
-                <div
-                  className="registration-row registration-header"
-                >
-                  <span>Buyer</span>
-                  <span>Registration</span>
-                  <span>Merchandise</span>
-                  <span>Amount</span>
-                  <span>Status</span>
-                </div>
-
-
-                {filtered.map(
-                  (registration) => {
-
+                <tbody>
+                  {filtered.map((registration) => {
                     const status =
-                      getRegistrationStatus(
-                        registration
-                      );
+                      getRegistrationStatus(registration);
 
-                    const items =
-                      registration.items ??
-                      [];
+                    const items = registration.items ?? [];
 
-                    const itemCount =
-                      items.reduce(
-                        (
-                          sum,
-                          item
-                        ) =>
-                          sum +
-                          Number(
-                            item.quantity ??
-                              1
-                          ),
-                        0
-                      );
+                    const itemCount = items.reduce(
+                      (sum, item) =>
+                        sum + Number(item.quantity ?? 1),
+                      0
+                    );
 
                     return (
-                      <Link
-                        href={`/admin/registrations/${encodeURIComponent(
-                          registration.registration_id
-                        )}`}
-                        className="registration-row"
-                        key={
-                          registration.registration_id
-                        }
-                        style={{
-                          textDecoration: "none",
-                          color: "inherit",
-                          cursor: "pointer",
-                        }}
-                      >
+                      <tr key={registration.registration_id}>
+                        <td>
+                          <div className="row-title">
+                            {registration.name}
+                          </div>
 
-                        {/* BUYER */}
+                          <div className="row-meta truncate">
+                            {registration.email}
+                          </div>
+                        </td>
 
-                        <div>
-                          <strong
-                            style={{
-                              display:
-                                "block",
-                              color:
-                                "var(--vt-white)",
-                              fontSize:
-                                "12px",
-                              fontWeight:
-                                600,
-                            }}
-                          >
-                            {
-                              registration.name
-                            }
-                          </strong>
+                        <td className="mono dim">
+                          #{registration.registration_id}
+                        </td>
 
+                        <td>
+                          {itemCount}
+                          <span className="dim"> pcs</span>
+                        </td>
+
+                        <td className="table-num">
+                          {formatAmount(
+                            Number(registration.total ?? 0)
+                          )}
+                        </td>
+
+                        <td>
                           <span
-                            style={{
-                              display:
-                                "block",
-                              marginTop:
-                                "5px",
-                              color:
-                                "var(--vt-muted)",
-                              fontFamily:
-                                '"SFMono-Regular", Consolas, monospace',
-                              fontSize:
-                                "8px",
-                            }}
+                            className={`badge ${
+                              status === "GIVEN"
+                                ? "badge-success"
+                                : "badge-warning"
+                            }`}
                           >
-                            {
-                              registration.email
-                            }
+                            {status === "GIVEN"
+                              ? "Given"
+                              : "Pending"}
                           </span>
-                        </div>
+                        </td>
 
-
-                        {/* ID */}
-
-                        <div>
-                          <span
-                            style={{
-                              color:
-                                "var(--vt-orange-light)",
-                              fontFamily:
-                                '"SFMono-Regular", Consolas, monospace',
-                              fontSize:
-                                "9px",
-                              fontWeight:
-                                700,
-                            }}
-                          >
-                            {
+                        <td className="table-num">
+                          <Link
+                            href={`/admin/registrations/${encodeURIComponent(
                               registration.registration_id
-                            }
-                          </span>
-                        </div>
-
-
-                        {/* MERCHANDISE */}
-
-                        <div>
-
-                          <strong
-                            style={{
-                              display:
-                                "block",
-                              color:
-                                "var(--vt-white)",
-                              fontFamily:
-                                '"SFMono-Regular", Consolas, monospace',
-                              fontSize:
-                                "12px",
-                            }}
+                            )}`}
+                            className="btn btn-ghost btn-sm"
                           >
-                            {itemCount}
-                          </strong>
-
-                          <span
-                            style={{
-                              color:
-                                "var(--vt-muted)",
-                              fontSize:
-                                "8px",
-                            }}
-                          >
-                            items
-                          </span>
-
-                        </div>
-
-
-                        {/* AMOUNT */}
-
-                        <div>
-                          <strong
-                            style={{
-                              color:
-                                "var(--vt-white)",
-                              fontFamily:
-                                '"SFMono-Regular", Consolas, monospace',
-                              fontSize:
-                                "12px",
-                            }}
-                          >
-                            {formatAmount(
-                              Number(
-                                registration.total ??
-                                  0
-                              )
-                            )}
-                          </strong>
-                        </div>
-
-
-                        {/* STATUS */}
-
-                        <div>
-
-                          <span
-                            style={{
-                              display:
-                                "inline-flex",
-                              alignItems:
-                                "center",
-                              minWidth:
-                                "72px",
-                              justifyContent:
-                                "center",
-                              padding:
-                                "7px 8px",
-                              border:
-                                `1px solid ${
-                                  status ===
-                                  "GIVEN"
-                                    ? "var(--vt-green)"
-                                    : "var(--vt-yellow)"
-                                }`,
-                              color:
-                                status ===
-                                "GIVEN"
-                                  ? "var(--vt-green)"
-                                  : "var(--vt-yellow)",
-                              background:
-                                "transparent",
-                              fontFamily:
-                                '"SFMono-Regular", Consolas, monospace',
-                              fontSize:
-                                "8px",
-                              fontWeight:
-                                800,
-                              letterSpacing:
-                                ".08em",
-                            }}
-                          >
-                            {status}
-                          </span>
-
-                        </div>
-
-                      </Link>
+                            View
+                          </Link>
+                        </td>
+                      </tr>
                     );
-                  }
-                )}
-
-              </div>
-
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
-        </section>
-
-
-        {/* MERCHANDISE BREAKDOWN */}
-
-        {!loading &&
-          filtered.length > 0 && (
-            <section
-              style={{
-                marginTop: "30px",
-              }}
-            >
-
-              <SectionLabel
-                number="03"
-                title="Merchandise Breakdown"
-              />
-
-              <div
-                className="inventory-grid"
-              >
-
-                {getMerchandiseSummary(
-                  filtered
-                ).map((item) => (
-                  <div
-                    className="inventory-card"
-                    key={item.name}
-                  >
-
-                    <div
-                      className="inventory-card-header"
-                    >
-
-                      <div>
-                        <h3>
-                          {item.name}
-                        </h3>
-
-                        <span>
-                          {item.orders} orders
-                        </span>
-                      </div>
-
-                      <div
-                        className="stock-number"
-                      >
-                        {item.quantity}
-                      </div>
-
-                    </div>
-
-                    <div
-                      className="inventory-label"
-                    >
-                      units ordered
-                    </div>
-
-                    <div
-                      className="inventory-footer"
-                    >
-                      <span>
-                        {item.orders} buyers
-                      </span>
-
-                      <strong>
-                        {formatAmount(
-                          item.revenue
-                        )}
-                      </strong>
-                    </div>
-
-                  </div>
-                ))}
-
-              </div>
-
-            </section>
+          {!loading && filtered.length > 0 && (
+            <div className="panel-footer">
+              Showing {filtered.length} of {registrations.length}{" "}
+              registrations
+            </div>
           )}
-
-
-        {/* FOOTER */}
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            gap: "15px",
-            flexWrap: "wrap",
-            marginTop: "28px",
-            paddingTop: "15px",
-            borderTop:
-              "1px solid var(--vt-border-soft)",
-            color:
-              "var(--vt-dim)",
-            fontFamily:
-              '"SFMono-Regular", Consolas, monospace',
-            fontSize: "8px",
-            letterSpacing:
-              ".1em",
-          }}
-        >
-
-          <span>
-            VTAAP 2026 /
-            REGISTRATION CONTROL
-          </span>
-
-          <span>
-            AUTO REFRESH / 60 SEC
-          </span>
-
-        </div>
+        </section>
 
       </div>
     </main>
-  );
-}
-
-
-/* ============================================================
-   COMPONENTS
-   ============================================================ */
-
-function SectionLabel({
-  number,
-  title,
-}: {
-  number: string;
-  title: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: "12px",
-        marginBottom: "12px",
-      }}
-    >
-      <span
-        style={{
-          color:
-            "var(--vt-orange-bright)",
-          fontFamily:
-            '"SFMono-Regular", Consolas, monospace',
-          fontSize: "9px",
-          fontWeight: 700,
-          letterSpacing:
-            ".1em",
-        }}
-      >
-        {number}
-      </span>
-
-      <h2
-        style={{
-          margin: 0,
-          color:
-            "var(--vt-white)",
-          fontSize: "18px",
-          fontWeight: 500,
-          textTransform:
-            "uppercase",
-          letterSpacing:
-            "-.02em",
-        }}
-      >
-        {title}
-      </h2>
-    </div>
-  );
-}
-
-
-function RegistrationStat({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-}) {
-  return (
-    <div className="stat-card">
-
-      <div className="stat-title">
-        {title}
-      </div>
-
-      <div className="stat-value">
-        {value}
-      </div>
-
-      <div className="stat-subtitle">
-        {subtitle}
-      </div>
-
-    </div>
-  );
-}
-
-
-function LoadingRows() {
-  return (
-    <div
-      style={{
-        border:
-          "1px solid var(--vt-border)",
-      }}
-    >
-      {[1, 2, 3, 4, 5, 6].map(
-        (row) => (
-          <div
-            key={row}
-            className="registration-row"
-          >
-            <div
-              className="skeleton skeleton-line medium"
-            />
-
-            <div
-              className="skeleton skeleton-line short"
-            />
-
-            <div
-              className="skeleton skeleton-line short"
-            />
-
-            <div
-              className="skeleton skeleton-line short"
-            />
-
-            <div
-              className="skeleton skeleton-line short"
-            />
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-
-function getMerchandiseSummary(
-  registrations: Registration[]
-) {
-  const map =
-    new Map<
-      string,
-      {
-        name: string;
-        quantity: number;
-        orders: number;
-        revenue: number;
-      }
-    >();
-
-  for (const registration of registrations) {
-    for (const item of
-      registration.items ?? []) {
-
-      const name =
-        item.item || "Unknown";
-
-      const quantity =
-        Number(
-          item.quantity ?? 1
-        );
-
-      const current =
-        map.get(name) ?? {
-          name,
-          quantity: 0,
-          orders: 0,
-          revenue: 0,
-        };
-
-      current.quantity +=
-        quantity;
-
-      current.orders += 1;
-
-      map.set(
-        name,
-        current
-      );
-    }
-  }
-
-  return Array.from(
-    map.values()
-  ).sort(
-    (a, b) =>
-      b.quantity -
-      a.quantity
   );
 }

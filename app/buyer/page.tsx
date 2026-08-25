@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import LogoutButton from "@/components/LogoutButton";
+import { AlertIcon, InboxIcon } from "@/components/icons";
 
 type Item = {
   id: number;
@@ -112,246 +113,119 @@ export default function BuyerPage() {
 
 
   return (
+    <main className="app">
+      <div className="container container-narrow">
 
-    <main className="dashboard">
-
-      <div className="container">
-
-        <header className="header">
-
+        <header className="page-header">
           <div>
+            <span className="page-eyebrow">V-TAPP / 2026</span>
 
-            <h1>
-              My Merchandise
-            </h1>
+            <h1 className="page-title">My Merchandise</h1>
 
-            <p>
-              Your V-TAPP merchandise
-              orders
+            <p className="page-subtitle">
+              {user?.email ?? "Your V-TAPP orders"}
             </p>
-
           </div>
 
           <LogoutButton />
-
         </header>
 
 
-        {user && (
-
-          <div
-            className="sales-panel"
-            style={{
-              marginBottom: "20px",
-            }}
-          >
-
-            <strong>
-              {user.email}
-            </strong>
-
-          </div>
-
-        )}
-
-
         {error && (
-
-          <div className="error-banner">
-            ⚠️ {error}
+          <div className="banner banner-danger" role="alert">
+            <AlertIcon size={18} />
+            <span>{error}</span>
           </div>
-
         )}
 
 
         {loading ? (
-
-          <section className="sales-panel">
-
-            <p>
-              Loading your orders...
-            </p>
-
+          <section className="panel">
+            <div className="panel-body">
+              <div className="skeleton skeleton-title" />
+              <div className="skeleton skeleton-line" />
+              <div className="skeleton skeleton-line" style={{ width: "70%" }} />
+            </div>
           </section>
-
         ) : registrations.length === 0 ? (
+          <section className="panel">
+            <div className="empty">
+              <div className="empty-icon">
+                <InboxIcon size={22} />
+              </div>
 
-          <section className="sales-panel">
+              <p className="empty-title">No merchandise found</p>
 
-            <h2>
-              No merchandise found
-            </h2>
-
-            <p className="panel-subtitle">
-              We couldn&apos;t find any V-TAPP
-              merchandise associated with
-              your Google account.
-            </p>
-
+              <p className="empty-body">
+                We couldn&apos;t find any V-TAPP merchandise for{" "}
+                {user?.email ?? "your Google account"}. If you bought
+                something with a different address, sign in with that
+                account instead.
+              </p>
+            </div>
           </section>
-
         ) : (
-
-          registrations.map(
-            registration => (
-
-              <section
-                className="sales-panel"
-                key={
-                  registration.id
-                }
-                style={{
-                  marginBottom:
-                    "20px",
-                }}
-              >
-
-                <div
-                  style={{
-                    display:
-                      "flex",
-                    justifyContent:
-                      "space-between",
-                    alignItems:
-                      "center",
-                    gap: "20px",
-                    flexWrap:
-                      "wrap",
-                  }}
-                >
-
+          <div className="stack-loose stack">
+            {registrations.map((registration) => (
+              <section className="panel" key={registration.id}>
+                <div className="panel-header">
                   <div>
-
-                    <h2>
-                      Registration #
-                      {
-                        registration.registration_id
-                      }
+                    <h2 className="panel-title">
+                      Registration #{registration.registration_id}
                     </h2>
 
                     <p className="panel-subtitle">
-                      {
-                        registration.ticket ??
-                        "Merchandise"
-                      }
+                      {registration.ticket ?? "Merchandise"}
                     </p>
-
                   </div>
-
 
                   <Link
                     href={`/claim/${registration.qr_token}`}
-                    className="qr-button"
+                    className="btn btn-primary btn-sm"
                   >
                     View QR
                   </Link>
-
                 </div>
 
+                <div className="panel-body stack-tight stack">
+                  {registration.items.map((item) => {
+                    const given = item.status === "GIVEN";
 
-                <div
-                  style={{
-                    marginTop:
-                      "20px",
-                  }}
-                >
-
-                  {registration.items.map(
-                    item => (
-
+                    return (
                       <div
-                        key={
-                          item.id
-                        }
-                        style={{
-                          padding:
-                            "16px",
-                          border:
-                            "1px solid #e5e7eb",
-                          borderRadius:
-                            "10px",
-                          marginBottom:
-                            "10px",
-                          display:
-                            "flex",
-                          justifyContent:
-                            "space-between",
-                          alignItems:
-                            "center",
-                          gap:
-                            "15px",
-                        }}
+                        key={item.id}
+                        className={`scan-item${
+                          given ? " scan-item-given" : ""
+                        }`}
                       >
-
                         <div>
-
-                          <strong>
+                          <div className="scan-item-name">
                             {item.item}
-                          </strong>
-
-                          {item.size && (
-
-                            <div
-                              style={{
-                                color:
-                                  "#64748b",
-                                marginTop:
-                                  "4px",
-                              }}
-                            >
-                              Size:{" "}
-                              {item.size}
-                            </div>
-
-                          )}
-
-                          <div
-                            style={{
-                              color:
-                                "#64748b",
-                              fontSize:
-                                "13px",
-                              marginTop:
-                                "4px",
-                            }}
-                          >
-                            Quantity:{" "}
-                            {item.quantity}
                           </div>
 
+                          <div className="scan-item-meta">
+                            {item.size ? `Size ${item.size} · ` : ""}
+                            Qty {item.quantity}
+                          </div>
                         </div>
 
-
                         <span
-                          className={
-                            item.status ===
-                            "GIVEN"
-                              ? "type-badge single"
-                              : "type-badge combo"
-                          }
+                          className={`badge ${
+                            given ? "badge-success" : "badge-warning"
+                          }`}
                         >
-                          {item.status ===
-                          "GIVEN"
-                            ? "✓ GIVEN"
-                            : "PENDING"}
+                          {given ? "Given" : "Pending"}
                         </span>
-
                       </div>
-
-                    )
-                  )}
-
+                    );
+                  })}
                 </div>
-
               </section>
-
-            )
-          )
-
+            ))}
+          </div>
         )}
 
       </div>
-
     </main>
   );
 }

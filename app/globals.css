@@ -1,5354 +1,1533 @@
-*{
+/* ==========================================================================
+   V-TAPP Design System
+   --------------------------------------------------------------------------
+   One token set. Components reference tokens only, never raw hex.
+
+   Contents
+     1.  Tokens
+     2.  Reset and base
+     3.  Layout: shell, container, page header
+     4.  Surfaces: panel, card
+     5.  Typography helpers
+     6.  Buttons and links
+     7.  Stats
+     8.  Meter (progress)
+     9.  Badges and status
+     10. Tables and rows
+     11. Forms
+     12. Feedback: banner, empty, skeleton, loading
+     13. Scanner
+     14. Utilities
+     15. Responsive
+     16. Motion preferences
+   ========================================================================== */
+
+
+/* 1. Tokens ================================================================ */
+
+:root {
+  /* -- Raw palette. Do not reference these directly in components. -- */
+  --c-bg:             #08090b;
+  --c-surface-1:      #101215;
+  --c-surface-2:      #161a1f;
+  --c-surface-3:      #1d2228;
+
+  --c-border:         #23272e;
+  --c-border-strong:  #2f343c;
+
+  --c-text:           #e8eaed;
+  --c-text-muted:     #9aa2ab;
+  --c-text-dim:       #7a828a;
+
+  --c-accent:         #f97316;
+  --c-accent-hover:   #fb8c3c;
+
+  --c-green:          #4ade80;
+  --c-amber:          #e8b45b;
+  --c-red:            #f87171;
+
+  /* -- Semantic surfaces -- */
+  --bg:               var(--c-bg);
+  --surface:          var(--c-surface-1);
+  --surface-raised:   var(--c-surface-2);
+  --surface-inset:    var(--c-surface-3);
+  --border:           var(--c-border);
+  --border-strong:    var(--c-border-strong);
+
+  /* -- Semantic text.
+        All three tiers clear 4.5:1 on --surface, so secondary copy
+        (.help, .stat-meta, .meter-foot) is readable rather than
+        merely decorative. -- */
+  --text:             var(--c-text);
+  --text-muted:       var(--c-text-muted);
+  --text-dim:         var(--c-text-dim);
+
+  /* -- Accent.
+        `--on-accent` is near-black on purpose: white on #f97316 is only
+        2.8:1, which fails AA. Dark text on the same fill is 8:1. -- */
+  --accent:           var(--c-accent);
+  --accent-hover:     var(--c-accent-hover);
+  --accent-soft:      rgb(249 115 22 / 0.12);
+  --accent-line:      rgb(249 115 22 / 0.35);
+  --on-accent:        #1a0f05;
+
+  /* -- Status. Always paired with an icon or text label, never colour alone. */
+  --success:          var(--c-green);
+  --success-soft:     rgb(74 222 128 / 0.12);
+  --warning:          var(--c-amber);
+  --warning-soft:     rgb(232 180 91 / 0.12);
+  --danger:           var(--c-red);
+  --danger-soft:      rgb(248 113 113 / 0.12);
+
+  /* -- Spacing. 4px rhythm. -- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* -- Radius -- */
+  --radius-sm:   4px;
+  --radius:      8px;
+  --radius-lg:   12px;
+  --radius-full: 999px;
+
+  /* -- Type scale -- */
+  --text-2xs:  10px;
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 14px;
+  --text-md:   16px;
+  --text-lg:   18px;
+  --text-xl:   22px;
+  --text-2xl:  28px;
+  --text-3xl:  34px;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* -- Elevation -- */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-3: 0 24px 64px rgb(0 0 0 / 0.55);
+
+  /* -- Motion -- */
+  --dur-fast: 120ms;
+  --dur:      180ms;
+  --ease:     cubic-bezier(0.2, 0, 0, 1);
+
+  /* -- Layering -- */
+  --z-sticky: 10;
+  --z-overlay: 100;
+  --z-modal:  1000;
+
+  color-scheme: dark;
+}
+
+
+/* 2. Reset and base ======================================================== */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html,
-body{
+body {
   height: 100%;
-  margin: 0;
-  padding: 0;
-  background: #f4f6f9;
-  color: #172033;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-body{
+body {
+  margin: 0;
   display: flex;
   flex-direction: column;
   min-height: 100%;
+
+  background: var(--bg);
+  color: var(--text);
+
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  color: var(--text);
+}
+
+p {
+  margin: 0;
 }
 
 button,
 input,
 select,
-textarea{
+textarea {
   font: inherit;
+  color: inherit;
 }
 
-.dashboard{
-  min-height: 100vh;
-  padding: 32px;
-  background: #f4f6f9;
-  color: #172033;
+button {
+  cursor: pointer;
 }
 
-.container{
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Numeric data must not reflow as digits change. */
+table,
+.stat-value,
+.meter-value,
+.mono,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One focus treatment everywhere. Never removed, only restyled. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 2px solid var(--bg);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+
+/* 3. Layout ================================================================ */
+
+/* Page shell. The grid is a texture, kept far below text contrast. */
+.app {
+  flex: 1;
+  min-height: 100dvh;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.016) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.container {
   width: 100%;
-  max-width: 1700px;
-  margin: 0 auto;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: var(--space-8) var(--space-6) var(--space-16);
 }
 
-/* HEADER */
-
-.header{
-  position: relative;
-  padding: 28px 30px;
-  border-radius: 16px;
-  background: #111827;
-  color: #ffffff;
-  margin-bottom: 20px;
+.container-narrow {
+  max-width: 880px;
 }
 
-.header h1{
-  margin: 0;
-  font-size: 25px;
+/* Page header ------------------------------------------------------------- */
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-8);
+  border-bottom: 1px solid var(--border);
+}
+
+.page-eyebrow {
+  display: block;
+  margin-bottom: var(--space-2);
+
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
-.header p{
-  margin: 7px 0 0;
-  color: #cbd5e1;
-  font-size: 14px;
+.page-title {
+  font-size: var(--text-2xl);
+  font-weight: 650;
 }
 
-/* ERROR */
-
-/* STATS */
-
-.stats{
-  display: grid;
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
-
-  gap: 15px;
-  margin-bottom: 18px;
+.page-subtitle {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-base);
 }
 
-.stat-card{
-  min-height: 125px;
-  padding: 20px;
-
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 13px;
-
-  color: #172033;
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.stat-title{
-  color: #64748b;
-  font-size: 12px;
+/* Section heading --------------------------------------------------------- */
+
+.section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.section-title {
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
-.stat-value{
-  margin-top: 9px;
-  color: #111827;
+.section-subtitle {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
 
-  font-size: 27px;
-  line-height: 1.2;
-  font-weight: 750;
+/* Grids ------------------------------------------------------------------- */
 
+.grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.grid-auto {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.grid-main {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stack-tight { gap: var(--space-2); }
+.stack-loose { gap: var(--space-8); }
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+
+/* 4. Surfaces ============================================================== */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.panel-subtitle {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.panel-body {
+  padding: var(--space-5);
+}
+
+.panel-body-flush {
+  padding: 0;
+}
+
+.panel-footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Interactive card, e.g. the admin navigation tiles. */
+.card-link {
+  display: block;
+  padding: var(--space-5);
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.card-link:hover {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.card-link:active {
+  transform: translateY(0);
+}
+
+/* Accent-tinted variant, for the single primary action on a screen. */
+.card-link-feature {
+  border-color: var(--accent-line);
+  background:
+    linear-gradient(var(--accent-soft), transparent 70%),
+    var(--surface);
+}
+
+.card-link-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.card-link-body {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.card-link-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-link:hover .card-link-cta {
+  color: var(--accent-hover);
+}
+
+
+/* 5. Typography helpers ==================================================== */
+
+.eyebrow {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.eyebrow-accent {
+  color: var(--accent);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.muted { color: var(--text-muted); }
+.dim   { color: var(--text-dim); }
+
+.text-sm { font-size: var(--text-sm); }
+.text-lg { font-size: var(--text-lg); }
+
+.truncate {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.stat-value.compact{
-  font-size: 19px;
-  padding-top: 3px;
-}
 
-.stat-subtitle{
-  margin-top: 7px;
-  color: #16a34a;
-  font-size: 12px;
-  font-weight: 600;
-}
+/* 6. Buttons and links ===================================================== */
 
-/* MERCHANDISE */
-
-/* SEARCH */
-
-/* TABLE */
-
-table{
-  width: 100%;
-  min-width: 1500px;
-
-  border-collapse: collapse;
-
-  color: #172033;
-  background: #ffffff;
-}
-
-thead{
-  background: #f8fafc;
-}
-
-th{
-  padding: 12px 14px;
-
-  color: #475569;
-  background: #f8fafc;
-
-  font-size: 11px;
-  font-weight: 700;
-  text-align: left;
-
-  white-space: nowrap;
-
-  border-bottom: 1px solid #e2e8f0;
-}
-
-td{
-  padding: 13px 14px;
-
-  color: #334155;
-  background: #ffffff;
-
-  font-size: 12px;
-  vertical-align: top;
-
-  border-bottom: 1px solid #eef2f7;
-}
-
-tbody tr:hover td{
-  background: #f8fafc;
-}
-
-/* RESPONSIVE */
-
-@media (max-width: 1000px){
-  .dashboard{
-    padding: 18px;
-  }
-
-  .stats{
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-}
-
-@media (max-width: 600px){
-  .dashboard{
-    padding: 10px;
-  }
-
-  .header{
-    padding: 20px;
-  }
-
-  .header h1{
-    font-size: 21px;
-  }
-
-  .stats{
-    grid-template-columns: 1fr;
-  }
-
-}
-
-/* INVENTORY DASHBOARD */
-
-.inventory-panel{
-  margin-bottom: 18px;
-  padding: 22px;
-
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 13px;
-}
-
-.section-header{
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  margin-bottom: 20px;
-}
-
-.section-header h2,
-.sales-panel h2,
-.countdown-panel h2{
-  margin: 0;
-
-  color: #111827;
-  font-size: 16px;
-}
-
-.section-header span,
-.panel-subtitle,
-.countdown-header p{
-  display: block;
-  margin-top: 5px;
-
-  color: #64748b;
-  font-size: 12px;
-}
-
-.inventory-grid{
-  display: grid;
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
-
-  gap: 14px;
-}
-
-.inventory-card{
-  padding: 18px;
-
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 11px;
-}
-
-.inventory-card.critical-card{
-  background: #fff7f7;
-  border-color: #fecaca;
-}
-
-.inventory-card-header{
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.inventory-card h3{
-  margin: 0;
-
-  color: #1e293b;
-  font-size: 14px;
-}
-
-.inventory-card-header span{
-  display: block;
-  margin-top: 4px;
-
-  color: #64748b;
-  font-size: 11px;
-}
-
-.stock-number{
-  color: #111827;
-  font-size: 30px;
-  line-height: 1;
-  font-weight: 800;
-}
-
-.inventory-label{
-  margin-top: 4px;
-
-  color: #64748b;
-  font-size: 10px;
-}
-
-.inventory-track{
-  height: 9px;
-  margin-top: 15px;
-
-  overflow: hidden;
-
-  background: #e2e8f0;
-  border-radius: 999px;
-}
-
-.inventory-fill{
-  height: 100%;
-  background: #16a34a;
-  border-radius: 999px;
-  transition: width 0.4s ease;
-}
-
-.inventory-fill.warning{
-  background: #f59e0b;
-}
-
-.inventory-fill.critical{
-  background: #dc2626;
-}
-
-.inventory-footer{
-  display: flex;
-  justify-content: space-between;
-
-  margin-top: 9px;
-
-  color: #64748b;
-  font-size: 10px;
-}
-
-.inventory-footer strong{
-  color: #334155;
-}
-
-/* SALES */
-
-.sales-grid{
-  display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-
-  gap: 18px;
-  margin-bottom: 18px;
-}
-
-.sales-panel{
-  padding: 20px;
-
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 13px;
-}
-
-.panel-subtitle{
-  margin-bottom: 16px;
-}
-
-/* COUNTDOWN */
-
-/* MERCHANDISE TAGS */
-
-.type-badge{
-  display: inline-block;
-
-  padding: 5px 8px;
-
-  border-radius: 999px;
-
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.type-badge.combo{
-  color: #7c2d12;
-  background: #ffedd5;
-}
-
-.type-badge.single{
-  color: #166534;
-  background: #dcfce7;
-}
-
-@media (max-width: 1100px){
-  .inventory-grid{
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-
-}
-
-@media (max-width: 700px){
-  .inventory-grid,
-  .sales-grid{
-    grid-template-columns: 1fr;
-  }
-
-  .section-header,
-  .countdown-header{
-    align-items: flex-start;
-    gap: 15px;
-  }
-
-}
-
-.admin-link{
-  color: inherit;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.admin-card{
-  text-decoration: none;
-  color: inherit;
-  transition: transform .2s ease, box-shadow .2s ease;
-}
-
-.admin-card:hover{
-  transform: translateY(-3px);
-  box-shadow: 0 12px 30px rgba(0,0,0,.08);
-}
-
-.admin-arrow{
-  display: inline-block;
-  margin-top: 15px;
-  font-weight: 700;
-}
-
-.qr-button{
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #111827;
-  color: white;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.error-banner{
-  padding: 14px 18px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  background: #fff1f2;
-  color: #be123c;
-}
-
-/* ============================================================
-   GLOBAL LOADING
-   ============================================================ */
-
-.loading-screen{
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
+.btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fb;
-  padding: 24px;
+  gap: var(--space-2);
+
+  /* 44px keeps the target comfortable on the volunteers' phones. */
+  min-height: 44px;
+  padding: 0 var(--space-4);
+
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+
+  font-size: var(--text-base);
+  font-weight: 550;
+  white-space: nowrap;
+
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 
-.loading-card{
+.btn:hover:not(:disabled) {
+  background: var(--surface-inset);
+  border-color: var(--text-dim);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--surface);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+}
+
+/* One primary action per screen. */
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 650;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--accent);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.btn-block {
   width: 100%;
-  max-width: 360px;
-  background: #ffffff;
-  border-radius: 18px;
-  padding: 36px 30px;
-  text-align: center;
-  box-shadow:
-    0 15px 45px rgba(0, 0, 0, 0.08);
 }
 
-.loading-spinner{
-  width: 42px;
-  height: 42px;
-  margin: 0 auto 20px;
-  border: 4px solid #e5e7eb;
-  border-top-color: #111827;
-  border-radius: 50%;
-  animation: vtapp-spin 0.8s linear infinite;
-}
-
-.loading-card h2{
-  margin: 0 0 8px;
-  font-size: 20px;
-}
-
-.loading-card p{
-  margin: 0;
-  color: #64748b;
-  font-size: 14px;
-}
-
-@keyframes vtapp-spin{
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ============================================================
-   BUTTON LOADING
-   ============================================================ */
-
-/* ============================================================
-   DATA SKELETON
-   ============================================================ */
-
-.skeleton{
-  background: linear-gradient(
-    90deg,
-    #eef1f5 25%,
-    #f8fafc 50%,
-    #eef1f5 75%
-  );
-  background-size: 200% 100%;
-  animation: vtapp-skeleton 1.4s infinite;
-  border-radius: 8px;
-}
-
-.skeleton-card{
-  height: 150px;
-  border-radius: 14px;
-}
-
-.skeleton-line{
+/* Spinner shown inside a button during async work. */
+.btn-spinner {
+  width: 14px;
   height: 14px;
-  margin-bottom: 10px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-full);
+  animation: spin 640ms linear infinite;
 }
 
-.skeleton-line.short{
-  width: 45%;
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: color var(--dur-fast) var(--ease);
 }
 
-.skeleton-line.medium{
-  width: 70%;
+.link:hover {
+  color: var(--accent-hover);
 }
 
-.skeleton-line.full{
-  width: 100%;
-}
 
-@keyframes vtapp-skeleton{
-  from {
-    background-position: 200% 0;
-  }
+/* 7. Stats ================================================================= */
 
-  to {
-    background-position: -200% 0;
-  }
-}
-
-/* =========================================================
-   V-TAPP 2026 ADMIN CONTROL UI
-   ========================================================= */
-
-:root{
-  --vt-bg: #050505;
-  --vt-panel: #0a0a0a;
-  --vt-panel-2: #0e0e0e;
-  --vt-green: #c7ff00;
-  --vt-green-dim: #8eae00;
-  --vt-text: #f1f1f1;
-  --vt-muted: #777;
-  --vt-border: #242424;
-  --vt-grid: rgba(199, 255, 0, 0.055);
-}
-
-body{
-  background:
-    linear-gradient(var(--vt-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--vt-grid) 1px, transparent 1px),
-    var(--vt-bg) !important;
-  background-size: 40px 40px !important;
-  color: var(--vt-text);
-  font-family:
-    "SFMono-Regular",
-    "SF Mono",
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    monospace !important;
-}
-
-/* Main dashboard */
-
-.dashboard{
-  min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 80% 10%,
-      rgba(199,255,0,.055),
-      transparent 30%
-    ),
-    transparent !important;
-}
-
-.dashboard .container{
-  max-width: 1500px;
-}
-
-/* Header */
-
-.dashboard .header{
-  position: relative;
-  border-bottom: 1px solid var(--vt-border);
-  padding: 28px 0;
-  margin-bottom: 28px;
-}
-
-.dashboard .header::before{
-  content: "V-TAPP / 2026";
-  display: block;
-  color: var(--vt-green);
-  font-size: 12px;
-  letter-spacing: .18em;
-  margin-bottom: 12px;
-}
-
-.dashboard .header h1{
-  color: #fff;
-  font-size: clamp(28px, 4vw, 52px);
-  letter-spacing: -.04em;
-  text-transform: uppercase;
-  margin: 0;
-}
-
-.dashboard .header p{
-  color: var(--vt-muted);
-  font-size: 12px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-
-/* Navigation */
-
-.dashboard .admin-link{
-  color: var(--vt-text) !important;
-  border: 1px solid var(--vt-border);
-  background: #080808;
-  border-radius: 0 !important;
-  padding: 9px 13px;
-  font-family: inherit;
-  font-size: 11px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  transition: all .15s ease;
-}
-
-.dashboard .admin-link:hover{
-  color: var(--vt-green) !important;
-  border-color: var(--vt-green);
-  box-shadow: 0 0 16px rgba(199,255,0,.12);
-}
-
-/* KPI section */
-
-.dashboard .stats{
+.stat-grid {
   display: grid;
-  grid-template-columns:
-    repeat(5, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--vt-border);
-  border: 1px solid var(--vt-border);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
 }
 
-.dashboard .stat-card{
-  background: var(--vt-panel);
-  border-radius: 0 !important;
-  padding: 22px;
-  min-height: 145px;
-  position: relative;
+.stat {
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
-.dashboard .stat-card::before{
-  content: "■";
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  color: var(--vt-green);
-  font-size: 7px;
+/* A hairline of accent marks the primary metric on a screen. */
+.stat-feature {
+  border-color: var(--accent-line);
+  background:
+    linear-gradient(var(--accent-soft), transparent 60%),
+    var(--surface);
 }
 
-.dashboard .stat-title{
-  color: #777;
-  font-size: 10px;
-  letter-spacing: .13em;
-  text-transform: uppercase;
-}
-
-.dashboard .stat-value{
-  color: var(--vt-green);
-  font-family: inherit;
-  font-size: 34px;
+.stat-label {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   font-weight: 700;
-  line-height: 1;
-  margin: 18px 0 10px;
-  letter-spacing: -.04em;
-}
-
-.dashboard .stat-subtitle{
-  color: #555;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-}
-
-/* Panels */
-
-.dashboard .sales-grid{
-  gap: 1px !important;
-  background: var(--vt-border);
-  border: 1px solid var(--vt-border);
-}
-
-.dashboard .sales-panel,
-.dashboard .admin-card,
-.dashboard .inventory-panel{
-  background: var(--vt-panel) !important;
-  border-radius: 0 !important;
-  border: 0 !important;
-}
-
-.dashboard .admin-card{
-  padding: 25px !important;
-  position: relative;
-}
-
-.dashboard .admin-card::before{
-  content: "[ CONTROL ]";
-  color: var(--vt-green);
-  font-size: 9px;
-  letter-spacing: .14em;
-}
-
-.dashboard .admin-card h2{
-  color: #fff;
-  text-transform: uppercase;
-  letter-spacing: -.02em;
-  margin-top: 18px;
-}
-
-.dashboard .admin-card .panel-subtitle{
-  color: #666;
-  font-size: 11px;
-  line-height: 1.7;
-}
-
-.dashboard .admin-arrow{
-  color: var(--vt-green) !important;
-  font-size: 11px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-/* Inventory */
-
-.dashboard .inventory-panel{
-  margin-top: 28px;
-  padding: 25px;
-  border: 1px solid var(--vt-border) !important;
-}
-
-.dashboard .section-header{
-  border-bottom: 1px solid var(--vt-border);
-  padding-bottom: 18px;
-  margin-bottom: 18px;
-}
-
-.dashboard .section-header h2{
-  color: #fff;
-  text-transform: uppercase;
-  letter-spacing: -.03em;
-}
-
-.dashboard .section-header span{
-  color: #555;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-}
-
-/* Inventory cards */
-
-.dashboard .inventory-grid{
-  display: grid;
-  grid-template-columns:
-    repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1px;
-  background: var(--vt-border);
-  border: 1px solid var(--vt-border);
-}
-
-.dashboard .inventory-card{
-  background: var(--vt-panel-2);
-  border-radius: 0 !important;
-  padding: 20px;
-  border: 0 !important;
-}
-
-.dashboard .inventory-card-header h3{
-  color: #fff;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
-
-.dashboard .inventory-card-header span{
-  color: #555;
-  font-size: 10px;
-}
-
-.dashboard .stock-number{
-  color: var(--vt-green) !important;
-  font-size: 36px !important;
-  font-family: inherit;
-  font-weight: 800;
-}
-
-.dashboard .inventory-label{
-  color: #555;
-  font-size: 9px;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-}
-
-.dashboard .inventory-track{
-  background: #181818 !important;
-  border-radius: 0 !important;
-  height: 5px !important;
-}
-
-.dashboard .inventory-fill{
-  background: var(--vt-green) !important;
-  box-shadow: 0 0 10px rgba(199,255,0,.25);
-}
-
-.dashboard .inventory-footer{
-  margin-top: 14px;
-  color: #777;
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-.dashboard .inventory-footer span{
-  color: #fff;
-}
-
-.dashboard .inventory-footer strong{
-  color: var(--vt-green);
-}
-
-/* Force refresh */
-
-.dashboard button{
-  font-family: inherit !important;
-  border-radius: 0 !important;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-}
-
-.dashboard button:hover{
-  border-color: var(--vt-green) !important;
-}
-
-/* Loading */
-
-.dashboard .skeleton{
-  background:
-    linear-gradient(
-      90deg,
-      #101010 25%,
-      #1a1a1a 50%,
-      #101010 75%
-    ) !important;
-  background-size: 200% 100%;
-  animation: vt-skeleton 1.2s infinite;
-}
-
-@keyframes vt-skeleton{
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-
-/* Status / system text */
-
-.dashboard::after{
-  content:
-    "V-TAPP 2026  //  ADMIN CONTROL  //  SYSTEM ONLINE";
+.stat-value {
   display: block;
-  max-width: 1500px;
-  margin: 35px auto 0;
-  padding: 18px 20px;
-  border-top: 1px solid var(--vt-border);
-  color: #444;
-  font-size: 9px;
-  letter-spacing: .12em;
+  margin-top: var(--space-3);
+  font-size: var(--text-2xl);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-/* Mobile */
-
-@media (max-width: 900px){
-  .dashboard .stats{
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-
+.stat-value-sm {
+  font-size: var(--text-xl);
 }
 
-@media (max-width: 600px){
-  .dashboard .stats{
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard .header h1{
-    font-size: 30px;
-  }
-
-  .dashboard .inventory-grid{
-    grid-template-columns: 1fr;
-  }
-
-}
-
-/* ============================================================
-   V-TAPP 2026 — ADMIN CONTROL CENTER
-   Complete high-contrast redesign
-   ============================================================ */
-
-:root{
-  --vt-bg: #050708;
-  --vt-surface: #0c1013;
-  --vt-surface-2: #11171b;
-  --vt-surface-3: #151d22;
-
-  --vt-border: #29343b;
-  --vt-border-soft: #1b252b;
-
-  --vt-white: #f7fafb;
-  --vt-text: #dce4e8;
-  --vt-muted: #8d9aa2;
-  --vt-dim: #65727a;
-
-  --vt-lime: #c8ff25;
-  --vt-lime-soft: rgba(200, 255, 37, 0.12);
-
-  --vt-cyan: #65d9ff;
-  --vt-cyan-soft: rgba(101, 217, 255, 0.10);
-
-  --vt-red: #ff5d67;
-  --vt-orange: #ffb454;
-
-  --vt-radius: 10px;
-}
-
-/* ------------------------------------------------------------
-   BASE
-   ------------------------------------------------------------ */
-
-body{
-  background:
-    radial-gradient(
-      circle at 85% 0%,
-      rgba(200, 255, 37, 0.045),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at 0% 70%,
-      rgba(101, 217, 255, 0.025),
-      transparent 28%
-    ),
-    var(--vt-bg) !important;
-
-  color: var(--vt-text) !important;
-
-  font-family:
-    Inter,
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif !important;
-}
-
-/* Subtle technical grid */
-
-.dashboard{
-  min-height: 100vh !important;
-
-  background-image:
-    linear-gradient(
-      rgba(255,255,255,0.018) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,0.018) 1px,
-      transparent 1px
-    ) !important;
-
-  background-size: 48px 48px !important;
-}
-
-/* ------------------------------------------------------------
-   CONTAINER
-   ------------------------------------------------------------ */
-
-.dashboard .container{
-  max-width: 1480px !important;
-  padding-bottom: 50px !important;
-}
-
-/* ------------------------------------------------------------
-   HEADER
-   ------------------------------------------------------------ */
-
-.dashboard .header{
-  position: relative !important;
-
-  display: grid !important;
-  grid-template-columns: 1fr auto !important;
-
-  gap: 24px !important;
-
-  padding: 34px !important;
-  margin-bottom: 28px !important;
-
-  background:
-    linear-gradient(
-      135deg,
-      #10171c,
-      #090d10
-    ) !important;
-
-  border: 1px solid var(--vt-border) !important;
-  border-radius: 14px !important;
-
-  box-shadow:
-    0 20px 60px rgba(0,0,0,.35),
-    inset 0 1px 0 rgba(255,255,255,.025) !important;
-}
-
-/* V-TAPP identifier */
-
-.dashboard .header::before{
-  content: "V-TAPP / 2026  •  ADMIN CONTROL CENTER";
-
+.stat-meta {
   display: block;
-
-  position: absolute;
-  top: 17px;
-  left: 34px;
-
-  color: var(--vt-lime) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-  font-weight: 700 !important;
-
-  letter-spacing: .16em !important;
+  margin-top: var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
 }
 
-/* Title */
+.stat-accent  { color: var(--accent); }
+.stat-success { color: var(--success); }
+.stat-warning { color: var(--warning); }
+.stat-danger  { color: var(--danger); }
 
-.dashboard .header h1{
-  margin-top: 15px !important;
 
-  color: var(--vt-white) !important;
+/* 8. Meter ================================================================= */
 
-  font-size:
-    clamp(30px, 4vw, 48px) !important;
-
-  font-weight: 800 !important;
-
-  letter-spacing: -.045em !important;
-
-  line-height: 1 !important;
-}
-
-/* Welcome */
-
-.dashboard .header p{
-  margin-top: 12px !important;
-
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 11px !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* ------------------------------------------------------------
-   NAVIGATION
-   ------------------------------------------------------------ */
-
-.dashboard .header > div:last-child{
-  align-self: end !important;
-}
-
-.dashboard .admin-link{
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-
-  min-height: 38px !important;
-
-  padding: 0 15px !important;
-
-  background: #0a0e11 !important;
-
-  color: var(--vt-text) !important;
-
-  border: 1px solid var(--vt-border) !important;
-  border-radius: 7px !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-  font-weight: 700 !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-
-  transition:
-    background .15s ease,
-    border-color .15s ease,
-    color .15s ease,
-    transform .15s ease !important;
-}
-
-.dashboard .admin-link:hover{
-  background: var(--vt-lime-soft) !important;
-
-  color: var(--vt-lime) !important;
-
-  border-color: var(--vt-lime) !important;
-
-  transform: translateY(-1px) !important;
-}
-
-/* ------------------------------------------------------------
-   FORCE REFRESH
-   ------------------------------------------------------------ */
-
-.dashboard .header button{
-  background: var(--vt-lime) !important;
-
-  color: #070900 !important;
-
-  border: 1px solid var(--vt-lime) !important;
-  border-radius: 7px !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-weight: 800 !important;
-
-  letter-spacing: .08em !important;
-
-  box-shadow:
-    0 0 0 0 rgba(200,255,37,0) !important;
-
-  transition: all .15s ease !important;
-}
-
-.dashboard .header button:hover:not(:disabled){
-  background: #d8ff5a !important;
-
-  box-shadow:
-    0 0 24px rgba(200,255,37,.18) !important;
-}
-
-.dashboard .header button:disabled{
-  opacity: .55 !important;
-}
-
-/* ------------------------------------------------------------
-   REFRESH STATUS
-   ------------------------------------------------------------ */
-
-.dashboard .header + div{
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-}
-
-/* ------------------------------------------------------------
-   KPI CARDS
-   ------------------------------------------------------------ */
-
-.dashboard .stats{
-  display: grid !important;
-
-  grid-template-columns:
-    repeat(5, minmax(0, 1fr)) !important;
-
-  gap: 12px !important;
-
-  background: transparent !important;
-
-  border: 0 !important;
-}
-
-.dashboard .stat-card{
-  position: relative !important;
-
-  min-height: 158px !important;
-
-  padding: 24px !important;
-
-  background:
-    linear-gradient(
-      145deg,
-      var(--vt-surface-2),
-      var(--vt-surface)
-    ) !important;
-
-  border: 1px solid var(--vt-border) !important;
-
-  border-radius: var(--vt-radius) !important;
-
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.025),
-    0 8px 30px rgba(0,0,0,.2) !important;
-
-  overflow: hidden !important;
-}
-
-.dashboard .stat-card::before{
-  content: "" !important;
-
-  position: absolute !important;
-
-  top: 0 !important;
-  left: 0 !important;
-
-  width: 100% !important;
-  height: 2px !important;
-
-  background: var(--vt-lime) !important;
-
-  opacity: .75 !important;
-}
-
-.dashboard .stat-card:hover{
-  border-color: #3b4a53 !important;
-
-  transform: translateY(-2px) !important;
-
-  transition: transform .15s ease !important;
-}
-
-.dashboard .stat-title{
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .12em !important;
-
-  text-transform: uppercase !important;
-}
-
-.dashboard .stat-value{
-  margin-top: 20px !important;
-
-  color: var(--vt-white) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 38px !important;
-
-  font-weight: 800 !important;
-
-  line-height: 1 !important;
-
-  letter-spacing: -.04em !important;
-}
-
-.dashboard .stat-card:nth-child(2) .stat-value,
-.dashboard .stat-card:nth-child(4) .stat-value{
-  color: var(--vt-lime) !important;
-}
-
-.dashboard .stat-subtitle{
-  margin-top: 12px !important;
-
-  color: var(--vt-dim) !important;
-
-  font-size: 10px !important;
-
-  letter-spacing: .04em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* ------------------------------------------------------------
-   CHART SECTION
-   ------------------------------------------------------------ */
-
-.dashboard .sales-grid{
-  display: grid !important;
-
-  gap: 12px !important;
-
-  background: transparent !important;
-
-  border: 0 !important;
-}
-
-/* Chart cards / existing sales panels */
-
-.dashboard .sales-grid > *,
-.dashboard .chart-card,
-.dashboard [class*="chart"]{
-  color: var(--vt-text) !important;
-}
-
-/* Make chart panels readable */
-
-.dashboard .sales-panel{
-  background:
-    linear-gradient(
-      145deg,
-      #0e1418,
-      #090d10
-    ) !important;
-
-  border: 1px solid var(--vt-border) !important;
-
-  border-radius: var(--vt-radius) !important;
-}
-
-/* Chart headings */
-
-.dashboard h2,
-.dashboard h3{
-  color: var(--vt-white) !important;
-}
-
-.dashboard .sales-panel h2{
-  color: var(--vt-white) !important;
-
-  font-size: 18px !important;
-
-  font-weight: 750 !important;
-
-  letter-spacing: -.025em !important;
-}
-
-.dashboard .panel-subtitle{
-  color: var(--vt-muted) !important;
-}
-
-/* ------------------------------------------------------------
-   CHART TEXT OVERRIDES
-   ------------------------------------------------------------ */
-
-/*
- * Existing chart JSX contains dark colors.
- * These overrides intentionally force readable values.
- */
-
-.dashboard .sales-panel span,
-.dashboard .sales-panel label,
-.dashboard .sales-panel p{
-  color: var(--vt-muted) !important;
-}
-
-.dashboard .sales-panel strong{
-  color: var(--vt-white) !important;
-}
-
-/* Merchandise names */
-
-.dashboard .sales-panel h4{
-  color: var(--vt-text) !important;
-}
-
-/* Numeric chart values */
-
-.dashboard .sales-panel .value,
-.dashboard .sales-panel [class*="value"]{
-  color: var(--vt-white) !important;
-}
-
-/* ------------------------------------------------------------
-   BAR CHARTS
-   ------------------------------------------------------------ */
-
-.dashboard [class*="chart"] > div{
-  color: var(--vt-text);
-}
-
-/* Horizontal tracks */
-
-.dashboard [class*="track"]{
-  background: #202a30 !important;
-
-  border-radius: 5px !important;
-}
-
-/* Lime fills */
-
-.dashboard [class*="fill"]{
-  background:
-    linear-gradient(
-      90deg,
-      var(--vt-lime),
-      #a9db18
-    ) !important;
-
-  border-radius: 5px !important;
-
-  box-shadow:
-    0 0 12px rgba(200,255,37,.12) !important;
-}
-
-/* ------------------------------------------------------------
-   DISTRIBUTION
-   ------------------------------------------------------------ */
-
-.dashboard .distribution-circle,
-.dashboard [class*="distribution"]{
-  color: var(--vt-white) !important;
-}
-
-/* Given */
-
-.dashboard .given{
-  color: var(--vt-lime) !important;
-}
-
-/* Pending */
-
-.dashboard .pending{
-  color: var(--vt-orange) !important;
-}
-
-/* ------------------------------------------------------------
-   INVENTORY
-   ------------------------------------------------------------ */
-
-.dashboard .inventory-panel{
-  margin-top: 28px !important;
-
-  padding: 26px !important;
-
-  background:
-    linear-gradient(
-      145deg,
-      #0e1418,
-      #090d10
-    ) !important;
-
-  border: 1px solid var(--vt-border) !important;
-
-  border-radius: var(--vt-radius) !important;
-
-  box-shadow:
-    0 12px 40px rgba(0,0,0,.22) !important;
-}
-
-.dashboard .section-header{
-  padding-bottom: 20px !important;
-
-  margin-bottom: 20px !important;
-
-  border-bottom:
-    1px solid var(--vt-border-soft) !important;
-}
-
-.dashboard .section-header h2{
-  color: var(--vt-white) !important;
-
-  font-size: 20px !important;
-
-  font-weight: 750 !important;
-}
-
-.dashboard .section-header span{
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-}
-
-/* Inventory grid */
-
-.dashboard .inventory-grid{
-  display: grid !important;
-
-  grid-template-columns:
-    repeat(
-      auto-fit,
-      minmax(280px, 1fr)
-    ) !important;
-
-  gap: 12px !important;
-
-  background: transparent !important;
-
-  border: 0 !important;
-}
-
-/* Individual inventory cards */
-
-.dashboard .inventory-card{
-  position: relative !important;
-
-  padding: 22px !important;
-
-  background: #0a0f12 !important;
-
-  border: 1px solid var(--vt-border-soft) !important;
-
-  border-radius: 9px !important;
-
-  transition:
-    border-color .15s ease,
-    transform .15s ease !important;
-}
-
-.dashboard .inventory-card:hover{
-  border-color: #43525b !important;
-
-  transform: translateY(-2px) !important;
-}
-
-/* Item name */
-
-.dashboard .inventory-card-header h3{
-  color: var(--vt-white) !important;
-
-  font-size: 13px !important;
-
-  font-weight: 750 !important;
-
-  letter-spacing: .02em !important;
-}
-
-/* Capacity */
-
-.dashboard .inventory-card-header span{
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-}
-
-/* Remaining number */
-
-.dashboard .stock-number{
-  color: var(--vt-lime) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 42px !important;
-
-  font-weight: 850 !important;
-
-  line-height: 1 !important;
-}
-
-/* Remaining label */
-
-.dashboard .inventory-label{
-  margin-top: 6px !important;
-
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .14em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* Progress track */
-
-.dashboard .inventory-track{
-  height: 7px !important;
-
-  margin-top: 17px !important;
-
-  background: #20292e !important;
-
-  border-radius: 5px !important;
-
-  overflow: hidden !important;
-}
-
-/* Progress */
-
-.dashboard .inventory-fill{
-  background:
-    linear-gradient(
-      90deg,
-      var(--vt-lime),
-      #91bb18
-    ) !important;
-
-  border-radius: 5px !important;
-}
-
-/* Footer */
-
-.dashboard .inventory-footer{
-  display: flex !important;
-
-  justify-content: space-between !important;
-
-  align-items: center !important;
-
-  gap: 10px !important;
-
-  margin-top: 17px !important;
-
-  padding-top: 15px !important;
-
-  border-top:
-    1px solid var(--vt-border-soft) !important;
-
-  color: var(--vt-muted) !important;
-}
-
-/* SOLD COUNT — intentionally large */
-
-.dashboard .inventory-footer span{
-  color: var(--vt-white) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 17px !important;
-
-  font-weight: 800 !important;
-
-  letter-spacing: -.02em !important;
-}
-
-/* % remaining */
-
-.dashboard .inventory-footer strong{
-  color: var(--vt-lime) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 11px !important;
-
-  font-weight: 800 !important;
-}
-
-/* ------------------------------------------------------------
-   BUTTONS
-   ------------------------------------------------------------ */
-
-.dashboard .qr-button{
-  background: transparent !important;
-
-  color: var(--vt-lime) !important;
-
-  border: 1px solid var(--vt-lime) !important;
-
-  border-radius: 7px !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-
-  font-weight: 800 !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-}
-
-.dashboard .qr-button:hover{
-  background: var(--vt-lime-soft) !important;
-}
-
-/* ------------------------------------------------------------
-   LOADING
-   ------------------------------------------------------------ */
-
-.dashboard .skeleton{
-  background:
-    linear-gradient(
-      90deg,
-      #10161a 0%,
-      #1b2429 50%,
-      #10161a 100%
-    ) !important;
-
-  background-size: 200% 100% !important;
-
-  animation:
-    vt-loading 1.25s ease-in-out infinite !important;
-
-  border-radius: 6px !important;
-}
-
-@keyframes vt-loading{
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-/* ------------------------------------------------------------
-   SYSTEM FOOTER
-   ------------------------------------------------------------ */
-
-.dashboard::after{
-  content:
-    "V-TAPP 2026   /   ADMIN CONTROL   /   SYSTEM ONLINE";
-
+.meter {
   display: block;
-
-  max-width: 1480px;
-
-  margin: 30px auto 0;
-
-  padding: 18px 0;
-
-  color: #4f5b62;
-
-  border-top:
-    1px solid var(--vt-border-soft);
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 700;
-
-  letter-spacing: .14em;
 }
 
-/* ------------------------------------------------------------
-   MOBILE
-   ------------------------------------------------------------ */
-
-@media (max-width: 1100px){
-  .dashboard .stats{
-    grid-template-columns:
-      repeat(3, minmax(0, 1fr)) !important;
-  }
-
+.meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
-@media (max-width: 760px){
-  .dashboard .header{
-    grid-template-columns: 1fr !important;
-
-    padding: 26px !important;
-  }
-
-  .dashboard .header > div:last-child{
-    align-self: start !important;
-  }
-
-  .dashboard .stats{
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .dashboard .stat-value{
-    font-size: 30px !important;
-  }
-
+.meter-label {
+  font-size: var(--text-base);
+  font-weight: 550;
 }
 
-@media (max-width: 520px){
-  .dashboard .stats{
-    grid-template-columns: 1fr !important;
-  }
-
-  .dashboard .inventory-grid{
-    grid-template-columns: 1fr !important;
-  }
-
-  .dashboard .header h1{
-    font-size: 30px !important;
-  }
-
-  .dashboard .inventory-footer span{
-    font-size: 16px !important;
-  }
-
+.meter-value {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 
-/* ============================================================
-   VTAAP 2026 — ADMIN CONTROL ROOM
-   Based on the VTAAP visual language
-   ============================================================ */
-
-:root{
-  --vt-bg: #050608;
-  --vt-surface: #0b0d10;
-  --vt-surface-2: #101317;
-  --vt-surface-3: #15191d;
-
-  --vt-border: #272c31;
-  --vt-border-soft: #1b1f23;
-
-  --vt-white: #f5f3ef;
-  --vt-text: #d7d4cf;
-  --vt-muted: #85817b;
-  --vt-dim: #57544f;
-
-  --vt-orange: #d87427;
-  --vt-orange-bright: #ff8a24;
-  --vt-orange-light: #f8ad7c;
-  --vt-orange-soft: rgba(216, 116, 39, 0.12);
-
-  --vt-green: #75c46b;
-  --vt-yellow: #e8b45b;
-  --vt-red: #dc6262;
+.meter-track {
+  height: 6px;
+  overflow: hidden;
+  background: var(--surface-inset);
+  border-radius: var(--radius-full);
 }
 
-/* ============================================================
-   BASE
-   ============================================================ */
-
-.dashboard{
-  min-height: 100vh !important;
-
-  background:
-    radial-gradient(
-      circle at 50% -10%,
-      rgba(216, 116, 39, 0.075),
-      transparent 34%
-    ),
-    linear-gradient(
-      rgba(255,255,255,0.018) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(255,255,255,0.018) 1px,
-      transparent 1px
-    ),
-    var(--vt-bg) !important;
-
-  background-size:
-    auto,
-    48px 48px,
-    48px 48px,
-    auto !important;
-
-  color: var(--vt-text) !important;
+.meter-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width var(--dur) var(--ease);
 }
 
-/* ============================================================
-   CONTAINER
-   ============================================================ */
-
-.dashboard .container{
-  max-width: 1440px !important;
-
-  padding:
-    34px 28px 70px !important;
-}
-
-/* ============================================================
-   HEADER
-   ============================================================ */
-
-.dashboard .header{
-  position: relative !important;
-
-  display: flex !important;
-
-  justify-content: space-between !important;
-  align-items: flex-end !important;
-
-  gap: 30px !important;
-
-  padding:
-    38px 0 24px !important;
-
-  margin-bottom: 20px !important;
-
-  background: transparent !important;
-
-  border: 0 !important;
-
-  border-bottom:
-    1px solid var(--vt-border) !important;
-
-  border-radius: 0 !important;
-
-  box-shadow: none !important;
-}
-
-/* Technical header label */
-
-.dashboard .header::before{
-  content:
-    "[01] / ADMIN CONTROL" !important;
-
-  position: absolute !important;
-
-  top: 0 !important;
-  left: 0 !important;
-
-  color: var(--vt-orange-bright) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .16em !important;
-}
-
-/* Header title */
-
-.dashboard .header h1{
-  margin: 10px 0 0 !important;
-
-  color: var(--vt-white) !important;
-
-  font-size:
-    clamp(32px, 5vw, 58px) !important;
-
-  font-weight: 500 !important;
-
-  letter-spacing: -.045em !important;
-
-  line-height: .95 !important;
-}
-
-/* Header subtitle */
-
-.dashboard .header p{
-  margin:
-    13px 0 0 !important;
-
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 10px !important;
-
-  letter-spacing: .09em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* ============================================================
-   NAVIGATION
-   ============================================================ */
-
-.dashboard .admin-link{
-  display: inline-flex !important;
-
-  align-items: center !important;
-  justify-content: center !important;
-
-  min-height: 34px !important;
-
-  padding:
-    0 12px !important;
-
-  background: transparent !important;
-
-  color: var(--vt-muted) !important;
-
-  border:
-    1px solid var(--vt-border) !important;
-
-  border-radius: 0 !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-
-  transition:
-    color .15s ease,
-    border-color .15s ease,
-    background .15s ease !important;
-}
-
-.dashboard .admin-link:hover{
-  color: var(--vt-orange-bright) !important;
-
-  border-color:
-    var(--vt-orange) !important;
-
-  background:
-    var(--vt-orange-soft) !important;
-}
-
-/* ============================================================
-   FORCE REFRESH
-   ============================================================ */
-
-.dashboard .header button{
-  min-height: 34px !important;
-
-  padding:
-    0 14px !important;
-
-  background:
-    var(--vt-orange) !important;
-
-  color:
-    #080706 !important;
-
-  border:
-    1px solid var(--vt-orange) !important;
-
-  border-radius: 0 !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  font-weight: 800 !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-
-  transition:
-    background .15s ease,
-    box-shadow .15s ease !important;
-}
-
-.dashboard .header button:hover:not(:disabled){
-  background:
-    var(--vt-orange-bright) !important;
-
-  box-shadow:
-    0 0 24px
-    rgba(216,116,39,.18) !important;
-}
-
-/* ============================================================
-   SECTION LABELS
-   ============================================================ */
-
-.dashboard section > div > h2,
-.dashboard .section-header h2{
-  color: var(--vt-white) !important;
-
-  font-weight: 500 !important;
-
-  letter-spacing: -.02em !important;
-}
-
-/* ============================================================
-   KPI / OVERVIEW
-   ============================================================ */
-
-.dashboard .stats{
-  display: grid !important;
-
-  grid-template-columns:
-    repeat(5, minmax(0, 1fr)) !important;
-
-  gap: 0 !important;
-
-  border:
-    1px solid var(--vt-border) !important;
-
-  background:
-    var(--vt-surface) !important;
-}
-
-.dashboard .stat-card{
-  position: relative !important;
-
-  min-height: 150px !important;
-
-  padding:
-    22px !important;
-
-  background:
-    var(--vt-surface) !important;
-
-  border: 0 !important;
-
-  border-right:
-    1px solid var(--vt-border) !important;
-
-  border-radius: 0 !important;
-
-  box-shadow: none !important;
-}
-
-.dashboard .stat-card:last-child{
-  border-right: 0 !important;
-}
-
-.dashboard .stat-card::before{
-  content: none !important;
-}
-
-.dashboard .stat-card:hover{
-  background:
-    var(--vt-surface-2) !important;
-
-  transform: none !important;
-}
-
-.dashboard .stat-title{
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .13em !important;
-
-  text-transform: uppercase !important;
-}
-
-.dashboard .stat-value{
-  margin-top: 20px !important;
-
-  color: var(--vt-white) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 36px !important;
-
-  font-weight: 500 !important;
-
-  letter-spacing: -.04em !important;
-
-  line-height: 1 !important;
-}
-
-.dashboard .stat-card:nth-child(2) .stat-value{
-  color:
-    var(--vt-orange-bright) !important;
-}
-
-.dashboard .stat-subtitle{
-  margin-top: 12px !important;
-
-  color: var(--vt-dim) !important;
-
-  font-size: 9px !important;
-
-  text-transform: uppercase !important;
-}
-
-/* ============================================================
-   PANELS
-   ============================================================ */
-
-.dashboard .sales-panel,
-.dashboard .inventory-panel{
-  background:
-    rgba(11,13,16,.92) !important;
-
-  border:
-    1px solid var(--vt-border) !important;
-
-  border-radius: 0 !important;
-
-  box-shadow:
-    0 12px 45px
-    rgba(0,0,0,.22) !important;
-}
-
-.dashboard .sales-panel h2,
-.dashboard .inventory-panel h2{
-  color: var(--vt-white) !important;
-
-  font-size: 18px !important;
-
-  font-weight: 500 !important;
-
-  letter-spacing: -.025em !important;
-}
-
-.dashboard .panel-subtitle{
-  color: var(--vt-muted) !important;
-}
-
-/* ============================================================
-   CHARTS
-   ============================================================ */
-
-.dashboard [class*="chart"]{
-  color: var(--vt-text) !important;
-}
-
-.dashboard [class*="chart"] span{
-  color: var(--vt-muted) !important;
-}
-
-.dashboard [class*="chart"] strong{
-  color: var(--vt-white) !important;
-}
-
-.dashboard [class*="track"]{
-  background:
-    #252a2e !important;
-
-  border-radius: 0 !important;
-}
-
-.dashboard [class*="fill"]{
-  background:
-    var(--vt-orange) !important;
-
-  border-radius: 0 !important;
-
-  box-shadow:
-    0 0 10px
-    rgba(216,116,39,.12) !important;
-}
-
-/* ============================================================
-   DISTRIBUTION
-   ============================================================ */
-
-.dashboard .given{
-  color:
-    var(--vt-green) !important;
-}
-
-.dashboard .pending{
-  color:
-    var(--vt-yellow) !important;
-}
-
-/* ============================================================
-   INVENTORY
-   ============================================================ */
-
-.dashboard .inventory-panel{
-  margin-top: 26px !important;
-
-  padding:
-    24px !important;
-}
-
-.dashboard .section-header{
-  padding-bottom: 18px !important;
-
-  margin-bottom: 18px !important;
-
-  border-bottom:
-    1px solid var(--vt-border-soft) !important;
-}
-
-.dashboard .section-header span{
-  color: var(--vt-muted) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* Inventory grid */
-
-.dashboard .inventory-grid{
-  display: grid !important;
-
-  grid-template-columns:
-    repeat(
-      auto-fit,
-      minmax(260px, 1fr)
-    ) !important;
-
-  gap: 1px !important;
-
-  background:
-    var(--vt-border) !important;
-
-  border:
-    1px solid var(--vt-border) !important;
-}
-
-/* Inventory card */
-
-.dashboard .inventory-card{
-  padding:
-    22px !important;
-
-  background:
-    var(--vt-surface) !important;
-
-  border: 0 !important;
-
-  border-radius: 0 !important;
-
-  transition:
-    background .15s ease !important;
-}
-
-.dashboard .inventory-card:hover{
-  background:
-    var(--vt-surface-2) !important;
-
-  transform: none !important;
-}
-
-/* Item */
-
-.dashboard .inventory-card-header h3{
-  color:
-    var(--vt-white) !important;
-
-  font-size: 12px !important;
-
-  font-weight: 600 !important;
-
-  letter-spacing: .02em !important;
-
-  text-transform: uppercase !important;
-}
-
-.dashboard .inventory-card-header span{
-  color:
-    var(--vt-dim) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-}
-
-/* Remaining */
-
-.dashboard .stock-number{
-  color:
-    var(--vt-orange-bright) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 38px !important;
-
-  font-weight: 500 !important;
-
-  letter-spacing: -.05em !important;
-
-  line-height: 1 !important;
-}
-
-.dashboard .inventory-label{
-  color:
-    var(--vt-dim) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 8px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .14em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* Inventory progress */
-
-.dashboard .inventory-track{
-  height: 5px !important;
-
-  margin-top: 18px !important;
-
-  background:
-    #292e32 !important;
-
-  border-radius: 0 !important;
-}
-
-.dashboard .inventory-fill{
-  background:
-    var(--vt-orange) !important;
-
-  border-radius: 0 !important;
-
-  box-shadow:
-    0 0 8px
-    rgba(216,116,39,.14) !important;
-}
-
-/* Inventory footer */
-
-.dashboard .inventory-footer{
-  margin-top: 15px !important;
-
-  padding-top: 12px !important;
-
-  border-top:
-    1px solid var(--vt-border-soft) !important;
-}
-
-.dashboard .inventory-footer span{
-  color:
-    var(--vt-white) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 13px !important;
-
-  font-weight: 700 !important;
-}
-
-.dashboard .inventory-footer strong{
-  color:
-    var(--vt-orange-light) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-}
-
-/* ============================================================
-   ACTION CARDS
-   ============================================================ */
-
-.dashboard .admin-card{
-  position: relative !important;
-
-  padding:
-    22px !important;
-
-  min-height: 130px !important;
-
-  background:
-    var(--vt-surface) !important;
-
-  border:
-    1px solid var(--vt-border) !important;
-
-  border-radius: 0 !important;
-
-  transition:
-    border-color .15s ease,
-    background .15s ease !important;
-}
-
-.dashboard .admin-card:hover{
-  background:
-    var(--vt-surface-2) !important;
-
-  border-color:
-    var(--vt-orange) !important;
-
-  transform: none !important;
-}
-
-.dashboard .admin-card h2{
-  color:
-    var(--vt-white) !important;
-
-  font-size: 14px !important;
-
-  font-weight: 600 !important;
-}
-
-.dashboard .admin-arrow{
-  color:
-    var(--vt-orange-bright) !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-}
-
-/* ============================================================
-   BUTTON
-   ============================================================ */
-
-.dashboard .qr-button{
-  background:
-    transparent !important;
-
-  color:
-    var(--vt-orange-bright) !important;
-
-  border:
-    1px solid var(--vt-orange) !important;
-
-  border-radius: 0 !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 9px !important;
-
-  font-weight: 700 !important;
-
-  letter-spacing: .08em !important;
-
-  text-transform: uppercase !important;
-}
-
-.dashboard .qr-button:hover{
-  background:
-    var(--vt-orange-soft) !important;
-}
-
-/* ============================================================
-   LOADING
-   ============================================================ */
-
-.dashboard .skeleton{
-  background:
-    linear-gradient(
-      90deg,
-      #101317 0%,
-      #20252a 50%,
-      #101317 100%
-    ) !important;
-
-  background-size:
-    200% 100% !important;
-
-  animation:
-    vtapp-admin-loading
-    1.3s ease-in-out infinite !important;
-
-  border-radius: 0 !important;
-}
-
-@keyframes vtapp-admin-loading{
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
-
-@media (max-width: 1100px){
-
-  .dashboard .stats{
-    grid-template-columns:
-      repeat(3, 1fr) !important;
-  }
-
-  .dashboard .stat-card:nth-child(3){
-    border-right: 0 !important;
-  }
-
-}
-
-@media (max-width: 760px){
-
-  .dashboard .container{
-    padding:
-      24px 16px 50px !important;
-  }
-
-  .dashboard .header{
-    display: block !important;
-  }
-
-  .dashboard .header > div:last-child{
-    margin-top: 22px !important;
-
-    justify-content: flex-start !important;
-  }
-
-  .dashboard .stats{
-    grid-template-columns:
-      repeat(2, 1fr) !important;
-  }
-
-  .dashboard .stat-card:nth-child(2){
-    border-right: 0 !important;
-  }
-
-  .dashboard .stat-card:nth-child(3){
-    border-right:
-      1px solid var(--vt-border) !important;
-  }
-
-}
-
-@media (max-width: 520px){
-
-  .dashboard .stats{
-    grid-template-columns: 1fr !important;
-  }
-
-  .dashboard .stat-card{
-    border-right: 0 !important;
-
-    border-bottom:
-      1px solid var(--vt-border) !important;
-  }
-
-  .dashboard .stat-card:last-child{
-    border-bottom: 0 !important;
-  }
-
-  .dashboard .inventory-grid{
-    grid-template-columns: 1fr !important;
-  }
-
-  .dashboard .header h1{
-    font-size: 34px !important;
-  }
-
-}
-
-/* ============================================================
-   END VTAAP ADMIN SYSTEM
-   ============================================================ */
-
-/* =========================================================
-   VTAAP REGISTRATION CONTROL
-   ========================================================= */
-
-.registration-row{
-  display: grid;
-  grid-template-columns:
-    minmax(230px, 1.5fr)
-    minmax(150px, 1fr)
-    minmax(150px, .9fr)
-    minmax(120px, .7fr)
-    minmax(110px, .6fr);
-
+.meter-fill-success { background: var(--success); }
+.meter-fill-warning { background: var(--warning); }
+.meter-fill-danger  { background: var(--danger); }
+
+.meter-foot {
+  display: flex;
   align-items: center;
-  min-height: 82px;
-  padding: 16px 18px;
-
-  border-bottom: 1px solid var(--vt-border, #242a2f);
-  background: #080b0d;
-
-  transition:
-    background .15s ease,
-    border-color .15s ease;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
 }
 
-.registration-row:last-child{
+/* Big two-part distribution readout on the volunteer dashboard. */
+.split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.split-item {
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.split-value {
+  display: block;
+  font-size: var(--text-3xl);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+
+/* 9. Badges and status ===================================================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  padding: 3px var(--space-2);
+
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The dot is decorative; the label carries the meaning. */
+.badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  flex: none;
+}
+
+.badge-plain::before {
+  display: none;
+}
+
+.badge-success {
+  color: var(--success);
+  border-color: transparent;
+  background: var(--success-soft);
+}
+
+.badge-warning {
+  color: var(--warning);
+  border-color: transparent;
+  background: var(--warning-soft);
+}
+
+.badge-danger {
+  color: var(--danger);
+  border-color: transparent;
+  background: var(--danger-soft);
+}
+
+.badge-accent {
+  color: var(--accent);
+  border-color: transparent;
+  background: var(--accent-soft);
+}
+
+/* Live indicator in page headers. */
+.pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+}
+
+.pulse::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--success);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+
+/* 10. Tables and rows ====================================================== */
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base);
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.table tbody tr:hover {
+  background: var(--surface-raised);
+}
+
+.table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.registration-row:not(.registration-header):hover{
-  background: #0e1316;
-  border-bottom-color: #3a4248;
+.table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
-.registration-row > div{
-  min-width: 0;
-  padding-right: 18px;
-}
-
-.registration-row > div:last-child{
-  padding-right: 0;
-}
-
-.registration-header{
-  min-height: 42px;
-  background: #11161a;
-  border-bottom: 1px solid #424a50;
-
-  color: #7d8992;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-
-.registration-header > span{
-  min-width: 0;
-}
-
-/* buyer */
-
-.registration-row strong{
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* registration ID */
-
-.registration-row > div:nth-child(2){
-  overflow: hidden;
-}
-
-/* merchandise */
-
-.registration-row > div:nth-child(3){
-  text-align: left;
-}
-
-/* amount */
-
-.registration-row > div:nth-child(4){
-  text-align: left;
-}
-
-/* status */
-
-.registration-row > div:nth-child(5){
+/* Row as a link, used where a table would be too rigid. */
+.row-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+
+  transition: background var(--dur-fast) var(--ease);
 }
 
-/* =========================================================
-   REGISTRATION PAGE SEARCH
-   ========================================================= */
-
-/* =========================================================
-   REGISTRATION TABLE FRAME
-   ========================================================= */
-
-.registration-table{
-  width: 100%;
-  overflow: hidden;
-
-  border: 1px solid var(--vt-border, #242a2f);
-  background: #080b0d;
+.row-card:last-child {
+  border-bottom: 0;
 }
 
-/* =========================================================
-   REGISTRATION STATS
-   ========================================================= */
-
-/* =========================================================
-   RESPONSIVE
-   ========================================================= */
-
-@media (max-width: 900px){
-
-  .registration-row{
-    grid-template-columns:
-      1.5fr
-      .8fr
-      .8fr
-      .7fr
-      .7fr;
-
-    padding: 14px;
-  }
-
-  .registration-row > div{
-    padding-right: 10px;
-  }
-
+.row-card:hover {
+  background: var(--surface-raised);
 }
 
-@media (max-width: 700px){
-
-  .registration-row{
-    display: block;
-    padding: 18px;
-  }
-
-  .registration-header{
-    display: none;
-  }
-
-  .registration-row > div{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-
-    min-height: 30px;
-    padding: 5px 0;
-
-    border-bottom:
-      1px solid #171d21;
-  }
-
-  .registration-row > div:last-child{
-    border-bottom: 0;
-  }
-
-  .registration-row > div::before{
-    content: "";
-    color: #69747c;
-
-    font-family:
-      "SFMono-Regular",
-      Consolas,
-      monospace;
-
-    font-size: 7px;
-    font-weight: 700;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-  }
-
-  .registration-row > div:nth-child(1)::before{
-    content: "BUYER";
-  }
-
-  .registration-row > div:nth-child(2)::before{
-    content: "REGISTRATION";
-  }
-
-  .registration-row > div:nth-child(3)::before{
-    content: "MERCHANDISE";
-  }
-
-  .registration-row > div:nth-child(4)::before{
-    content: "AMOUNT";
-  }
-
-  .registration-row > div:nth-child(5)::before{
-    content: "STATUS";
-  }
-
+.row-title {
+  font-size: var(--text-base);
+  font-weight: 550;
 }
 
-/* =========================================================
-   REGISTRATION DETAIL
-   ========================================================= */
-
-@media (max-width: 800px){
-
-  .dashboard .container{
-    width: min(
-      calc(100% - 24px),
-      1400px
-    );
-  }
-
-  /* Buyer + QR */
-
-  .dashboard section[style*="360px"]{
-    grid-template-columns: 1fr !important;
-  }
-
+.row-meta {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
-@media (max-width: 600px){
-
-  .registration-row{
-    min-height: auto;
-  }
-
+/* Small key/value list inside cards. */
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
 }
 
-/* =========================================================
-   ADMIN DASHBOARD — DISTRIBUTION / ANALYTICS POLISH
-   ========================================================= */
-
-/* Keep dashboard analytics balanced */
-.sales-grid,
-.analytics-grid{
-  align-items: stretch;
-}
-
-/* Chart cards */
-
-/* Distribution card should use the available width */
-
-/* Distribution content */
-
-/* Individual distribution item */
-
-/* Circle */
-
-/* Big number inside circle */
-
-/* Percentage */
-
-/* Circle labels */
-.distribution-item > label,
-.distribution-item > span:last-child,
-.distribution-label{
-  margin-top: 12px;
-  font-size: 12px !important;
-  font-weight: 800;
-  letter-spacing: .04em;
-  color: #e5e7eb !important;
+.kv dt {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-/* Given circle */
-
-/* Pending circle */
-
-/* Better status text */
-
-/* Percentage text */
-
-/* =========================================================
-   SALES + INVENTORY CHARTS
-   ========================================================= */
-
-.chart-card .panel-subtitle{
-  color: #94a3b8;
+.kv dd {
+  margin: 0;
+  font-size: var(--text-base);
 }
 
-/* Progress tracks */
-.inventory-track,
-.chart-track{
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: #e2e8f0;
-}
 
-.inventory-fill,
-.chart-fill{
-  height: 100%;
-  border-radius: inherit;
-  transition: width .3s ease;
-}
+/* 11. Forms ================================================================ */
 
-/* =========================================================
-   DASHBOARD RESPONSIVE
-   ========================================================= */
-
-/* =========================================================
-   V-TAPP ADMIN — DISTRIBUTION STATUS FINAL LAYOUT
-   ========================================================= */
-
-/*
- * The analytics area is a two-column grid.
- * Make Distribution Status span the complete width.
- */
-
-/* =========================================================
-   DISTRIBUTION CONTENT
-   ========================================================= */
-
-/*
- * Put the two statistics in a clean horizontal layout.
- */
-
-/* =========================================================
-   DISTRIBUTION CIRCLES
-   ========================================================= */
-
-/*
- * GIVEN
- */
-
-/*
- * PENDING
- */
-
-/* =========================================================
-   NUMBER INSIDE CIRCLE
-   ========================================================= */
-
-/* =========================================================
-   PERCENTAGE
-   ========================================================= */
-
-/* Given percentage */
-
-/* =========================================================
-   LABELS
-   ========================================================= */
-
-.chart-card:has(.distribution-circle)
-.distribution-item > label,
-
-.chart-card:has(.distribution-circle)
-.distribution-item > span:last-child,
-
-.chart-card:has(.distribution-circle)
-.distribution-label{
+.field {
   display: block;
+  margin-bottom: var(--space-4);
+}
 
-  margin-top: 13px;
+/* Visible label, always. Placeholders are hints, not labels. */
+.label {
+  display: block;
+  margin-bottom: var(--space-2);
 
-  color: #f8fafc !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 11px !important;
-
-  font-weight: 800 !important;
-
-  letter-spacing: .08em;
-
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+}
 
+.required {
+  color: var(--accent);
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+
+  /* 16px avoids iOS zooming the viewport on focus. */
+  font-size: var(--text-md);
+
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+
+.input::placeholder {
+  color: var(--text-dim);
+}
+
+.input:hover:not(:disabled),
+.select:hover:not(:disabled) {
+  border-color: var(--text-dim);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input:disabled,
+.select:disabled {
+  opacity: 0.5;
+}
+
+.input-invalid,
+.input-invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.input-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.select {
+  appearance: none;
+  padding-right: var(--space-8);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% + 2px),
+    calc(100% - 13px) calc(50% + 2px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Persistent helper text, not a placeholder. */
+.help {
+  margin-top: var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+/* Error sits with its field, not in a summary at the top. */
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.search {
+  position: relative;
+}
+
+.search .input {
+  padding-left: var(--space-10);
+}
+
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+/* Segmented filter control. */
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.segmented-item {
+  min-height: 34px;
+  padding: 0 var(--space-4);
+
+  background: transparent;
+  color: var(--text-muted);
+  border: 0;
+  border-radius: var(--radius-sm);
+
+  font-size: var(--text-sm);
+  font-weight: 550;
+
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.segmented-item:hover {
+  color: var(--text);
+}
+
+.segmented-item[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+
+/* 12. Feedback ============================================================= */
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-dim);
+  border-radius: var(--radius);
+
+  font-size: var(--text-base);
+}
+
+.banner-danger {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.banner-success {
+  border-left-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.banner-warning {
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.banner-title {
+  font-weight: 600;
+}
+
+.banner-body {
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
+/* Empty state: says what is missing and what to do about it. */
+.empty {
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-4);
+
+  color: var(--text-dim);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.empty-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.empty-body {
+  max-width: 46ch;
+  margin: var(--space-2) auto 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+/* Skeletons reserve the space the real content will take, so nothing
+   jumps when it arrives. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-raised) 0%,
+    var(--surface-inset) 50%,
+    var(--surface-raised) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 12px;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton-line:last-child {
+  margin-bottom: 0;
+}
+
+.skeleton-title {
+  height: 22px;
+  width: 45%;
+  margin-bottom: var(--space-4);
+}
+
+.skeleton-card {
+  height: 116px;
+  border-radius: var(--radius-lg);
+}
+
+/* Full-page loading, used by app/loading.tsx. */
+.loading-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--space-6);
+  background: var(--bg);
+}
+
+.loading-card {
+  width: 100%;
+  max-width: 340px;
+  padding: var(--space-8);
   text-align: center;
 
-  opacity: 1 !important;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
 }
 
-/* =========================================================
-   IF CIRCLES ARE WRAPPED IN ITEMS
-   ========================================================= */
-
-/* =========================================================
-   DISTRIBUTION CARD HEADER
-   ========================================================= */
-
-.chart-card:has(.distribution-circle) .panel-subtitle{
-  color: #94a3b8 !important;
-}
-
-/* =========================================================
-   RESPONSIVE
-   ========================================================= */
-
-/* =========================================================
-   V-TAPP ADMIN — DISTRIBUTION PIE CHART
-   ========================================================= */
-
-/* Header */
-
-/* Total */
-
-/* Main */
-
-/* Pie */
-
-/* Hole in pie */
-
-/* Breakdown */
-
-/* Given */
-
-/* Pending */
-
-/* Dots */
-
-/* =========================================================
-   RESPONSIVE
-   ========================================================= */
-
-/* =========================================================
-   ADMIN DISTRIBUTION — NEW VISUAL
-   ========================================================= */
-
-/* Header */
-
-/* Total */
-
-/* Content */
-
-/* Pie */
-
-/* Legend */
-
-/* GIVEN */
-
-/* PENDING */
-
-/* Dots */
-
-/* Responsive */
-
-/* =========================================================
-   ADMIN DISTRIBUTION PIE
-   ========================================================= */
-
-/* =========================================================
-   ADMIN DASHBOARD — DISTRIBUTION PIE
-   ========================================================= */
-
-.admin-distribution-layout{
-  width: 100%;
-
-  min-height: 280px;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  gap: 90px;
-
-  padding: 30px 20px;
-
-  box-sizing: border-box;
-}
-
-/* PIE */
-
-.admin-distribution-pie{
-  width: 190px;
-
-  height: 190px;
-
-  min-width: 190px;
-
-  border-radius: 50%;
-
-  display: grid;
-
-  place-items: center;
-
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.08),
-    0 20px 50px rgba(0,0,0,.35);
-}
-
-.admin-distribution-pie-inner{
-  width: 120px;
-
-  height: 120px;
-
-  border-radius: 50%;
-
-  background: #0b1014;
-
-  border: 1px solid #35414b;
-
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: center;
-
-  justify-content: center;
-}
-
-.admin-distribution-pie-inner strong{
-  color: #ffffff;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 34px;
-
-  font-weight: 900;
-
-  line-height: 1;
-}
-
-.admin-distribution-pie-inner span{
-  margin-top: 8px;
-
-  color: #718096;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 8px;
-
-  font-weight: 800;
-
-  letter-spacing: .15em;
-}
-
-/* STATS */
-
-.admin-distribution-stats{
-  display: grid;
-
-  grid-template-columns:
-    repeat(2, 180px);
-
-  gap: 14px;
-}
-
-.admin-distribution-stat{
-  min-height: 140px;
-
-  padding: 22px;
-
-  box-sizing: border-box;
-
-  background: #111920;
-
-  border: 1px solid #303b45;
-}
-
-.admin-distribution-stat.admin-given{
-  border-color:
-    rgba(132,204,22,.45);
-}
-
-.admin-distribution-stat.admin-pending{
-  border-color:
-    rgba(249,115,22,.45);
-}
-
-.admin-stat-label{
-  display: flex;
-
-  align-items: center;
-
-  gap: 9px;
-
-  color: #cbd5e1;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 800;
-
-  letter-spacing: .12em;
-}
-
-.admin-stat-label span{
-  width: 8px;
-
-  height: 8px;
-
-  border-radius: 50%;
-
-  display: inline-block;
-}
-
-.admin-given .admin-stat-label span{
-  background: #84cc16;
-
-  box-shadow:
-    0 0 12px rgba(132,204,22,.6);
-}
-
-.admin-pending .admin-stat-label span{
-  background: #f97316;
-
-  box-shadow:
-    0 0 12px rgba(249,115,22,.6);
-}
-
-.admin-distribution-stat strong{
-  display: block;
-
-  margin-top: 20px;
-
-  color: #ffffff;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 38px;
-
-  line-height: 1;
-
-  font-weight: 900;
-}
-
-.admin-given strong{
-  color: #a3e635;
-}
-
-.admin-pending strong{
-  color: #fb923c;
-}
-
-.admin-distribution-stat small{
-  display: block;
-
-  margin-top: 9px;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 10px;
-
-  font-weight: 800;
-}
-
-.admin-given small{
-  color: #84cc16;
-}
-
-.admin-pending small{
-  color: #f97316;
-}
-
-/* MOBILE */
-
-@media (max-width: 720px){
-
-  .admin-distribution-layout{
-    flex-direction: column;
-
-    gap: 30px;
-  }
-
-  .admin-distribution-stats{
-    width: 100%;
-
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-
-}
-
-@media (max-width: 450px){
-
-  .admin-distribution-stats{
-    grid-template-columns: 1fr;
-  }
-
-}
-
-/* =========================================================
-   V-TAPP — MERCHANDISE ANALYTICS REDESIGN
-   ========================================================= */
-
-.sales-grid{
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 22px !important;
-}
-
-/* Cards */
-
-.sales-grid > *{
-  background: #080c14 !important;
-  border-radius: 18px !important;
-  padding: 30px !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-}
-
-/* SALES CARD */
-
-.sales-grid > :first-child{
-  border: 1px solid rgba(168, 85, 247, 0.65) !important;
-  box-shadow:
-    0 0 35px rgba(168, 85, 247, 0.06),
-    inset 0 1px 0 rgba(255,255,255,0.02) !important;
-}
-
-/* INVENTORY CARD */
-
-.sales-grid > :nth-child(2){
-  border: 1px solid rgba(249, 115, 22, 0.65) !important;
-  box-shadow:
-    0 0 35px rgba(249, 115, 22, 0.06),
-    inset 0 1px 0 rgba(255,255,255,0.02) !important;
-}
-
-/* Card headings */
-
-.sales-grid h2{
-  color: #f8fafc !important;
-  font-size: 22px !important;
-  font-weight: 800 !important;
-  letter-spacing: -0.025em !important;
-}
-
-.sales-grid p{
-  color: #94a3b8 !important;
-}
-
-/* Item names */
-
-.sales-grid span{
-  color: #e2e8f0;
-}
-
-/* Numbers */
-
-.sales-grid strong{
-  color: #f8fafc !important;
-  font-size: 20px !important;
-  font-weight: 800 !important;
-}
-
-/* =========================================================
-   SALES — PURPLE
-   ========================================================= */
-
-.sales-grid > :first-child
-[class*="progress"],
-.sales-grid > :first-child
-[class*="bar"]{
-  background: linear-gradient(
-    90deg,
-    #9333ea,
-    #c084fc
-  ) !important;
-  box-shadow:
-    0 0 12px rgba(168,85,247,.35) !important;
-}
-
-/* =========================================================
-   INVENTORY — ORANGE
-   ========================================================= */
-
-.sales-grid > :nth-child(2)
-[class*="progress"],
-.sales-grid > :nth-child(2)
-[class*="bar"]{
-  background: linear-gradient(
-    90deg,
-    #ea580c,
-    #fb923c
-  ) !important;
-  box-shadow:
-    0 0 12px rgba(249,115,22,.30) !important;
-}
-
-/* Progress track */
-
-.sales-grid [role="progressbar"]{
-  background: #17202d !important;
-  height: 10px !important;
-  border-radius: 999px !important;
-  overflow: hidden !important;
-}
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 900px){
-
-  .sales-grid{
-    grid-template-columns: 1fr !important;
-  }
-
-}
-
-/* =========================================================
-   VTAAP 2026 — MERCHANDISE CONTROL CARDS
-   ========================================================= */
-
-/* =========================================================
-   RESTORE ORIGINAL DISTRIBUTION CHART COLORS
-   Merchandise design remains untouched.
-   ========================================================= */
-
-/* GIVEN — dark navy */
-
-/* PENDING — light neutral */
-
-/* Labels */
-
-/* =========================================================
-   MERCHANDISE PROGRESS BAR COLORS
-   ========================================================= */
-
-/* SALES — purple */
-.sales-grid .inventory-fill,
-.sales-grid .sales-fill{
-  background: linear-gradient(
-    90deg,
-    #8b5cf6,
-    #c084fc
-  ) !important;
-
-  box-shadow:
-    0 0 10px rgba(168, 85, 247, 0.25);
-}
-
-/* INVENTORY — orange */
-.sales-grid .inventory-fill-orange,
-.sales-grid .remaining-fill{
-  background: linear-gradient(
-    90deg,
-    #f97316,
-    #fb923c
-  ) !important;
-
-  box-shadow:
-    0 0 10px rgba(249, 115, 22, 0.25);
-}
-
-/* Existing progress-bar track */
-.sales-grid .inventory-track,
-.sales-grid .merch-track{
-  background: #17202c !important;
-}
-
-/* =========================================================
-   FORCE MERCHANDISE BAR COLORS
-   Targets the existing old layout without changing JSX.
-   ========================================================= */
-
-/* SALES CARD — PURPLE */
-.sales-grid > :nth-child(1) div[class*="fill"]{
-  background: linear-gradient(
-    90deg,
-    #8b5cf6 0%,
-    #c084fc 100%
-  ) !important;
-
-  box-shadow:
-    0 0 12px rgba(168, 85, 247, 0.30) !important;
-}
-
-/* INVENTORY CARD — ORANGE */
-.sales-grid > :nth-child(2) div[class*="fill"]{
-  background: linear-gradient(
-    90deg,
-    #f97316 0%,
-    #fb923c 100%
-  ) !important;
-
-  box-shadow:
-    0 0 12px rgba(249, 115, 22, 0.30) !important;
-}
-
-/* Progress tracks */
-.sales-grid > :nth-child(1) div[class*="track"],
-.sales-grid > :nth-child(2) div[class*="track"]{
-  background: #17202c !important;
-}
-
-/* Kill any old inline fill colors */
-.sales-grid > :nth-child(1) div[style*="background"]{
-  background: linear-gradient(
-    90deg,
-    #8b5cf6,
-    #c084fc
-  ) !important;
-}
-
-.sales-grid > :nth-child(2) div[style*="background"]{
-  background: linear-gradient(
-    90deg,
-    #f97316,
-    #fb923c
-  ) !important;
-}
-
-/* =========================================================
-   ADMIN USER MANAGEMENT
-   ========================================================= */
-
-/* =========================================================
-   VOLUNTEER — ADMIN VISUAL SYSTEM
-   Keep scanner logic untouched; only unify presentation.
-   ========================================================= */
-
-:root{
-  --vol-bg: #030506;
-  --vol-surface: #090c0f;
-  --vol-surface-2: #0c1014;
-  --vol-border: #252b33;
-  --vol-border-strong: #303640;
-
-  --vol-text: #f4f4f5;
-  --vol-muted: #8b8f98;
-  --vol-dim: #626975;
-
-  --vol-orange: #f97316;
-  --vol-orange-bright: #fb923c;
-
-  --vol-purple: #8b5cf6;
-  --vol-purple-bright: #c084fc;
-
-  --vol-green: #4ade80;
-  --vol-red: #f87171;
-}
-
-/* Main volunteer shell */
-
-main.dashboard{
-  background:
-    linear-gradient(
-      rgba(3, 5, 6, .96),
-      rgba(3, 5, 6, .96)
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0,
-      transparent 39px,
-      rgba(255,255,255,.025) 40px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent 39px,
-      rgba(255,255,255,.025) 40px
-    );
-
-  color: var(--vol-text);
-  min-height: 100vh;
-}
-
-/* Header */
-
-main.dashboard .header{
-  border-bottom: 1px solid var(--vol-border);
-  padding-bottom: 24px;
-  margin-bottom: 24px;
-}
-
-main.dashboard .header h1{
-  color: var(--vol-text);
-  letter-spacing: -.025em;
-}
-
-main.dashboard .header p{
-  color: var(--vol-muted);
-}
-
-/* Back/dashboard links */
-
-main.dashboard .admin-link{
-  color: var(--vol-orange-bright);
-  border-color: var(--vol-border);
-  background: transparent;
-  transition:
-    background .18s ease,
-    border-color .18s ease,
-    color .18s ease;
-}
-
-main.dashboard .admin-link:hover{
-  color: #fff;
-  border-color: var(--vol-orange);
-  background: rgba(249,115,22,.08);
-}
-
-/* Scanner landing card */
-
-main.dashboard .sales-panel{
-  background:
-    linear-gradient(
-      145deg,
-      rgba(10,14,18,.98),
-      rgba(6,9,12,.98)
-    );
-
-  border: 1px solid var(--vol-border);
-  box-shadow:
-    0 20px 60px rgba(0,0,0,.28);
-}
-
-/* Scanner icon */
-
-main.dashboard .sales-panel > div > div:first-child{
-  color: var(--vol-orange-bright);
-  filter:
-    drop-shadow(
-      0 0 20px rgba(249,115,22,.18)
-    );
-}
-
-/* Scanner headings */
-
-main.dashboard .sales-panel h2{
-  color: var(--vol-text);
-  letter-spacing: -.02em;
-}
-
-main.dashboard .panel-subtitle{
-  color: var(--vol-muted);
-}
-
-/* Start Scanner */
-
-main.dashboard .save-button{
-  background: var(--vol-orange);
-  border: 1px solid var(--vol-orange);
-  color: #080808;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-weight: 900;
-  letter-spacing: .08em;
-
-  transition:
-    transform .15s ease,
-    background .15s ease,
-    box-shadow .15s ease;
-}
-
-main.dashboard .save-button:hover{
-  background: var(--vol-orange-bright);
-  border-color: var(--vol-orange-bright);
-
-  box-shadow:
-    0 0 25px rgba(249,115,22,.18);
-
-  transform: translateY(-1px);
-}
-
-/* =========================================================
-   VOLUNTEER SCANNER
-   ========================================================= */
-
-/* Scanner frame */
-
-/* Camera / scanner area */
-
-#reader{
-  background: #020304 !important;
-  border: 1px solid var(--vol-border-strong) !important;
-}
-
-/* Scanner buttons */
-
-/* QR / action buttons */
-
-.scanner-page .qr-button,
-.scan-panel .qr-button{
-  border: 1px solid var(--vol-orange);
-  background: transparent;
-  color: var(--vol-orange-bright);
-}
-
-.scanner-page .qr-button:hover,
-.scan-panel .qr-button:hover{
-  background: rgba(249,115,22,.08);
-}
-
-/* Given badge */
-
-.type-badge.single{
-  border-color: var(--vol-green) !important;
-  color: var(--vol-green) !important;
-  background: rgba(74,222,128,.07) !important;
-}
-
-/* Pending / action badge */
-
-.type-badge.combo{
-  border-color: var(--vol-orange) !important;
-  color: var(--vol-orange-bright) !important;
-  background: rgba(249,115,22,.07) !important;
-}
-
-/* Distribution item cards */
-
-/* Strong text */
-
-/* Secondary item information */
-
-/* Mark as given */
-
-/* Disabled */
-
-button:disabled{
-  opacity: .45;
-  cursor: not-allowed;
-}
-
-/* Error */
-
-/* Success */
-
-/* Mobile */
-
-@media (max-width: 700px){
-  main.dashboard .container{
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  main.dashboard .header{
-    gap: 16px;
-  }
-
-  main.dashboard .sales-panel{
-    width: 100%;
-  }
-
-}
-
-/* =========================================================
-   VOLUNTEER — ADMIN VISUAL SYSTEM
-   Keep scanner logic untouched; only unify presentation.
-   ========================================================= */
-
-:root{
-  --vol-bg: #030506;
-  --vol-surface: #090c0f;
-  --vol-surface-2: #0c1014;
-  --vol-border: #252b33;
-  --vol-border-strong: #303640;
-
-  --vol-text: #f4f4f5;
-  --vol-muted: #8b8f98;
-  --vol-dim: #626975;
-
-  --vol-orange: #f97316;
-  --vol-orange-bright: #fb923c;
-
-  --vol-purple: #8b5cf6;
-  --vol-purple-bright: #c084fc;
-
-  --vol-green: #4ade80;
-  --vol-red: #f87171;
-}
-
-/* Main volunteer shell */
-
-main.dashboard{
-  background:
-    linear-gradient(
-      rgba(3, 5, 6, .96),
-      rgba(3, 5, 6, .96)
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0,
-      transparent 39px,
-      rgba(255,255,255,.025) 40px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent 39px,
-      rgba(255,255,255,.025) 40px
-    );
-
-  color: var(--vol-text);
-  min-height: 100vh;
-}
-
-/* Header */
-
-main.dashboard .header{
-  border-bottom: 1px solid var(--vol-border);
-  padding-bottom: 24px;
-  margin-bottom: 24px;
-}
-
-main.dashboard .header h1{
-  color: var(--vol-text);
-  letter-spacing: -.025em;
-}
-
-main.dashboard .header p{
-  color: var(--vol-muted);
-}
-
-/* Back/dashboard links */
-
-main.dashboard .admin-link{
-  color: var(--vol-orange-bright);
-  border-color: var(--vol-border);
-  background: transparent;
-  transition:
-    background .18s ease,
-    border-color .18s ease,
-    color .18s ease;
-}
-
-main.dashboard .admin-link:hover{
-  color: #fff;
-  border-color: var(--vol-orange);
-  background: rgba(249,115,22,.08);
-}
-
-/* Scanner landing card */
-
-main.dashboard .sales-panel{
-  background:
-    linear-gradient(
-      145deg,
-      rgba(10,14,18,.98),
-      rgba(6,9,12,.98)
-    );
-
-  border: 1px solid var(--vol-border);
-  box-shadow:
-    0 20px 60px rgba(0,0,0,.28);
-}
-
-/* Scanner icon */
-
-main.dashboard .sales-panel > div > div:first-child{
-  color: var(--vol-orange-bright);
-  filter:
-    drop-shadow(
-      0 0 20px rgba(249,115,22,.18)
-    );
-}
-
-/* Scanner headings */
-
-main.dashboard .sales-panel h2{
-  color: var(--vol-text);
-  letter-spacing: -.02em;
+.loading-card h2 {
+  margin-top: var(--space-5);
+  font-size: var(--text-md);
 }
-
-main.dashboard .panel-subtitle{
-  color: var(--vol-muted);
-}
-
-/* Start Scanner */
-
-main.dashboard .save-button{
-  background: var(--vol-orange);
-  border: 1px solid var(--vol-orange);
-  color: #080808;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-weight: 900;
-  letter-spacing: .08em;
-
-  transition:
-    transform .15s ease,
-    background .15s ease,
-    box-shadow .15s ease;
-}
-
-main.dashboard .save-button:hover{
-  background: var(--vol-orange-bright);
-  border-color: var(--vol-orange-bright);
-
-  box-shadow:
-    0 0 25px rgba(249,115,22,.18);
-
-  transform: translateY(-1px);
-}
-
-/* =========================================================
-   VOLUNTEER SCANNER
-   ========================================================= */
-
-/* Scanner frame */
-
-/* Camera / scanner area */
-
-#reader{
-  background: #020304 !important;
-  border: 1px solid var(--vol-border-strong) !important;
-}
-
-/* Scanner buttons */
-
-/* QR / action buttons */
-
-.scanner-page .qr-button,
-.scan-panel .qr-button{
-  border: 1px solid var(--vol-orange);
-  background: transparent;
-  color: var(--vol-orange-bright);
-}
-
-.scanner-page .qr-button:hover,
-.scan-panel .qr-button:hover{
-  background: rgba(249,115,22,.08);
-}
-
-/* Given badge */
-
-.type-badge.single{
-  border-color: var(--vol-green) !important;
-  color: var(--vol-green) !important;
-  background: rgba(74,222,128,.07) !important;
-}
-
-/* Pending / action badge */
-
-.type-badge.combo{
-  border-color: var(--vol-orange) !important;
-  color: var(--vol-orange-bright) !important;
-  background: rgba(249,115,22,.07) !important;
-}
-
-/* Distribution item cards */
-
-/* Strong text */
-
-/* Secondary item information */
-
-/* Mark as given */
-
-/* Disabled */
-
-button:disabled{
-  opacity: .45;
-  cursor: not-allowed;
-}
-
-/* Error */
-
-/* Success */
-
-/* Mobile */
-
-@media (max-width: 700px){
-  main.dashboard .container{
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  main.dashboard .header{
-    gap: 16px;
-  }
-
-  main.dashboard .sales-panel{
-    width: 100%;
-  }
-
-}
-
-/* =========================================================
-   V-TAPP VOLUNTEER SCANNER UI
-   Camera-only — no image/file scanning
-   ========================================================= */
 
-/* Hide image-file scanning controls */
-#html5-qrcode-button-file-selection,
-#html5-qrcode-anchor-scan-type-change,
-.html5-qrcode-element[type="file"],
-input[type="file"]{
-  display: none !important;
+.loading-card p {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
-/* Scanner library container */
-#reader{
-  width: 100% !important;
-  max-width: 620px;
+.loading-spinner {
+  width: 28px;
+  height: 28px;
   margin: 0 auto;
 
-  background: #090c0f !important;
-  border: 1px solid #252b33 !important;
-  border-radius: 14px;
-  overflow: hidden;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: var(--radius-full);
 
-  color: #f4f4f5 !important;
+  animation: spin 720ms linear infinite;
 }
 
-/* Remove library's ugly default borders */
-#reader > div{
+/* Centred single-card screens: login, access denied, redirect. */
+.center-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--space-6);
+}
+
+.center-card {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+
+.center-card-wide {
+  max-width: 520px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto var(--space-5);
+
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-lg);
+}
+
+
+/* 13. Scanner ============================================================== */
+
+.scanner {
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.scanner :global(video),
+.scanner video {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+}
+
+/* html5-qrcode injects its own markup; these tame it to fit the system. */
+#qr-reader {
   border: 0 !important;
 }
 
-/* Camera permission button */
-#html5-qrcode-button-camera-permission,
-#html5-qrcode-button-camera-start{
-  appearance: none !important;
-
-  background: #f97316 !important;
-  color: #080808 !important;
-
-  border: 1px solid #f97316 !important;
-  border-radius: 6px !important;
-
-  padding: 13px 24px !important;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace !important;
-
-  font-size: 13px !important;
-  font-weight: 800 !important;
-  letter-spacing: .06em !important;
-
-  cursor: pointer !important;
-
-  transition:
-    background .15s ease,
-    border-color .15s ease,
-    box-shadow .15s ease,
-    transform .15s ease !important;
-}
-
-#html5-qrcode-button-camera-permission:hover,
-#html5-qrcode-button-camera-start:hover{
-  background: #fb923c !important;
-  border-color: #fb923c !important;
-
-  box-shadow:
-    0 0 24px rgba(249,115,22,.18) !important;
-
-  transform: translateY(-1px);
-}
-
-/* Scanner text */
-#reader span,
-#reader div{
-  color: #8b8f98;
-}
-
-/* Keep camera video clean */
-#reader video{
-  width: 100% !important;
-  border-radius: 10px;
-  display: block;
-}
-
-/* QR scanning region */
-#reader__scan_region{
-  background: #030506 !important;
-}
-
-/* Camera permission area */
-#reader__dashboard{
-  padding: 18px !important;
-  background: #090c0f !important;
-  border-top: 1px solid #252b33 !important;
-}
-
-/* Dashboard text */
-#reader__dashboard_section_csr,
-#reader__dashboard_section_swaplink{
-  color: #8b8f98 !important;
-}
-
-/* Hide "Scan an Image File" text even if library
-   renders it dynamically */
-#reader__dashboard_section_swaplink{
+#qr-reader img[alt="Info icon"] {
   display: none !important;
 }
 
-/* Hide file input generated by html5-qrcode */
-#reader input[type="file"]{
-  display: none !important;
-}
+#qr-reader__dashboard_section_csr button,
+#qr-reader__dashboard_section_swaplink,
+.html5-qrcode-element {
+  min-height: 40px !important;
+  padding: 0 var(--space-4) !important;
 
-/* Scanner status */
-#reader__status_span{
-  color: #8b8f98 !important;
-}
-
-/* Camera permission message */
-#reader__camera_permission_message{
-  color: #8b8f98 !important;
-  margin-bottom: 12px;
-}
-
-/* Error state */
-#reader__status_span[style*="color: red"]{
-  color: #f87171 !important;
-}
-
-/* Mobile */
-@media (max-width: 700px){
-  #reader{
-    max-width: 100%;
-    border-radius: 10px;
-  }
-
-  #html5-qrcode-button-camera-permission,
-  #html5-qrcode-button-camera-start{
-    width: 100%;
-  }
-
-}
-
-/* =========================================================
-   V-TAPP VOLUNTEER OPERATIONS
-   Match ADMIN dashboard visual system
-   ========================================================= */
-
-.volunteer-page,
-main.dashboard{
-  --admin-orange: #f97316;
-  --admin-orange-light: #fb923c;
-  --admin-green: #a3e635;
-
-  --bg: #050708;
-  --panel: #090c0f;
-  --panel-soft: #0d1115;
-  --border: #252b33;
-  --text: #f4f4f5;
-  --muted: #737983;
-}
-
-/* Page background */
-main.dashboard{
-  background:
-    linear-gradient(
-      rgba(5, 7, 8, 0.96),
-      rgba(5, 7, 8, 0.96)
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0,
-      transparent 39px,
-      rgba(255,255,255,.025) 40px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent 39px,
-      rgba(255,255,255,.025) 40px
-    ) !important;
-
+  background: var(--surface-raised) !important;
   color: var(--text) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: var(--radius) !important;
+
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-base) !important;
+  text-decoration: none !important;
+  cursor: pointer;
 }
 
-/* Main container */
-main.dashboard .container{
-  max-width: 1240px;
+#qr-reader__status_span {
+  background: var(--surface-raised) !important;
+  color: var(--text-muted) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
-/* Header */
-main.dashboard .header{
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 28px;
+#qr-reader__scan_region {
+  background: #000 !important;
 }
 
-main.dashboard .header h1{
-  color: #f4f4f5 !important;
-  letter-spacing: -0.045em;
-}
+/* Scanned-item checklist. */
+.scan-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 
-main.dashboard .header p{
-  color: #737983 !important;
-}
-
-/* Header buttons */
-main.dashboard .admin-link{
-  color: #737983 !important;
-  border-color: var(--border) !important;
-  background: #090c0f !important;
-}
-
-main.dashboard .admin-link:hover{
-  color: var(--admin-orange-light) !important;
-  border-color: var(--admin-orange) !important;
-}
-
-/* All volunteer panels */
-main.dashboard .sales-panel,
-main.dashboard .inventory-panel,
-main.dashboard .inventory-card,
-main.dashboard .stat-card,
-main.dashboard .dashboard-card{
-  background: #090c0f !important;
-  border-color: var(--border) !important;
-}
-
-/* Distribution status */
-main.dashboard .distribution-status{
-  background: #090c0f !important;
-  border: 1px solid var(--border) !important;
-}
-
-/* Status labels */
-main.dashboard .section-label,
-main.dashboard .eyebrow,
-main.dashboard .panel-label{
-  color: #737983 !important;
-}
-
-/* BIG percentage */
-main.dashboard .distribution-percentage{
-  color: #f4f4f5 !important;
-}
-
-/* Distribution progress */
-main.dashboard .distribution-progress{
-  background: #1a2027 !important;
-}
-
-main.dashboard .distribution-progress > div{
-  background: var(--admin-orange) !important;
-}
-
-/* Given */
-main.dashboard .given,
-main.dashboard .given-count,
-main.dashboard [data-status="given"]{
-  color: var(--admin-green) !important;
-}
-
-/* Pending */
-main.dashboard .pending,
-main.dashboard .pending-count,
-main.dashboard [data-status="pending"]{
-  color: var(--admin-orange-light) !important;
-}
-
-/* =========================================================
-   SCAN QR CTA
-   Replace neon lime with ADMIN orange
-   ========================================================= */
-
-main.dashboard a[href="/volunteer/scan"],
-main.dashboard .scan-qr,
-main.dashboard .scan-button,
-main.dashboard .distribution-action{
-  background: var(--admin-orange) !important;
-  color: #080808 !important;
-
-  border: 1px solid var(--admin-orange) !important;
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 
   transition:
-    background .15s ease,
-    border-color .15s ease,
-    box-shadow .15s ease,
-    transform .15s ease !important;
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
 }
 
-main.dashboard a[href="/volunteer/scan"]:hover,
-main.dashboard .scan-qr:hover,
-main.dashboard .scan-button:hover,
-main.dashboard .distribution-action:hover{
-  background: var(--admin-orange-light) !important;
-  border-color: var(--admin-orange-light) !important;
-
-  box-shadow:
-    0 0 28px rgba(249,115,22,.16) !important;
-
-  transform: translateY(-1px);
+.scan-item-given {
+  background: var(--success-soft);
+  border-color: rgb(74 222 128 / 0.3);
 }
 
-/* Scan QR arrow */
-main.dashboard a[href="/volunteer/scan"] svg,
-main.dashboard .scan-qr svg,
-main.dashboard .scan-button svg{
-  color: #080808 !important;
+.scan-item-name {
+  font-size: var(--text-md);
+  font-weight: 600;
 }
 
-/* =========================================================
-   STAT CARDS
-   ========================================================= */
-
-main.dashboard .stat-card h2,
-main.dashboard .stat-card .value,
-main.dashboard .stat-number{
-  color: #f4f4f5 !important;
+.scan-item-meta {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 
-main.dashboard .stat-card .pending,
-main.dashboard .stat-card .pending-value{
-  color: var(--admin-orange-light) !important;
-}
-
-main.dashboard .stat-card .given,
-main.dashboard .stat-card .given-value{
-  color: var(--admin-green) !important;
-}
-
-/* =========================================================
-   INVENTORY
-   ========================================================= */
-
-main.dashboard .inventory-fill{
-  background: var(--admin-orange) !important;
-}
-
-main.dashboard .inventory-track{
-  background: #1a2027 !important;
-}
-
-main.dashboard .inventory-card strong,
-main.dashboard .inventory-card h3{
-  color: #f4f4f5 !important;
-}
-
-main.dashboard .inventory-card span{
-  color: #737983;
-}
-
-/* =========================================================
-   SCANNER PAGE
-   ========================================================= */
-
-#reader{
-  background: #090c0f !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
-  color: #f4f4f5 !important;
-}
-
-/* Camera permission */
-#html5-qrcode-button-camera-permission,
-#html5-qrcode-button-camera-start{
-  background: var(--admin-orange) !important;
-  color: #080808 !important;
-  border: 1px solid var(--admin-orange) !important;
-  border-radius: 6px !important;
-  font-weight: 800 !important;
-}
-
-#html5-qrcode-button-camera-permission:hover,
-#html5-qrcode-button-camera-start:hover{
-  background: var(--admin-orange-light) !important;
-}
-
-/* Remove image/file scanning */
-#html5-qrcode-button-file-selection,
-#html5-qrcode-anchor-scan-type-change,
-#reader input[type="file"],
-#reader__dashboard_section_swaplink{
-  display: none !important;
-}
-
-/* Scanner dashboard */
-#reader__dashboard{
-  background: #090c0f !important;
-  border-top: 1px solid var(--border) !important;
-}
-
-/* Scanner video */
-#reader video{
-  border-radius: 8px !important;
-}
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 700px){
-  main.dashboard .container{
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  main.dashboard a[href="/volunteer/scan"],
-  main.dashboard .scan-qr,
-  main.dashboard .scan-button,
-  main.dashboard .distribution-action{
-    width: 100%;
-  }
-
-}
-
-/* =========================================================
-   V-TAPP VOLUNTEER OPERATIONS
-   Complete page redesign
-   ========================================================= */
-
-.volunteer-shell{
-  --v-bg: #050708;
-  --v-panel: #090d10;
-  --v-panel-2: #0c1115;
-  --v-border: #252d35;
-
-  --v-white: #f4f4f5;
-  --v-muted: #737983;
-  --v-dim: #4e555d;
-
-  --v-orange: #f97316;
-  --v-orange-light: #fb923c;
-
-  --v-green: #a3e635;
-
-  min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 50% -20%,
-      rgba(249, 115, 22, .045),
-      transparent 38%
-    ),
-    #050708;
-
-  color: var(--v-white);
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
-}
-
-.volunteer-container{
-  width: min(
-    1236px,
-    calc(100% - 48px)
-  );
-
-  margin: 0 auto;
-
-  padding:
-    14px 0
-    80px;
-}
-
-/* =========================================================
-   HEADER
-   ========================================================= */
-
-.volunteer-header{
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-
-  gap: 30px;
-
-  padding:
-    0 0 26px;
-
-  border-bottom:
-    1px solid var(--v-border);
-}
-
-.volunteer-kicker{
-  margin-bottom: 8px;
-
-  color: var(--v-green);
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 11px;
-  font-weight: 800;
-
-  letter-spacing: .18em;
-}
-
-.volunteer-header h1{
-  margin: 0;
-
-  color: var(--v-white);
-
-  font-size: clamp(
-    42px,
-    5vw,
-    58px
-  );
-
-  line-height: .95;
-
-  letter-spacing: -.055em;
-
-  font-weight: 900;
-}
-
-.volunteer-header p{
-  margin:
-    12px 0 0;
-
-  color: var(--v-muted);
-
-  font-size: 15px;
-}
-
-.volunteer-header-actions{
-  display: flex;
-
-  align-items: center;
-
-  gap: 10px;
-
-  padding-top: 10px;
-}
-
-.volunteer-small-button{
-  display: inline-flex;
-
-  align-items: center;
-  justify-content: center;
-
-  min-height: 38px;
-
-  padding:
-    0 17px;
-
-  background: #090d10;
-
-  border:
-    1px solid var(--v-border);
-
-  color: #8b929a;
-
-  text-decoration: none;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 800;
-
-  letter-spacing: .05em;
-
-  cursor: pointer;
-}
-
-.volunteer-small-button:hover{
-  border-color:
-    var(--v-orange);
-
-  color:
-    var(--v-orange-light);
-}
-
-.volunteer-logout{
-  min-height: 46px;
-
-  padding:
-    0 22px;
-
-  border:
-    1px solid #d8dce0;
-
-  border-radius: 11px;
-
-  background:
-    #f4f4f5;
-
-  color:
-    #343943;
-
-  font-size: 16px;
-
-  font-weight: 700;
-
-  cursor: pointer;
-}
-
-.volunteer-logout:hover{
-  background:
-    #ffffff;
-}
-
-/* =========================================================
-   DISTRIBUTION HERO
-   ========================================================= */
-
-.distribution-hero{
-  margin-top: 28px;
-
-  padding:
-    34px 36px
-    31px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #0d1216,
-      #090d10
-    );
-
-  border:
-    1px solid var(--v-border);
-}
-
-.distribution-top{
-  display: flex;
-
-  justify-content: space-between;
-
-  gap: 50px;
-}
-
-.distribution-main{
-  flex: 1;
-}
-
-.distribution-label{
-  color: #7d858d;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 800;
-
-  letter-spacing: .16em;
-}
-
-.distribution-percent{
-  margin-top: 18px;
-
-  color: var(--v-white);
-
-  font-size:
-    clamp(82px, 9vw, 108px);
-
-  line-height: .8;
-
-  font-weight: 900;
-
-  letter-spacing: -.08em;
-}
-
-.distribution-progress-label{
-  margin-top: 28px;
-
-  color:
-    var(--v-green);
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 10px;
-
-  font-weight: 900;
-
-  letter-spacing: .13em;
-}
-
-.distribution-track{
+/* QR image on the claim and detail screens. */
+.qr-frame {
+  display: block;
   width: 100%;
+  max-width: 260px;
+  margin-inline: auto;
+  padding: var(--space-3);
 
-  height: 11px;
+  background: #fff;
+  border-radius: var(--radius-lg);
+}
 
-  margin-top: 35px;
+.qr-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 
+
+/* 14. Utilities ============================================================ */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-
-  background:
-    #20282e;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-.distribution-fill{
-  height: 100%;
-
-  min-width:
-    8px;
-
-  background:
-    var(--v-green);
-
-  transition:
-    width .35s ease;
+.divider {
+  height: 1px;
+  margin: var(--space-6) 0;
+  background: var(--border);
+  border: 0;
 }
 
-.distribution-track-footer{
-  display: flex;
+.mt-0  { margin-top: 0; }
+.mt-2  { margin-top: var(--space-2); }
+.mt-4  { margin-top: var(--space-4); }
+.mt-6  { margin-top: var(--space-6); }
+.mt-8  { margin-top: var(--space-8); }
+.mb-0  { margin-bottom: 0; }
+.mb-4  { margin-bottom: var(--space-4); }
+.mb-6  { margin-bottom: var(--space-6); }
+.mb-8  { margin-bottom: var(--space-8); }
 
-  justify-content: space-between;
 
-  margin-top: 9px;
+/* 15. Responsive =========================================================== */
 
-  color:
-    #59616a;
+@media (max-width: 1024px) {
+  .grid-main,
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
+  .grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-.distribution-numbers{
-  display: flex;
-
-  gap: 85px;
-
-  min-width: 270px;
-
-  padding-top: 4px;
-}
-
-.distribution-numbers div{
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 9px;
-}
-
-.distribution-numbers span{
-  color: #646c74;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 800;
-
-  letter-spacing: .12em;
-}
-
-.distribution-numbers strong{
-  font-size: 47px;
-
-  line-height: 1;
-
-  font-weight: 900;
-
-  letter-spacing: -.05em;
-}
-
-.given-number{
-  color:
-    var(--v-green) !important;
-}
-
-.pending-number{
-  color:
-    var(--v-orange-light) !important;
-}
-
-/* =========================================================
-   SCAN ACTION
-   ========================================================= */
-
-.scan-action{
-  display: flex;
-
-  align-items: center;
-
-  justify-content: space-between;
-
-  margin-top: 10px;
-
-  min-height: 128px;
-
-  padding:
-    24px 28px;
-
-  background:
-    var(--v-orange);
-
-  color:
-    #080808;
-
-  text-decoration: none;
-
-  transition:
-    background .15s ease,
-    transform .15s ease;
-}
-
-.scan-action:hover{
-  background:
-    var(--v-orange-light);
-
-  transform:
-    translateY(-1px);
-}
-
-.scan-action-label{
-  margin-bottom: 12px;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 900;
-
-  letter-spacing: .15em;
-}
-
-.scan-action-title{
-  font-size: 46px;
-
-  line-height: .9;
-
-  font-weight: 900;
-
-  letter-spacing: -.055em;
-}
-
-.scan-arrow{
-  font-size: 57px;
-
-  line-height: 1;
-
-  font-weight: 300;
-}
-
-/* =========================================================
-   STATS
-   ========================================================= */
-
-.volunteer-stats{
-  display: grid;
-
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
-
-  gap: 10px;
-
-  margin-top: 28px;
-}
-
-.volunteer-stat{
-  min-height: 112px;
-
-  padding:
-    22px 23px;
-
-  background:
-    var(--v-panel);
-
-  border:
-    1px solid var(--v-border);
-}
-
-.volunteer-stat > span{
-  display: block;
-
-  color:
-    #626b74;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  font-weight: 800;
-
-  letter-spacing: .12em;
-}
-
-.volunteer-stat strong{
-  display: block;
-
-  margin-top: 12px;
-
-  color:
-    var(--v-white);
-
-  font-size: 42px;
-
-  line-height: .9;
-
-  font-weight: 900;
-
-  letter-spacing: -.05em;
-}
-
-.volunteer-stat small{
-  display: block;
-
-  margin-top: 13px;
-
-  color:
-    #626a72;
-
-  font-size: 10px;
-}
-
-/* =========================================================
-   INVENTORY
-   ========================================================= */
-
-.volunteer-inventory{
-  margin-top: 37px;
-}
-
-.volunteer-section-heading{
-  display: flex;
-
-  align-items: center;
-
-  justify-content: space-between;
-
-  margin-bottom: 12px;
-}
-
-.volunteer-section-heading > div{
-  display: flex;
-
-  align-items: center;
-
-  gap: 10px;
-}
-
-.volunteer-section-heading span{
-  color:
-    var(--v-green);
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 10px;
-
-  font-weight: 900;
-}
-
-.volunteer-section-heading h2{
-  margin: 0;
-
-  color:
-    var(--v-white);
-
-  font-size: 21px;
-
-  line-height: 1;
-
-  letter-spacing: -.025em;
-}
-
-.volunteer-section-heading a{
-  color:
-    #69717a;
-
-  text-decoration: none;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 8px;
-
-  font-weight: 800;
-}
-
-.volunteer-section-heading a:hover{
-  color:
-    var(--v-orange-light);
-}
-
-.volunteer-inventory-list{
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 7px;
-}
-
-.volunteer-inventory-card{
-  padding:
-    20px 22px;
-
-  background:
-    var(--v-panel);
-
-  border:
-    1px solid var(--v-border);
-}
-
-.inventory-card-top{
-  display: flex;
-
-  align-items: flex-end;
-
-  justify-content: space-between;
-}
-
-.inventory-card-top h3{
-  margin: 0;
-
-  color:
-    #e7e9eb;
-
-  font-size: 15px;
-
-  font-weight: 700;
-}
-
-.inventory-card-top span{
-  display: block;
-
-  margin-top: 7px;
-
-  color:
-    #59616a;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 8px;
-}
-
-.inventory-card-top strong{
-  color:
-    var(--v-green);
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 29px;
-
-  line-height: 1;
-
-  font-weight: 900;
-}
-
-.inventory-progress{
-  height: 5px;
-
-  margin-top: 13px;
-
-  overflow: hidden;
-
-  background:
-    #20272d;
-}
-
-.inventory-progress-fill{
-  height: 100%;
-
-  background:
-    var(--v-green);
-
-  transition:
-    width .35s ease;
-}
-
-.inventory-loading{
-  width: 55%;
-
-  height: 9px;
-
-  border-radius: 3px;
-
-  background:
-    #20272d;
-}
-
-/* =========================================================
-   RESPONSIVE
-   ========================================================= */
-
-@media (max-width: 900px){
-
-  .volunteer-header{
+@media (max-width: 720px) {
+  .container {
+    padding: var(--space-6) var(--space-4) var(--space-12);
+  }
+
+  .page-header {
+    align-items: flex-start;
     flex-direction: column;
   }
 
-  .volunteer-header-actions{
-    padding-top: 0;
+  .page-title {
+    font-size: var(--text-xl);
   }
 
-  .distribution-top{
-    flex-direction: column;
+  .grid-main,
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .distribution-numbers{
-    min-width: 0;
-
-    gap: 60px;
+  .stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-3);
   }
 
-  .volunteer-stats{
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+  .stat {
+    padding: var(--space-4);
   }
 
-}
-
-@media (max-width: 600px){
-
-  .volunteer-container{
-    width:
-      calc(100% - 28px);
-
-    padding-bottom: 50px;
+  .stat-value {
+    font-size: var(--text-xl);
   }
 
-  .volunteer-header h1{
-    font-size: 40px;
+  .panel-header,
+  .panel-body {
+    padding: var(--space-4);
   }
 
-  .volunteer-header-actions{
-    width: 100%;
-
-    display: grid;
-
-    grid-template-columns:
-      1fr 1fr;
-  }
-
-  .volunteer-logout{
-    grid-column:
-      1 / -1;
-
+  .header-actions {
     width: 100%;
   }
 
-  .distribution-hero{
-    padding:
-      25px 20px;
+  .header-actions .btn {
+    flex: 1 1 auto;
   }
 
-  .distribution-percent{
-    font-size: 78px;
+  .center-card {
+    padding: var(--space-8) var(--space-5);
   }
-
-  .distribution-numbers{
-    justify-content: space-between;
-
-    width: 100%;
-  }
-
-  .distribution-numbers strong{
-    font-size: 38px;
-  }
-
-  .scan-action{
-    min-height: 105px;
-
-    padding:
-      20px;
-  }
-
-  .scan-action-title{
-    font-size: 38px;
-  }
-
-  .scan-arrow{
-    font-size: 44px;
-  }
-
-  .volunteer-stats{
-    grid-template-columns:
-      1fr;
-  }
-
 }
 
 
+/* 16. Motion preferences =================================================== */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    background: var(--surface-raised);
+  }
+}

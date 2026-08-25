@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { usePoll } from "@/lib/use-poll";
+import { BoxIcon, ScanIcon } from "@/components/icons";
 
 type InventoryItem = {
   id: number;
@@ -141,327 +142,258 @@ export default function VolunteerPage() {
     data?.inventory ?? [];
 
   return (
-    <main className="volunteer-shell">
+    <main className="app">
+      <div className="container">
 
-      <div className="volunteer-container">
-
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
-        <header className="volunteer-header">
-
+        <header className="page-header">
           <div>
-            <div className="volunteer-kicker">
+            <span className="page-eyebrow">
               V-TAPP / 2026
-            </div>
+            </span>
 
-            <h1>
-              VOLUNTEER OPERATIONS
+            <h1 className="page-title">
+              Volunteer Operations
             </h1>
 
-            <p>
+            <p className="page-subtitle">
               Merchandise distribution control
             </p>
           </div>
 
-          <div className="volunteer-header-actions">
+          <div className="header-actions">
+            <span className="pulse">LIVE</span>
 
             <button
-              className="volunteer-small-button"
-              onClick={() =>
-                loadDashboard("silent")
-              }
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => loadDashboard("silent")}
               disabled={refreshing}
             >
-              {refreshing
-                ? "LOADING"
-                : "REFRESH"}
+              {refreshing && <span className="btn-spinner" />}
+              {refreshing ? "Refreshing" : "Refresh"}
             </button>
 
-            <Link
-              href="/admin"
-              className="volunteer-small-button"
-            >
-              ADMIN
+            <Link href="/admin" className="btn btn-ghost btn-sm">
+              Admin
             </Link>
 
             <button
-              className="volunteer-logout"
+              type="button"
+              className="btn btn-ghost btn-sm"
               onClick={logout}
             >
-              Logout
+              Sign out
             </button>
-
           </div>
-
         </header>
 
 
-        {/* =================================================
-            DISTRIBUTION STATUS
-        ================================================= */}
-
-        <section className="distribution-hero">
-
-          <div className="distribution-top">
-
-            <div className="distribution-main">
-
-              <div className="distribution-label">
-                DISTRIBUTION STATUS
-              </div>
-
-              <div className="distribution-percent">
-                {loading ? "—" : `${percentage}%`}
-              </div>
-
-              <div className="distribution-progress-label">
-                DISTRIBUTION PROGRESS
-              </div>
-
-              <div className="distribution-track">
-                <div
-                  className="distribution-fill"
-                  style={{
-                    width: `${percentage}%`,
-                  }}
-                />
-              </div>
-
-              <div className="distribution-track-footer">
-                <span>
-                  {given} GIVEN
-                </span>
-
-                <span>
-                  {total} TOTAL
-                </span>
-              </div>
-
-            </div>
-
-
-            <div className="distribution-numbers">
-
-              <div>
-                <span>GIVEN</span>
-                <strong className="given-number">
-                  {loading ? "—" : given}
-                </strong>
-              </div>
-
-              <div>
-                <span>PENDING</span>
-                <strong className="pending-number">
-                  {loading ? "—" : pending}
-                </strong>
-              </div>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* =================================================
-            SCAN ACTION
-        ================================================= */}
-
+        {/* Primary action. One per screen. */}
         <Link
           href="/volunteer/scan"
-          className="scan-action"
+          className="card-link card-link-feature mb-8"
         >
+          <div className="row-between">
+            <div>
+              <span className="eyebrow eyebrow-accent">
+                Distribution action
+              </span>
 
-          <div>
-            <div className="scan-action-label">
-              DISTRIBUTION ACTION
+              <div className="page-title mt-2">Scan QR</div>
+
+              <p className="card-link-body">
+                Open the camera and hand merchandise over.
+              </p>
             </div>
 
-            <div className="scan-action-title">
-              SCAN QR
-            </div>
+            <ScanIcon size={34} />
           </div>
-
-          <div className="scan-arrow">
-            →
-          </div>
-
         </Link>
 
 
-        {/* =================================================
-            STATS
-        ================================================= */}
+        {/* Distribution progress */}
+        <section className="panel mb-8">
+          <div className="panel-body">
+            <div className="meter">
+              <div className="meter-head">
+                <span className="meter-label">
+                  Distribution progress
+                </span>
 
-        <section className="volunteer-stats">
+                <span className="meter-value">
+                  {loading ? "—" : `${percentage}%`}
+                </span>
+              </div>
 
-          <div className="volunteer-stat">
-            <span>PENDING</span>
+              <div
+                className="meter-track"
+                role="progressbar"
+                aria-valuenow={percentage}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Items distributed"
+              >
+                <div
+                  className="meter-fill"
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
 
-            <strong className="pending-number">
-              {loading ? "—" : pending}
-            </strong>
+              <div className="meter-foot">
+                <span>{given} given</span>
+                <span>{total} total</span>
+              </div>
+            </div>
 
-            <small>
-              Items awaiting distribution
-            </small>
+            <div className="split">
+              <div className="split-item">
+                <span className="stat-label">Given</span>
+
+                <strong className="split-value stat-success">
+                  {loading ? "—" : given}
+                </strong>
+
+                <span className="stat-meta">
+                  Items distributed
+                </span>
+              </div>
+
+              <div className="split-item">
+                <span className="stat-label">Pending</span>
+
+                <strong className="split-value stat-warning">
+                  {loading ? "—" : pending}
+                </strong>
+
+                <span className="stat-meta">
+                  Awaiting distribution
+                </span>
+              </div>
+            </div>
           </div>
-
-
-          <div className="volunteer-stat">
-            <span>GIVEN</span>
-
-            <strong className="given-number">
-              {loading ? "—" : given}
-            </strong>
-
-            <small>
-              Items successfully distributed
-            </small>
-          </div>
-
-
-          <div className="volunteer-stat">
-            <span>TOTAL</span>
-
-            <strong>
-              {loading ? "—" : total}
-            </strong>
-
-            <small>
-              Current allocation
-            </small>
-          </div>
-
-
-          <div className="volunteer-stat">
-            <span>BUYERS</span>
-
-            <strong>
-              {loading
-                ? "—"
-                : data?.registrations ?? 0}
-            </strong>
-
-            <small>
-              Completed registrations
-            </small>
-          </div>
-
         </section>
 
 
-        {/* =================================================
-            INVENTORY
-        ================================================= */}
+        {/* Totals */}
+        <section className="stat-grid">
+          <div className="stat">
+            <span className="stat-label">Total items</span>
 
-        <section className="volunteer-inventory">
+            <strong className="stat-value">
+              {loading ? "—" : total}
+            </strong>
 
-          <div className="volunteer-section-heading">
+            <span className="stat-meta">Current allocation</span>
+          </div>
 
+          <div className="stat">
+            <span className="stat-label">Buyers</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : data?.registrations ?? 0}
+            </strong>
+
+            <span className="stat-meta">
+              Completed registrations
+            </span>
+          </div>
+        </section>
+
+
+        {/* Inventory */}
+        <section className="panel">
+          <div className="panel-header">
             <div>
-              <span>
-                01
-              </span>
+              <h2 className="panel-title">Inventory</h2>
 
-              <h2>
-                INVENTORY
-              </h2>
+              <p className="panel-subtitle">
+                Remaining stock by item
+              </p>
             </div>
 
             <Link
               href="/admin/inventory"
+              className="btn btn-ghost btn-sm"
             >
-              VIEW →
+              View all
             </Link>
-
           </div>
 
-
-          <div className="volunteer-inventory-list">
-
+          <div className="panel-body stack">
             {loading ? (
+              [1, 2, 3, 4, 5].map((item) => (
+                <div key={item}>
+                  <div className="skeleton skeleton-line" />
+                  <div className="skeleton meter-track" />
+                </div>
+              ))
+            ) : inventory.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">
+                  <BoxIcon size={22} />
+                </div>
 
-              [1, 2, 3, 4, 5].map(
-                (item) => (
-                  <div
-                    className="volunteer-inventory-card"
-                    key={item}
-                  >
-                    <div className="inventory-loading" />
-                  </div>
-                )
-              )
+                <p className="empty-title">No inventory yet</p>
 
+                <p className="empty-body">
+                  Stock appears here once items are configured.
+                </p>
+              </div>
             ) : (
+              inventory.map((item) => {
+                const remainingPercent = Math.max(
+                  0,
+                  Math.min(
+                    100,
+                    Number(item.remaining_percentage ?? 0)
+                  )
+                );
 
-              inventory.map(
-                (item) => {
+                const level =
+                  remainingPercent <= 15
+                    ? "meter-fill-danger"
+                    : remainingPercent <= 40
+                      ? "meter-fill-warning"
+                      : "meter-fill-success";
 
-                  const percentage =
-                    Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        Number(
-                          item.remaining_percentage ??
-                            0
-                        )
-                      )
-                    );
+                return (
+                  <div className="meter" key={item.id}>
+                    <div className="meter-head">
+                      <span className="meter-label">
+                        {item.item}
+                      </span>
 
-                  return (
-                    <div
-                      className="volunteer-inventory-card"
-                      key={item.id}
-                    >
-
-                      <div className="inventory-card-top">
-
-                        <div>
-                          <h3>
-                            {item.item}
-                          </h3>
-
-                          <span>
-                            SOLD /{" "}
-                            {item.initial_stock}
-                          </span>
-                        </div>
-
-                        <strong>
-                          {item.remaining}
-                        </strong>
-
-                      </div>
-
-
-                      <div className="inventory-progress">
-
-                        <div
-                          className="inventory-progress-fill"
-                          style={{
-                            width: `${percentage}%`,
-                          }}
-                        />
-
-                      </div>
-
+                      <span className="meter-value">
+                        {item.remaining} / {item.initial_stock}
+                      </span>
                     </div>
-                  );
-                }
-              )
 
+                    <div
+                      className="meter-track"
+                      role="progressbar"
+                      aria-valuenow={remainingPercent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${item.item} stock remaining`}
+                    >
+                      <div
+                        className={`meter-fill ${level}`}
+                        style={{ width: `${remainingPercent}%` }}
+                      />
+                    </div>
+
+                    <div className="meter-foot">
+                      <span>{item.sold} sold</span>
+                      <span>{remainingPercent}% left</span>
+                    </div>
+                  </div>
+                );
+              })
             )}
-
           </div>
-
         </section>
 
       </div>
-
     </main>
   );
 }

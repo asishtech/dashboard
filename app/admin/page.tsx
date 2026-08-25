@@ -5,6 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { usePoll } from "@/lib/use-poll";
+import {
+  ArrowRightIcon,
+  BoxIcon,
+  ListIcon,
+  UsersIcon,
+} from "@/components/icons";
 
 type Inventory = {
   id: number;
@@ -333,31 +339,6 @@ export default function AdminPage() {
   const givenPercent =
     (givenCount / distributionTotal) * 100;
 
-  /*
-   * Inventory chart maximum.
-   */
-  const maxSold = Math.max(
-    ...inventory.map(
-      (item) =>
-        Number(
-          item.sold ?? 0
-        )
-    ),
-    1
-  );
-
-  const maxRemaining =
-    Math.max(
-      ...inventory.map(
-        (item) =>
-          Number(
-            item.remaining ?? 0
-          )
-      ),
-      1
-    );
-
-
   const formatAmount = (
     amount: number
   ) =>
@@ -389,815 +370,337 @@ export default function AdminPage() {
   };
 
 
+  const busy = syncing || refreshing;
+
   return (
-    <main className="dashboard">
+    <main className="app">
       <div className="container">
 
-        <header className="header">
-
+        <header className="page-header">
           <div>
-            <h1>
-              Admin Dashboard
-            </h1>
+            <span className="page-eyebrow">
+              V-TAPP / Control
+            </span>
 
-            <p>
-              Welcome, {adminName}
+            <h1 className="page-title">Admin Dashboard</h1>
+
+            <p className="page-subtitle">
+              {adminName ? `Signed in as ${adminName}` : " "}
             </p>
           </div>
 
-
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-
-            <button
-              type="button"
-              onClick={
-                forceRefresh
-              }
-              disabled={
-                syncing ||
-                refreshing
-              }
-              style={{
-                border:
-                  "1px solid #cbd5e1",
-                borderRadius:
-                  "8px",
-                padding:
-                  "10px 16px",
-                background:
-                  syncing ||
-                  refreshing
-                    ? "#e2e8f0"
-                    : "#0f172a",
-                color:
-                  syncing ||
-                  refreshing
-                    ? "#64748b"
-                    : "#ffffff",
-                cursor:
-                  syncing ||
-                  refreshing
-                    ? "wait"
-                    : "pointer",
-                fontWeight:
-                  600,
-                whiteSpace:
-                  "nowrap",
-              }}
-            >
-              {syncing
-                ? "Synchronizing..."
-                : refreshing
-                ? "Refreshing..."
-                : "Force Refresh"}
-            </button>
-
-
-            <Link
-              href="/admin"
-              className="admin-link"
-            >
-              Dashboard
-            </Link>
-
-            <Link
-              href="/admin/inventory"
-              className="admin-link"
-            >
-              Inventory
-            </Link>
+          <div className="header-actions">
+            {lastUpdated && (
+              <span className="pulse">
+                Updated {formatTime(lastUpdated)}
+              </span>
+            )}
 
             <Link
               href="/admin/registrations"
-              className="admin-link"
+              className="btn btn-ghost btn-sm"
             >
               Registrations
             </Link>
 
             <Link
-              href="/volunteer"
-              className="admin-link"
+              href="/admin/inventory"
+              className="btn btn-ghost btn-sm"
             >
-              Volunteer
+              Inventory
             </Link>
 
+            <button
+              type="button"
+              onClick={forceRefresh}
+              disabled={busy}
+              className="btn btn-primary btn-sm"
+            >
+              {busy && <span className="btn-spinner" />}
+              {syncing
+                ? "Synchronizing"
+                : refreshing
+                  ? "Refreshing"
+                  : "Sync V-TAPP"}
+            </button>
+
             <LogoutButton />
-
           </div>
-
         </header>
 
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems:
-              "center",
-            gap: "12px",
-            flexWrap: "wrap",
-            margin:
-              "10px 0 20px",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "13px",
-              color: "#64748b",
-            }}
-          >
-            Dashboard refreshes
-            automatically every
-            60 seconds.
-          </span>
-
-          <span
-            style={{
-              fontSize: "13px",
-              color: "#64748b",
-            }}
-          >
-            Last updated:{" "}
-            {formatTime(
-              lastUpdated
-            )}
-          </span>
-        </div>
-
-
         {syncMessage && (
-          <div
-            style={{
-              margin:
-                "12px 0 20px",
-              padding:
-                "10px 14px",
-              borderRadius:
-                "8px",
-              background:
-                syncMessage
-                  .toLowerCase()
-                  .includes(
-                    "failed"
-                  )
-                  ? "#fef2f2"
-                  : "#ecfdf5",
-              color:
-                "#334155",
-              fontSize:
-                "14px",
-            }}
-          >
-            {syncMessage}
+          <div className="banner" role="status" aria-live="polite">
+            <span>{syncMessage}</span>
           </div>
         )}
 
 
-        <section className="stats">
-
-          <Stat
-            title="Total Buyers"
-            value={
-              loading
-                ? "—"
-                : registrations
-            }
-            subtitle="Completed registrations"
-          />
-
-          <Stat
-            title="Merchandise Revenue"
-            value={
-              loading
-                ? "—"
-                : formatAmount(
-                    totalAmount
-                  )
-            }
-            subtitle="Total recorded sales"
-          />
-
-          <Stat
-            title="Total Stock"
-            value={
-              loading
-                ? "—"
-                : totalStock
-            }
-            subtitle="Configured capacity"
-          />
-
-          <Stat
-            title="Items Sold"
-            value={
-              loading
-                ? "—"
-                : totalSold
-            }
-            subtitle="Physical merchandise"
-          />
-
-          <Stat
-            title="Items Remaining"
-            value={
-              loading
-                ? "—"
-                : totalRemaining
-            }
-            subtitle="Current inventory"
-          />
-
-        </section>
-
-
-        <section
-          className="sales-grid"
-          style={{
-            marginTop: "24px",
-          }}
-        >
-
-          <ChartCard
-            title="Sales by Merchandise"
-            description="Items sold from current inventory."
-          >
-
-            {inventory.length === 0 ? (
-              <EmptyChart />
-            ) : (
-              <div
-                style={{
-                  display:
-                    "flex",
-                  flexDirection:
-                    "column",
-                  gap:
-                    "16px",
-                }}
-              >
-                {inventory.map(
-                  (item) => {
-
-                    const sold =
-                      Number(
-                        item.sold ??
-                          0
-                      );
-
-                    const width =
-                      Math.max(
-                        3,
-                        (sold /
-                          maxSold) *
-                          100
-                      );
-
-                    return (
-                      <div
-                        key={
-                          item.id
-                        }
-                      >
-
-                        <div
-                          style={{
-                            display:
-                              "flex",
-                            justifyContent:
-                              "space-between",
-                            fontSize:
-                              "13px",
-                            marginBottom:
-                              "6px",
-                          }}
-                        >
-                          <span>
-                            {
-                              item.item
-                            }
-                          </span>
-
-                          <strong>
-                            {sold}
-                          </strong>
-                        </div>
-
-                        <div
-                          style={{
-                            height:
-                              "10px",
-                            background:
-                              "#e2e8f0",
-                            borderRadius:
-                              "999px",
-                            overflow:
-                              "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height:
-                                "100%",
-                              width:
-                                `${width}%`,
-                              background:
-                                "#0f172a",
-                              borderRadius:
-                                "999px",
-                              transition:
-                                "width 0.4s ease",
-                            }}
-                          />
-                        </div>
-
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            )}
-
-          </ChartCard>
-
-
-          <ChartCard
-            title="Inventory Remaining"
-            description="Remaining stock by merchandise."
-          >
-
-            {inventory.length === 0 ? (
-              <EmptyChart />
-            ) : (
-              <div
-                style={{
-                  display:
-                    "flex",
-                  flexDirection:
-                    "column",
-                  gap:
-                    "16px",
-                }}
-              >
-                {inventory.map(
-                  (item) => {
-
-                    const remaining =
-                      Number(
-                        item.remaining ??
-                          0
-                      );
-
-                    const width =
-                      Math.max(
-                        3,
-                        (remaining /
-                          maxRemaining) *
-                          100
-                      );
-
-                    return (
-                      <div
-                        key={
-                          item.id
-                        }
-                      >
-
-                        <div
-                          style={{
-                            display:
-                              "flex",
-                            justifyContent:
-                              "space-between",
-                            fontSize:
-                              "13px",
-                            marginBottom:
-                              "6px",
-                          }}
-                        >
-                          <span>
-                            {
-                              item.item
-                            }
-                          </span>
-
-                          <strong>
-                            {remaining}
-                          </strong>
-                        </div>
-
-                        <div
-                          style={{
-                            height:
-                              "10px",
-                            background:
-                              "#e2e8f0",
-                            borderRadius:
-                              "999px",
-                            overflow:
-                              "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height:
-                                "100%",
-                              width:
-                                `${width}%`,
-                              background:
-                                "#475569",
-                              borderRadius:
-                                "999px",
-                              transition:
-                                "width 0.4s ease",
-                            }}
-                          />
-                        </div>
-
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            )}
-
-          </ChartCard>
-
-
-          <ChartCard
-            title="Distribution Status"
-            description="Physical merchandise handover status."
-          >
-
-            <div className="admin-distribution-layout">
-
-              <div
-                className="admin-distribution-pie"
-                style={{
-                  background:
-                    "conic-gradient(" +
-                    "#84cc16 0deg " +
-                    (givenPercent * 3.6) +
-                    "deg, " +
-                    "#f97316 " +
-                    (givenPercent * 3.6) +
-                    "deg 360deg)"
-                }}
-              >
-                <div className="admin-distribution-pie-inner">
-
-                  <strong>
-                    {givenCount + pendingCount}
-                  </strong>
-
-                  <span>
-                    TOTAL
-                  </span>
-
-                </div>
-              </div>
-
-
-              <div className="admin-distribution-stats">
-
-                <div className="admin-distribution-stat admin-given">
-
-                  <div className="admin-stat-label">
-                    <span />
-                    GIVEN
-                  </div>
-
-                  <strong>
-                    {givenCount}
-                  </strong>
-
-                  <small>
-                    {Math.round(givenPercent)}%
-                  </small>
-
-                </div>
-
-
-                <div className="admin-distribution-stat admin-pending">
-
-                  <div className="admin-stat-label">
-                    <span />
-                    PENDING
-                  </div>
-
-                  <strong>
-                    {pendingCount}
-                  </strong>
-
-                  <small>
-                    {Math.round(
-                      100 - givenPercent
-                    )}%
-                  </small>
-
-                </div>
-
-              </div>
-
-            </div>
-
-</ChartCard>
-
-        </section>
-
-
-        <section className="sales-grid">
-
-          <AdminCard
-            title="Inventory Management"
-            description="Update available quantities for all merchandise."
-            href="/admin/inventory"
-          />
-
-          <AdminCard
-            title="Registrations"
-            description="View buyers, merchandise, distribution status and QR codes."
-            href="/admin/registrations"
-          />
-
-          <AdminCard
-            title="User Management"
-            description="Add administrators and volunteers by Google account email."
-            href="/admin/users"
-          />
-
-          <AdminCard
-            title="Volunteer Scanner"
-            description="Open the merchandise distribution scanner."
-            href="/volunteer"
-          />
-
-        </section>
-
-
-        <section className="inventory-panel">
-
-          <div className="section-header">
-
-            <div>
-              <h2>
-                Current Inventory
-              </h2>
-
-              <span>
-                Live data from Supabase
-              </span>
-            </div>
-
-            <Link
-              href="/admin/inventory"
-              className="qr-button"
-            >
-              Edit Inventory
-            </Link>
-
+        {/* Key figures */}
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Merchandise revenue</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : formatAmount(totalAmount)}
+            </strong>
+
+            <span className="stat-meta">Total recorded sales</span>
           </div>
 
+          <div className="stat">
+            <span className="stat-label">Buyers</span>
 
-          {loading ? (
+            <strong className="stat-value">
+              {loading ? "—" : registrations}
+            </strong>
 
-            <div className="inventory-grid">
+            <span className="stat-meta">
+              Completed registrations
+            </span>
+          </div>
 
-              {[1, 2, 3, 4, 5].map(
-                (item) => (
-                  <div
-                    className="inventory-card"
-                    key={item}
-                  >
-                    <div className="skeleton skeleton-line medium" />
-                    <div className="skeleton skeleton-line short" />
-                    <div className="skeleton skeleton-card" />
-                  </div>
-                )
-              )}
+          <div className="stat">
+            <span className="stat-label">Items sold</span>
 
+            <strong className="stat-value">
+              {loading ? "—" : totalSold}
+            </strong>
+
+            <span className="stat-meta">
+              of {loading ? "—" : totalStock} configured
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Items remaining</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : totalRemaining}
+            </strong>
+
+            <span className="stat-meta">Current inventory</span>
+          </div>
+        </section>
+
+
+        <div className="grid grid-main mb-8">
+
+          {/* Stock levels */}
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Stock levels</h2>
+
+                <p className="panel-subtitle">
+                  Remaining against configured capacity
+                </p>
+              </div>
+
+              <Link
+                href="/admin/inventory"
+                className="btn btn-ghost btn-sm"
+              >
+                Manage
+              </Link>
             </div>
 
-          ) : (
+            <div className="panel-body stack">
+              {loading ? (
+                [1, 2, 3, 4, 5].map((row) => (
+                  <div key={row}>
+                    <div className="skeleton skeleton-line" />
+                    <div className="skeleton meter-track" />
+                  </div>
+                ))
+              ) : inventory.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-icon">
+                    <BoxIcon size={22} />
+                  </div>
 
-            <div className="inventory-grid">
+                  <p className="empty-title">No inventory yet</p>
 
-              {inventory.map(
-                (item) => (
+                  <p className="empty-body">
+                    Add stock in Inventory to see levels here.
+                  </p>
+                </div>
+              ) : (
+                inventory.map((item) => {
+                  const stock = Number(item.initial_stock ?? 0);
+                  const remaining = Number(item.remaining ?? 0);
 
-                  <div
-                    className="inventory-card"
-                    key={item.id}
-                  >
+                  const percent =
+                    stock > 0
+                      ? Math.max(
+                          0,
+                          Math.min(100, (remaining / stock) * 100)
+                        )
+                      : 0;
 
-                    <div className="inventory-card-header">
+                  const level =
+                    percent <= 15
+                      ? "meter-fill-danger"
+                      : percent <= 40
+                        ? "meter-fill-warning"
+                        : "meter-fill-success";
 
-                      <div>
-                        <h3>
+                  return (
+                    <div className="meter" key={item.id}>
+                      <div className="meter-head">
+                        <span className="meter-label">
                           {item.item}
-                        </h3>
+                        </span>
 
-                        <span>
-                          Capacity:{" "}
-                          {
-                            item.initial_stock
-                          }
+                        <span className="meter-value">
+                          {remaining} / {stock}
                         </span>
                       </div>
 
-                      <div className="stock-number">
-                        {
-                          item.remaining
-                        }
+                      <div
+                        className="meter-track"
+                        role="progressbar"
+                        aria-valuenow={Math.round(percent)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${item.item} stock remaining`}
+                      >
+                        <div
+                          className={`meter-fill ${level}`}
+                          style={{ width: `${percent}%` }}
+                        />
                       </div>
 
+                      <div className="meter-foot">
+                        <span>{item.sold} sold</span>
+                        <span>{Math.round(percent)}% left</span>
+                      </div>
                     </div>
-
-                    <div className="inventory-label">
-                      remaining
-                    </div>
-
-                    <div className="inventory-track">
-
-                      <div
-                        className="inventory-fill"
-                        style={{
-                          width:
-                            `${Math.max(
-                              0,
-                              Math.min(
-                                100,
-                                Number(
-                                  item.remaining_percentage ??
-                                    0
-                                )
-                              )
-                            )}%`,
-                        }}
-                      />
-
-                    </div>
-
-                    <div className="inventory-footer">
-
-                      <span>
-                        <span
-                      style={{
-                        fontSize: "20px",
-                        fontWeight: 800,
-                      }}
-                    >
-                      {item.sold} sold
-                    </span>
-                      </span>
-
-                      <strong>
-                        {Number(
-                          item.remaining_percentage ??
-                            0
-                        ).toFixed(1)}
-                        % left
-                      </strong>
-
-                    </div>
-
-                  </div>
-
-                )
+                  );
+                })
               )}
+            </div>
+          </section>
 
+
+          {/* Distribution */}
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Distribution</h2>
+
+                <p className="panel-subtitle">
+                  Merchandise handed over
+                </p>
+              </div>
             </div>
 
-          )}
+            <div className="panel-body">
+              <div className="meter">
+                <div className="meter-head">
+                  <span className="meter-label">Handed over</span>
 
+                  <span className="meter-value">
+                    {loading ? "—" : `${Math.round(givenPercent)}%`}
+                  </span>
+                </div>
+
+                <div
+                  className="meter-track"
+                  role="progressbar"
+                  aria-valuenow={Math.round(givenPercent)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Items distributed"
+                >
+                  <div
+                    className="meter-fill meter-fill-success"
+                    style={{ width: `${givenPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="split">
+                <div className="split-item">
+                  <span className="stat-label">Given</span>
+
+                  <strong className="split-value stat-success">
+                    {loading ? "—" : givenCount}
+                  </strong>
+                </div>
+
+                <div className="split-item">
+                  <span className="stat-label">Pending</span>
+
+                  <strong className="split-value stat-warning">
+                    {loading ? "—" : pendingCount}
+                  </strong>
+                </div>
+              </div>
+
+              <p className="help mt-4">
+                {loading
+                  ? " "
+                  : `${distributionTotal} items across all registrations.`}
+              </p>
+            </div>
+          </section>
+        </div>
+
+
+        {/* Navigation */}
+        <section className="grid grid-3">
+          <Link href="/admin/registrations" className="card-link">
+            <ListIcon size={20} />
+
+            <div className="card-link-title mt-4">
+              Registrations
+            </div>
+
+            <p className="card-link-body">
+              Every buyer, their merchandise and distribution state.
+            </p>
+
+            <span className="card-link-cta">
+              Open
+              <ArrowRightIcon size={13} />
+            </span>
+          </Link>
+
+          <Link href="/admin/inventory" className="card-link">
+            <BoxIcon size={20} />
+
+            <div className="card-link-title mt-4">Inventory</div>
+
+            <p className="card-link-body">
+              Adjust configured stock for each item.
+            </p>
+
+            <span className="card-link-cta">
+              Open
+              <ArrowRightIcon size={13} />
+            </span>
+          </Link>
+
+          <Link href="/admin/users" className="card-link">
+            <UsersIcon size={20} />
+
+            <div className="card-link-title mt-4">
+              Staff accounts
+            </div>
+
+            <p className="card-link-body">
+              Invite admins and volunteers by email.
+            </p>
+
+            <span className="card-link-cta">
+              Open
+              <ArrowRightIcon size={13} />
+            </span>
+          </Link>
         </section>
 
       </div>
     </main>
-  );
-}
-
-
-function ChartCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      className="sales-panel"
-      style={{
-        minHeight:
-          "250px",
-      }}
-    >
-      <h2>
-        {title}
-      </h2>
-
-      <p className="panel-subtitle">
-        {description}
-      </p>
-
-      <div
-        style={{
-          marginTop:
-            "24px",
-        }}
-      >
-        {children}
-      </div>
-    </section>
-  );
-}
-
-
-function EmptyChart() {
-  return (
-    <div
-      style={{
-        minHeight:
-          "150px",
-        display:
-          "grid",
-        placeItems:
-          "center",
-        color:
-          "#64748b",
-        fontSize:
-          "14px",
-      }}
-    >
-      No inventory data available.
-    </div>
-  );
-}
-
-
-
-function Stat({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-}) {
-  return (
-    <div className="stat-card">
-      <div className="stat-title">
-        {title}
-      </div>
-
-      <div className="stat-value">
-        {value}
-      </div>
-
-      <div className="stat-subtitle">
-        {subtitle}
-      </div>
-    </div>
-  );
-}
-
-
-function AdminCard({
-  title,
-  description,
-  href,
-}: {
-  title: string;
-  description: string;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="sales-panel admin-card"
-    >
-      <h2>
-        {title}
-      </h2>
-
-      <p className="panel-subtitle">
-        {description}
-      </p>
-
-      <span className="admin-arrow">
-        Open →
-      </span>
-    </Link>
   );
 }

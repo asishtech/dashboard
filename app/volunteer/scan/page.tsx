@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AlertIcon } from "@/components/icons";
 
 type Item = {
   id: number;
@@ -374,225 +375,125 @@ export default function ScannerPage() {
 
 
   return (
-    <main className="dashboard">
-      <div className="container">
+    <main className="app">
+      <div className="container container-narrow">
 
-        <header className="header">
-
+        <header className="page-header">
           <div>
-            <h1>
-              QR Scanner
-            </h1>
+            <span className="page-eyebrow">
+              Volunteer / Scanner
+            </span>
 
-            <p>
-              Merchandise distribution
+            <h1 className="page-title">QR Scanner</h1>
+
+            <p className="page-subtitle">
+              Scan a buyer&apos;s code to hand merchandise over.
             </p>
           </div>
 
-          <Link
-            href="/volunteer"
-            className="admin-link"
-          >
-            ← Volunteer
+          <Link href="/volunteer" className="btn btn-ghost btn-sm">
+            Back to dashboard
           </Link>
-
         </header>
 
 
         {error && (
-          <div className="error-banner">
-            {error}
+          <div className="banner banner-danger" role="alert">
+            <AlertIcon size={18} />
+            <span>{error}</span>
           </div>
         )}
 
 
         {!registration && (
-          <section className="sales-panel">
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Scan buyer QR</h2>
 
-            <h2>
-              Scan Buyer QR
-            </h2>
+                <p className="panel-subtitle">
+                  Point the camera at the code on the buyer&apos;s
+                  phone or printout.
+                </p>
+              </div>
+            </div>
 
-            <p className="panel-subtitle">
-              Scan the QR code provided to
-              the buyer.
-            </p>
-
-            <div
-              id="qr-reader"
-              style={{
-                width: "100%",
-                maxWidth: "500px",
-                margin:
-                  "24px auto 0",
-              }}
-            />
-
+            <div className="panel-body">
+              <div id="qr-reader" className="scanner" />
+            </div>
           </section>
         )}
 
 
         {registration && (
-          <section className="sales-panel">
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                alignItems: "flex-start",
-                gap: "20px",
-                flexWrap: "wrap",
-              }}
-            >
-
+          <section className="panel">
+            <div className="panel-header">
               <div>
-                <h2>
+                <h2 className="panel-title">
                   {registration.name}
                 </h2>
 
-                <p
-                  className="panel-subtitle"
-                >
+                <p className="panel-subtitle">
                   {registration.email}
                 </p>
 
-                <p
-                  className="panel-subtitle"
-                >
-                  Registration:{" "}
-                  {
-                    registration.registration_id
-                  }
+                <p className="mono dim mt-2">
+                  #{registration.registration_id}
                 </p>
               </div>
 
               <button
                 type="button"
-                className="admin-link"
-                onClick={
-                  resetScanner
-                }
+                className="btn btn-ghost btn-sm"
+                onClick={resetScanner}
               >
-                Scan Another
+                Scan another
               </button>
-
             </div>
 
+            <div className="panel-body stack-tight stack">
+              {registration.items.map((item) => {
+                const given = item.status === "GIVEN";
 
-            <div
-              style={{
-                marginTop: "28px",
-              }}
-            >
-
-              <h3>
-                Merchandise
-              </h3>
-
-
-              {registration.items.map(
-                (item) => {
-
-                  const given =
-                    item.status ===
-                    "GIVEN";
-
-                  return (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: "flex",
-                        justifyContent:
-                          "space-between",
-                        alignItems:
-                          "center",
-                        gap: "16px",
-                        padding:
-                          "16px 0",
-                        borderBottom:
-                          "1px solid #e5e7eb",
-                        flexWrap:
-                          "wrap",
-                      }}
-                    >
-
-                      <div>
-
-                        <strong>
-                          {item.item}
-                        </strong>
-
-                        {item.size && (
-                          <div
-                            style={{
-                              color:
-                                "#64748b",
-                              fontSize:
-                                "13px",
-                              marginTop:
-                                "4px",
-                            }}
-                          >
-                            Size:{" "}
-                            {item.size}
-                          </div>
-                        )}
-
-                        {item.quantity >
-                          1 && (
-                          <div
-                            style={{
-                              color:
-                                "#64748b",
-                              fontSize:
-                                "13px",
-                              marginTop:
-                                "4px",
-                            }}
-                          >
-                            Quantity:{" "}
-                            {item.quantity}
-                          </div>
-                        )}
-
+                return (
+                  <div
+                    key={item.id}
+                    className={`scan-item${
+                      given ? " scan-item-given" : ""
+                    }`}
+                  >
+                    <div>
+                      <div className="scan-item-name">
+                        {item.item}
                       </div>
 
-
-                      {given ? (
-
-                        <span
-                          className="type-badge single"
-                        >
-                          GIVEN
-                        </span>
-
-                      ) : (
-
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            markGiven(
-                              item.id
-                            )
-                          }
-                          className="qr-button"
-                        >
-                          {busy
-                            ? "Updating..."
-                            : "Mark as Given"}
-                        </button>
-
-                      )}
-
+                      <div className="scan-item-meta">
+                        {item.size ? `Size ${item.size}` : "One size"}
+                        {item.quantity > 1
+                          ? ` · Qty ${item.quantity}`
+                          : ""}
+                      </div>
                     </div>
-                  );
-                }
-              )}
 
+                    {given ? (
+                      <span className="badge badge-success">
+                        Given
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => markGiven(item.id)}
+                        className="btn btn-primary btn-sm"
+                      >
+                        {busy && <span className="btn-spinner" />}
+                        {busy ? "Updating" : "Mark as given"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-
           </section>
         )}
 

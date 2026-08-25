@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
+import {
+  AlertIcon,
+  CheckIcon,
+  UsersIcon,
+} from "@/components/icons";
 
 type StaffUser = {
   id: number;
@@ -172,489 +179,217 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#030506",
-        color: "#f4f4f5",
-        padding: "40px",
-        fontFamily:
-          "Inter, system-ui, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "1500px",
-          margin: "0 auto",
-        }}
-      >
-        {/* HEADER */}
-        <div
-          style={{
-            marginBottom: "30px",
-          }}
-        >
-          <div
-            style={{
-              color: "#f97316",
-              fontFamily:
-                "SFMono-Regular, Consolas, monospace",
-              fontSize: "11px",
-              fontWeight: 800,
-              letterSpacing: ".16em",
-              marginBottom: "10px",
-            }}
-          >
-            [ CONTROL ] / USER MANAGEMENT
+    <main className="app">
+      <div className="container container-narrow">
+
+        <header className="page-header">
+          <div>
+            <span className="page-eyebrow">V-TAPP / Access</span>
+
+            <h1 className="page-title">Staff Accounts</h1>
+
+            <p className="page-subtitle">
+              Who can reach the admin and volunteer tools
+            </p>
           </div>
 
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "34px",
-              fontWeight: 800,
-            }}
-          >
-            Staff Accounts
-          </h1>
+          <div className="header-actions">
+            <Link href="/admin" className="btn btn-ghost btn-sm">
+              Dashboard
+            </Link>
 
-          <p
-            style={{
-              marginTop: "8px",
-              color: "#8b8f98",
-              fontSize: "14px",
-            }}
-          >
-            Manage administrator and volunteer
-            access.
-          </p>
-        </div>
+            <LogoutButton />
+          </div>
+        </header>
 
-        {/* MAIN GRID */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "minmax(360px, 1fr) minmax(500px, 1.35fr)",
-            border:
-              "1px solid #242a32",
-            background: "#090c0f",
-          }}
-        >
-          {/* ADD USER */}
-          <section
-            style={{
-              padding: "38px",
-              borderRight:
-                "1px solid #242a32",
-            }}
+
+        {error && (
+          <div className="banner banner-danger" role="alert">
+            <AlertIcon size={18} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {message && (
+          <div
+            className="banner banner-success"
+            role="status"
+            aria-live="polite"
           >
-            <div
-              style={{
-                color: "#f97316",
-                fontFamily:
-                  "SFMono-Regular, Consolas, monospace",
-                fontSize: "10px",
-                fontWeight: 800,
-                letterSpacing: ".15em",
-                marginBottom: "12px",
-              }}
-            >
-              CREATE ACCESS
+            <CheckIcon size={18} />
+            <span>{message}</span>
+          </div>
+        )}
+
+
+        <div className="grid grid-main">
+
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Invite a user</h2>
+
+                <p className="panel-subtitle">
+                  The profile is created when they first sign in.
+                </p>
+              </div>
             </div>
 
-            <h2
-              style={{
-                margin: 0,
-                fontSize: "28px",
-              }}
-            >
-              Add User
-            </h2>
+            <form className="panel-body" onSubmit={addUser}>
+              <div className="field">
+                <label className="label" htmlFor="staff-email">
+                  Google email{" "}
+                  <span className="required" aria-hidden="true">
+                    *
+                  </span>
+                </label>
 
-            <p
-              style={{
-                color: "#8b8f98",
-                lineHeight: 1.6,
-                fontSize: "14px",
-                margin:
-                  "10px 0 30px",
-              }}
-            >
-              Enter the Google account email
-              and assign its role. The user&apos;s
-              profile details are resolved
-              automatically when they sign in.
-            </p>
+                <input
+                  id="staff-email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  className="input"
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                  required
+                  disabled={saving}
+                />
 
-            <form onSubmit={addUser}>
-              {/* EMAIL */}
-              <label
-                style={{
-                  display: "block",
-                  color: "#777d87",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  letterSpacing: ".12em",
-                  marginBottom: "8px",
-                }}
-              >
-                GOOGLE EMAIL
-              </label>
+                <p className="help">
+                  Must match the Google account they sign in with.
+                </p>
+              </div>
 
-              <input
-                value={email}
-                onChange={(event) =>
-                  setEmail(
-                    event.target.value
-                  )
-                }
-                type="email"
-                placeholder="user@example.com"
-                autoComplete="email"
-                disabled={saving}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  height: "54px",
-                  padding: "0 16px",
-                  background: "#080b0e",
-                  border:
-                    "1px solid #303640",
-                  color: "#f4f4f5",
-                  outline: "none",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "13px",
-                  marginBottom: "22px",
-                }}
-              />
+              <div className="field">
+                <label className="label" htmlFor="staff-role">
+                  Role{" "}
+                  <span className="required" aria-hidden="true">
+                    *
+                  </span>
+                </label>
 
-              {/* ROLE */}
-              <label
-                style={{
-                  display: "block",
-                  color: "#777d87",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  letterSpacing: ".12em",
-                  marginBottom: "8px",
-                }}
-              >
-                ROLE
-              </label>
-
-              <select
-                value={role}
-                onChange={(event) =>
-                  setRole(
-                    event.target.value as
-                      | "volunteer"
-                      | "admin"
-                  )
-                }
-                disabled={saving}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  height: "54px",
-                  padding: "0 16px",
-                  background: "#080b0e",
-                  border:
-                    "1px solid #303640",
-                  color: "#f4f4f5",
-                  outline: "none",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "13px",
-                  marginBottom: "24px",
-                }}
-              >
-                <option value="volunteer">
-                  Volunteer
-                </option>
-                <option value="admin">
-                  Administrator
-                </option>
-              </select>
-
-              {/* STATUS */}
-              {error && (
-                <div
-                  style={{
-                    marginBottom: "16px",
-                    padding: "12px 14px",
-                    border:
-                      "1px solid #7f1d1d",
-                    background:
-                      "rgba(127,29,29,.12)",
-                    color: "#f87171",
-                    fontFamily:
-                      "SFMono-Regular, Consolas, monospace",
-                    fontSize: "11px",
-                  }}
+                <select
+                  id="staff-role"
+                  className="select"
+                  value={role}
+                  onChange={(event) =>
+                    setRole(
+                      event.target.value as "volunteer" | "admin"
+                    )
+                  }
+                  disabled={saving}
                 >
-                  {error}
-                </div>
-              )}
+                  <option value="volunteer">Volunteer</option>
+                  <option value="admin">Admin</option>
+                </select>
 
-              {message && (
-                <div
-                  style={{
-                    marginBottom: "16px",
-                    padding: "12px 14px",
-                    border:
-                      "1px solid #166534",
-                    background:
-                      "rgba(22,101,52,.12)",
-                    color: "#4ade80",
-                    fontFamily:
-                      "SFMono-Regular, Consolas, monospace",
-                    fontSize: "11px",
-                  }}
-                >
-                  {message}
-                </div>
-              )}
+                <p className="help">
+                  Volunteers can scan and distribute. Admins can do
+                  everything, including managing this list.
+                </p>
+              </div>
 
               <button
                 type="submit"
-                disabled={
-                  saving ||
-                  !email.trim()
-                }
-                style={{
-                  width: "100%",
-                  height: "52px",
-                  border:
-                    "1px solid #f97316",
-                  background: saving
-                    ? "#321b0b"
-                    : "#f97316",
-                  color: saving
-                    ? "#f97316"
-                    : "#080808",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "11px",
-                  fontWeight: 900,
-                  letterSpacing: ".1em",
-                  cursor: saving
-                    ? "wait"
-                    : "pointer",
-                }}
+                className="btn btn-primary btn-block"
+                disabled={saving}
               >
-                {saving
-                  ? "ADDING..."
-                  : "ADD STAFF ACCOUNT"}
+                {saving && <span className="btn-spinner" />}
+                {saving ? "Adding" : "Add user"}
               </button>
             </form>
           </section>
 
-          {/* STAFF LIST */}
-          <section
-            style={{
-              padding: "38px",
-            }}
-          >
-            <div
-              style={{
-                color: "#4ade80",
-                fontFamily:
-                  "SFMono-Regular, Consolas, monospace",
-                fontSize: "10px",
-                fontWeight: 800,
-                letterSpacing: ".15em",
-                marginBottom: "12px",
-              }}
-            >
-              PRIVILEGED ACCOUNTS
+
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Authorized users</h2>
+
+                <p className="panel-subtitle">
+                  {loading
+                    ? " "
+                    : `${users.length} account${
+                        users.length === 1 ? "" : "s"
+                      }`}
+                </p>
+              </div>
             </div>
 
-            <h2
-              style={{
-                margin: 0,
-                fontSize: "28px",
-              }}
-            >
-              Staff Accounts
-            </h2>
-
-            <p
-              style={{
-                color: "#8b8f98",
-                fontSize: "14px",
-                margin:
-                  "8px 0 28px",
-              }}
-            >
-              Administrators and volunteers
-              authorized by email.
-            </p>
-
             {loading ? (
-              <div
-                style={{
-                  color: "#777d87",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "12px",
-                }}
-              >
-                Loading accounts...
+              <div className="panel-body stack">
+                {[1, 2, 3].map((row) => (
+                  <div key={row}>
+                    <div className="skeleton skeleton-line" />
+                    <div
+                      className="skeleton skeleton-line"
+                      style={{ width: "45%" }}
+                    />
+                  </div>
+                ))}
               </div>
             ) : users.length === 0 ? (
-              <div
-                style={{
-                  padding: "24px",
-                  border:
-                    "1px dashed #303640",
-                  color: "#777d87",
-                  fontFamily:
-                    "SFMono-Regular, Consolas, monospace",
-                  fontSize: "11px",
-                }}
-              >
-                No staff accounts configured.
+              <div className="empty">
+                <div className="empty-icon">
+                  <UsersIcon size={22} />
+                </div>
+
+                <p className="empty-title">No staff yet</p>
+
+                <p className="empty-body">
+                  Add a Google email on the left to grant access.
+                </p>
               </div>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
+              <div className="panel-body-flush">
                 {users.map((user) => (
-                  <div
-                    key={user.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "1fr auto auto",
-                      alignItems: "center",
-                      gap: "18px",
-                      padding:
-                        "17px 18px",
-                      border:
-                        "1px solid #252b33",
-                      background:
-                        "#07090c",
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          color: "#f4f4f5",
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          marginBottom:
-                            "6px",
-                        }}
-                      >
+                  <div className="row-card" key={user.id}>
+                    <div className="truncate">
+                      <div className="row-title truncate">
                         {user.email}
                       </div>
 
-                      <div
-                        style={{
-                          color: "#626975",
-                          fontFamily:
-                            "SFMono-Regular, Consolas, monospace",
-                          fontSize: "9px",
-                        }}
-                      >
-                        Added{" "}
-                        {new Date(
-                          user.created_at
-                        ).toLocaleDateString()}
+                      <div className="row-meta">
+                        <span
+                          className={`badge ${
+                            user.role === "admin"
+                              ? "badge-accent"
+                              : "badge-plain"
+                          }`}
+                        >
+                          {user.role}
+                        </span>{" "}
+                        {!user.active && (
+                          <span className="badge badge-danger">
+                            Disabled
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <span
-                      style={{
-                        padding:
-                          "7px 10px",
-                        border:
-                          user.role ===
-                          "admin"
-                            ? "1px solid #f97316"
-                            : "1px solid #8b5cf6",
-                        color:
-                          user.role ===
-                          "admin"
-                            ? "#fb923c"
-                            : "#c084fc",
-                        fontFamily:
-                          "SFMono-Regular, Consolas, monospace",
-                        fontSize: "9px",
-                        fontWeight: 800,
-                        letterSpacing:
-                          ".08em",
-                      }}
-                    >
-                      {user.role ===
-                      "admin"
-                        ? "ADMIN"
-                        : "VOLUNTEER"}
-                    </span>
-
                     <button
                       type="button"
-                      onClick={() =>
-                        toggleUser(user)
-                      }
-                      style={{
-                        padding:
-                          "7px 10px",
-                        border:
-                          "1px solid #303640",
-                        background:
-                          "transparent",
-                        color: user.active
-                          ? "#4ade80"
-                          : "#f87171",
-                        fontFamily:
-                          "SFMono-Regular, Consolas, monospace",
-                        fontSize: "9px",
-                        fontWeight: 800,
-                        cursor:
-                          "pointer",
-                      }}
+                      onClick={() => toggleUser(user)}
+                      className={`btn btn-sm ${
+                        user.active ? "btn-danger" : "btn-ghost"
+                      }`}
                     >
-                      {user.active
-                        ? "ACTIVE"
-                        : "DISABLED"}
+                      {user.active ? "Disable" : "Enable"}
                     </button>
                   </div>
                 ))}
               </div>
             )}
+
+            <div className="panel-footer">
+              Disabling revokes the invite. Someone who has already
+              signed in keeps their role until their profile is
+              deactivated too.
+            </div>
           </section>
         </div>
 
-        {/* BACK */}
-        <div
-          style={{
-            marginTop: "20px",
-          }}
-        >
-          <a
-            href="/admin"
-            style={{
-              color: "#777d87",
-              fontFamily:
-                "SFMono-Regular, Consolas, monospace",
-              fontSize: "10px",
-              textDecoration: "none",
-            }}
-          >
-            ← BACK TO ADMIN DASHBOARD
-          </a>
-        </div>
       </div>
     </main>
   );
