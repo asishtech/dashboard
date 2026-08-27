@@ -1322,7 +1322,6 @@ table,
   border-radius: var(--radius-lg);
 }
 
-.scanner :global(video),
 .scanner video {
   display: block;
   width: 100% !important;
