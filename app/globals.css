@@ -816,6 +816,14 @@ table,
   background: var(--accent-soft);
 }
 
+/* Wrapping row of chips, e.g. the per-item merchandise breakdown in
+   a table cell. */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 /* Live indicator in page headers. */
 .pulse {
   display: inline-flex;

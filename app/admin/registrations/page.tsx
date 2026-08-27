@@ -6,6 +6,7 @@ import LogoutButton from "@/components/LogoutButton";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
+  DownloadIcon,
   InboxIcon,
   SearchIcon,
 } from "@/components/icons";
@@ -32,6 +33,18 @@ const LIVE_TABLES = [
   "distributions",
 ];
 
+/*
+ * Distinct sentinel for the "items with no size recorded" filter
+ * option. A real size string could never collide with it.
+ */
+const NO_SIZE = " no-size";
+
+const hasSize = (item: RegistrationItem) =>
+  Boolean((item.size ?? "").trim());
+
+const sizeLabel = (item: RegistrationItem) =>
+  (item.size ?? "").trim() || "—";
+
 export default function RegistrationsPage() {
   const [registrations, setRegistrations] =
     useState<Registration[]>([]);
@@ -49,6 +62,12 @@ export default function RegistrationsPage() {
     useState<
       "ALL" | "GIVEN" | "PENDING"
     >("ALL");
+
+  const [merchFilter, setMerchFilter] =
+    useState("ALL");
+
+  const [sizeFilter, setSizeFilter] =
+    useState("ALL");
 
   const [error, setError] =
     useState("");
@@ -146,6 +165,90 @@ export default function RegistrationsPage() {
         : "PENDING";
     };
 
+  /*
+   * Does a single line match the merchandise + size filters?
+   * Used both to decide which registrations to show and which
+   * lines to export.
+   */
+  const itemMatches = useCallback(
+    (item: RegistrationItem) => {
+      if (
+        merchFilter !== "ALL" &&
+        item.item !== merchFilter
+      ) {
+        return false;
+      }
+
+      if (sizeFilter === "ALL") {
+        return true;
+      }
+
+      if (sizeFilter === NO_SIZE) {
+        return !hasSize(item);
+      }
+
+      return (item.size ?? "").trim() === sizeFilter;
+    },
+    [merchFilter, sizeFilter]
+  );
+
+  /* Distinct merchandise types across every registration. */
+  const merchTypes = useMemo(() => {
+    const set = new Set<string>();
+
+    for (const registration of registrations) {
+      for (const item of registration.items ?? []) {
+        if (item.item) {
+          set.add(item.item);
+        }
+      }
+    }
+
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [registrations]);
+
+  /*
+   * Sizes offered in the Size dropdown, scoped to the selected
+   * merchandise type -- picking "T-Shirt" narrows the sizes to the
+   * ones t-shirts actually come in. `hasNoSize` drives a "No size"
+   * option for items (caps, totes) that never carried one.
+   */
+  const { sizeOptions, hasNoSize } = useMemo(() => {
+    const set = new Set<string>();
+    let noSize = false;
+
+    for (const registration of registrations) {
+      for (const item of registration.items ?? []) {
+        if (
+          merchFilter !== "ALL" &&
+          item.item !== merchFilter
+        ) {
+          continue;
+        }
+
+        const size = (item.size ?? "").trim();
+
+        if (size) {
+          set.add(size);
+        } else {
+          noSize = true;
+        }
+      }
+    }
+
+    return {
+      sizeOptions: Array.from(set).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+      hasNoSize: noSize,
+    };
+  }, [registrations, merchFilter]);
+
+  const merchActive =
+    merchFilter !== "ALL" || sizeFilter !== "ALL";
+
   const filtered =
     useMemo(() => {
       const query =
@@ -165,6 +268,15 @@ export default function RegistrationsPage() {
             status === filter;
 
           if (!matchesFilter) {
+            return false;
+          }
+
+          if (
+            merchActive &&
+            !(registration.items ?? []).some(
+              itemMatches
+            )
+          ) {
             return false;
           }
 
@@ -189,6 +301,8 @@ export default function RegistrationsPage() {
       registrations,
       search,
       filter,
+      merchActive,
+      itemMatches,
     ]);
 
   const stats = useMemo(() => {
@@ -221,6 +335,108 @@ export default function RegistrationsPage() {
       pending,
     };
   }, [registrations]);
+
+  /*
+   * Export the current view to a spreadsheet.
+   *
+   * One row per merchandise line rather than per buyer, so sizes are
+   * directly filterable and summable in Excel. Whatever the filters
+   * are showing is what gets exported: narrow to "T-Shirt / L" and
+   * the download is exactly the L t-shirts to pack.
+   *
+   * The file is an HTML table that Excel opens natively as .xls,
+   * which keeps this dependency-free -- a real .xlsx would mean
+   * bundling a spreadsheet writer into the client for no real gain.
+   */
+  function downloadXls() {
+    const escape = (value: unknown) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const headers = [
+      "Registration ID",
+      "Buyer",
+      "Email",
+      "Merchandise",
+      "Size",
+      "Quantity",
+      "Item status",
+      "Registration status",
+      "Total (INR)",
+    ];
+
+    const rows: string[] = [];
+
+    for (const registration of filtered) {
+      const status =
+        getRegistrationStatus(registration);
+
+      const total = Number(registration.total ?? 0);
+
+      const lines = (registration.items ?? []).filter(
+        (item) => (merchActive ? itemMatches(item) : true)
+      );
+
+      /*
+       * A buyer with no line still belongs in an unfiltered export,
+       * so emit one row with blank merchandise rather than dropping
+       * them. (When a filter is active such buyers were already
+       * excluded above.)
+       */
+      const cells = (item: RegistrationItem | null) =>
+        [
+          registration.registration_id,
+          registration.name,
+          registration.email,
+          item?.item ?? "",
+          item ? sizeLabel(item) : "",
+          item?.quantity ?? "",
+          item?.status ?? "",
+          status,
+          total,
+        ]
+          .map((cell) => `<td>${escape(cell)}</td>`)
+          .join("");
+
+      if (lines.length === 0) {
+        rows.push(`<tr>${cells(null)}</tr>`);
+      } else {
+        for (const item of lines) {
+          rows.push(`<tr>${cells(item)}</tr>`);
+        }
+      }
+    }
+
+    const head = headers
+      .map((header) => `<th>${escape(header)}</th>`)
+      .join("");
+
+    const html =
+      `<html><head><meta charset="utf-8"></head><body>` +
+      `<table border="1"><thead><tr>${head}</tr></thead>` +
+      `<tbody>${rows.join("")}</tbody></table>` +
+      `</body></html>`;
+
+    /* Lead with a UTF-8 BOM so Excel reads non-ASCII names correctly. */
+    const blob = new Blob([String.fromCharCode(0xfeff) + html], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `vtapp-registrations-${date}.xls`;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    URL.revokeObjectURL(url);
+  }
 
   const formatAmount = (
     amount: number
@@ -358,6 +574,58 @@ export default function RegistrationsPage() {
               />
             </div>
 
+            <div style={{ flex: "0 1 190px" }}>
+              <label className="sr-only" htmlFor="merch-filter">
+                Filter by merchandise
+              </label>
+
+              <select
+                id="merch-filter"
+                className="select"
+                value={merchFilter}
+                onChange={(event) => {
+                  setMerchFilter(event.target.value);
+                  setSizeFilter("ALL");
+                }}
+              >
+                <option value="ALL">All merchandise</option>
+
+                {merchTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: "0 1 150px" }}>
+              <label className="sr-only" htmlFor="size-filter">
+                Filter by size
+              </label>
+
+              <select
+                id="size-filter"
+                className="select"
+                value={sizeFilter}
+                onChange={(event) =>
+                  setSizeFilter(event.target.value)
+                }
+                disabled={sizeOptions.length === 0 && !hasNoSize}
+              >
+                <option value="ALL">All sizes</option>
+
+                {sizeOptions.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+
+                {hasNoSize && (
+                  <option value={NO_SIZE}>No size</option>
+                )}
+              </select>
+            </div>
+
             <div
               className="segmented"
               role="group"
@@ -381,6 +649,17 @@ export default function RegistrationsPage() {
                 )
               )}
             </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={downloadXls}
+              disabled={loading || filtered.length === 0}
+              title="Download the current view as an Excel file"
+            >
+              <DownloadIcon size={15} />
+              Excel
+            </button>
           </div>
 
           {loading ? (
@@ -425,7 +704,7 @@ export default function RegistrationsPage() {
                   <tr>
                     <th scope="col">Buyer</th>
                     <th scope="col">Registration</th>
-                    <th scope="col">Items</th>
+                    <th scope="col">Merchandise</th>
                     <th scope="col" className="table-num">
                       Total
                     </th>
@@ -466,8 +745,36 @@ export default function RegistrationsPage() {
                         </td>
 
                         <td>
-                          {itemCount}
-                          <span className="dim"> pcs</span>
+                          {items.length === 0 ? (
+                            <span className="dim">—</span>
+                          ) : (
+                            <div className="chip-row">
+                              {items.map((item) => {
+                                const matched =
+                                  merchActive &&
+                                  itemMatches(item);
+
+                                return (
+                                  <span
+                                    key={item.id}
+                                    className={`badge badge-plain${
+                                      matched ? " badge-accent" : ""
+                                    }`}
+                                  >
+                                    {item.item}
+                                    {hasSize(item) &&
+                                      ` · ${sizeLabel(item)}`}
+                                    {item.quantity > 1 &&
+                                      ` ×${item.quantity}`}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <div className="row-meta">
+                            {itemCount} pcs
+                          </div>
                         </td>
 
                         <td className="table-num">
