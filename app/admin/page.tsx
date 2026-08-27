@@ -24,6 +24,9 @@ type Inventory = {
 type DashboardData = {
   success?: boolean;
 
+  /* Present only on a failed response. */
+  error?: string;
+
   registrations: number;
 
   totalAmount: number;
@@ -85,21 +88,51 @@ export default function AdminPage() {
       }
 
       try {
-        const response = await fetch(
-          "/api/dashboard",
-          {
-            cache: "no-store",
-          }
+        const controller =
+          new AbortController();
+
+        const timeout = setTimeout(
+          () => controller.abort(),
+          15000
         );
 
-        if (!response.ok) {
-          throw new Error(
-            "Failed to load dashboard"
+        let response: Response;
+
+        try {
+          response = await fetch(
+            "/api/dashboard",
+            {
+              method: "GET",
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: {
+                Accept:
+                  "application/json",
+              },
+              signal:
+                controller.signal,
+            }
           );
+        } finally {
+          clearTimeout(timeout);
         }
 
         const data: DashboardData =
           await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              `Dashboard API failed (${response.status})`
+          );
+        }
+
+        if (data?.success === false) {
+          throw new Error(
+            data?.error ||
+              "Dashboard API returned an error"
+          );
+        }
 
         setInventory(
           data.inventory ?? []
@@ -134,10 +167,19 @@ export default function AdminPage() {
         );
 
       } catch (error) {
-        console.error(
-          "Admin dashboard error:",
-          error
-        );
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError"
+        ) {
+          console.warn(
+            "Dashboard request timed out."
+          );
+        } else {
+          console.error(
+            "Admin dashboard error:",
+            error
+          );
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
