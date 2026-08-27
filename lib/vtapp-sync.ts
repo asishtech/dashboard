@@ -673,23 +673,55 @@ export async function syncVtapp() {
   }
 }
 
+/*
+ * Per-phase stopwatch.
+ *
+ * The manual sync felt slow but the cost was not attributable, so
+ * each phase is timed and returned to the caller. The admin UI
+ * surfaces the breakdown, which is what tells you whether the delay
+ * is the upstream V-TAPP API or our own writes.
+ */
+function stopwatch() {
+  const timings: Record<string, number> = {};
+
+  return {
+    timings,
+
+    async time<T>(label: string, work: () => Promise<T>): Promise<T> {
+      const started = Date.now();
+
+      try {
+        return await work();
+      } finally {
+        timings[label] =
+          (timings[label] ?? 0) + (Date.now() - started);
+      }
+    },
+  };
+}
+
 async function runSync() {
+  const clock = stopwatch();
+  const startedAt = Date.now();
+
   const { url, key } = vtappApi();
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      "X-API-KEY": key,
-      Accept: "application/json",
-    },
-    cache: "no-store",
+  const payload = await clock.time("upstreamApi", async () => {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-API-KEY": key,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`V-TAPP returned HTTP ${response.status}`);
+    }
+
+    return response.json();
   });
-
-  if (!response.ok) {
-    throw new Error(`V-TAPP returned HTTP ${response.status}`);
-  }
-
-  const payload = await response.json();
 
   const records: Registration[] = Array.isArray(payload)
     ? payload
@@ -716,7 +748,14 @@ async function runSync() {
   if (entries.length === 0) {
     await recordSyncState(true, null);
 
-    return { fetched: records.length, created: 0, updated: 0 };
+    return {
+      fetched: records.length,
+      created: 0,
+      updated: 0,
+      itemsRewritten: 0,
+      durationMs: Date.now() - startedAt,
+      timings: clock.timings,
+    };
   }
 
   const db = supabaseAdmin();
@@ -729,17 +768,21 @@ async function runSync() {
   const idByRegistrationId = new Map<string, number>();
 
   for (const batch of chunk(entries)) {
-    const { data, error } = await db
-      .from("registrations")
-      .upsert(
-        batch.map((entry) => entry.row),
-        { onConflict: "registration_id" }
-      )
-      .select("id,registration_id");
+    const data = await clock.time("upsertRegistrations", async () => {
+      const { data, error } = await db
+        .from("registrations")
+        .upsert(
+          batch.map((entry) => entry.row),
+          { onConflict: "registration_id" }
+        )
+        .select("id,registration_id");
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    });
 
     for (const row of data ?? []) {
       idByRegistrationId.set(
@@ -760,14 +803,18 @@ async function runSync() {
   >();
 
   for (const batch of chunk(registrationIds)) {
-    const { data, error } = await db
-      .from("registration_items")
-      .select("registration_id,item,size,quantity")
-      .in("registration_id", batch);
+    const data = await clock.time("readItems", async () => {
+      const { data, error } = await db
+        .from("registration_items")
+        .select("registration_id,item,size,quantity")
+        .in("registration_id", batch);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    });
 
     for (const row of data ?? []) {
       const bucket =
@@ -843,32 +890,38 @@ async function runSync() {
   }
 
   for (const batch of chunk(staleRegistrationIds)) {
-    const { error } = await db
-      .from("registration_items")
-      .delete()
-      .in("registration_id", batch);
+    await clock.time("deleteItems", async () => {
+      const { error } = await db
+        .from("registration_items")
+        .delete()
+        .in("registration_id", batch);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
+    });
   }
 
   for (const batch of chunk(itemsToInsert)) {
-    const { error } = await db
-      .from("registration_items")
-      .insert(batch);
+    await clock.time("insertItems", async () => {
+      const { error } = await db
+        .from("registration_items")
+        .insert(batch);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
+    });
   }
 
-  await recordSyncState(true, null);
+  await clock.time("syncState", () => recordSyncState(true, null));
 
   return {
     fetched: records.length,
     created,
     updated,
     itemsRewritten: itemsToInsert.length,
+    durationMs: Date.now() - startedAt,
+    timings: clock.timings,
   };
 }

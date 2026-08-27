@@ -82,6 +82,20 @@ actually changed. This matters: `distributions` rows reference
 `registration_items`, so blindly replacing items would discard the
 record of what has already been handed out.
 
+## Realtime
+
+The dashboards subscribe to the distribution tables and refresh the
+moment Postgres reports a change, so a handover on the volunteer
+screen shows up on the admin dashboard without waiting for a poll.
+The header shows **Live** when the subscription is connected and
+**Polling** when it is not.
+
+This is best-effort and optional. Realtime only fires once the tables
+are in the `supabase_realtime` publication, so run
+`supabase/enable-realtime.sql` once against the project to turn it on.
+Until then the dashboards fall back to polling and behave exactly as
+before — the indicator just reads **Polling**. See `lib/use-realtime.ts`.
+
 ## Scripts
 
 ```bash

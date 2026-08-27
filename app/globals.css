@@ -836,6 +836,13 @@ table,
   animation: pulse 2.4s ease-in-out infinite;
 }
 
+/* Realtime is unavailable and we are back to polling. Steady rather
+   than pulsing, so "live" stays visually distinct at a glance. */
+.pulse-idle::before {
+  background: var(--text-dim);
+  animation: none;
+}
+
 
 /* 10. Tables and rows ====================================================== */
 

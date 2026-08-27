@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
-import { usePoll } from "@/lib/use-poll";
+import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   ArrowRightIcon,
   BoxIcon,
@@ -41,6 +41,56 @@ type DashboardData = {
 
   responseTimeMs?: number;
 };
+
+type SyncResult = {
+  fetched?: number;
+  created?: number;
+  updated?: number;
+  durationMs?: number;
+  timings?: Record<string, number>;
+};
+
+/*
+ * Report where the sync actually spent its time.
+ *
+ * Almost all of it is usually the upstream V-TAPP API, which is a
+ * different problem from our own writes being slow, and the two are
+ * indistinguishable from a spinner.
+ */
+function describeSync(result: SyncResult) {
+  const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+  const parts = [
+    `Synced ${result.fetched ?? 0} records`,
+  ];
+
+  if (result.durationMs) {
+    parts.push(`in ${seconds(result.durationMs)}`);
+  }
+
+  const upstream = result.timings?.upstreamApi;
+
+  if (upstream && result.durationMs) {
+    const share = Math.round((upstream / result.durationMs) * 100);
+
+    parts.push(
+      `— ${seconds(upstream)} of that was the V-TAPP API (${share}%)`
+    );
+  }
+
+  return parts.join(" ");
+}
+
+/*
+ * Distribution state is spread across these tables, so a change to
+ * any of them can move a number on this page.
+ */
+const LIVE_TABLES = [
+  "registrations",
+  "registration_items",
+  "distributions",
+  "inventory",
+];
 
 export default function AdminPage() {
   const [inventory, setInventory] =
@@ -235,15 +285,21 @@ export default function AdminPage() {
 
 
   /*
-   * Refresh the dashboard every 60 seconds while the tab is
-   * visible.
+   * Live updates.
    *
-   * This only reads Supabase.
-   * It does NOT call the V-TAPP API.
+   * Postgres pushes the change as soon as a volunteer hands
+   * something over, so the dashboard no longer waits on a poll (or
+   * on someone pressing Sync) to notice. The poll stays on as a
+   * safety net and takes over entirely if realtime is unavailable.
+   *
+   * This only reads Supabase. It does NOT call the V-TAPP API.
    */
-  usePoll(
-    () => loadDashboard(false),
-    60_000
+  const live = useLiveRefresh(
+    LIVE_TABLES,
+    useCallback(
+      () => loadDashboard(false),
+      [loadDashboard]
+    )
   );
 
 
@@ -286,10 +342,6 @@ export default function AdminPage() {
         );
       }
 
-      setSyncMessage(
-        `Synced ${result.fetched ?? 0} records.`
-      );
-
       /*
        * Read the freshly synchronized
        * data without reloading the page.
@@ -299,7 +351,7 @@ export default function AdminPage() {
       await loadDashboard(false);
 
       setSyncMessage(
-        `Synced ${result.fetched ?? 0} records successfully.`
+        describeSync(result)
       );
 
     } catch (error) {
@@ -433,8 +485,18 @@ export default function AdminPage() {
 
           <div className="header-actions">
             {lastUpdated && (
-              <span className="pulse">
-                Updated {formatTime(lastUpdated)}
+              <span
+                className={`pulse${
+                  live === "live" ? "" : " pulse-idle"
+                }`}
+                title={
+                  live === "live"
+                    ? "Changes arrive as they happen"
+                    : "Realtime unavailable, refreshing every 30s"
+                }
+              >
+                {live === "live" ? "Live" : "Polling"} ·{" "}
+                {formatTime(lastUpdated)}
               </span>
             )}
 

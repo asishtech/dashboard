@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
-import { usePoll } from "@/lib/use-poll";
+import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
   InboxIcon,
@@ -25,6 +25,12 @@ type Registration = {
   total?: number | null;
   items?: RegistrationItem[];
 };
+
+const LIVE_TABLES = [
+  "registrations",
+  "registration_items",
+  "distributions",
+];
 
 export default function RegistrationsPage() {
   const [registrations, setRegistrations] =
@@ -98,9 +104,12 @@ export default function RegistrationsPage() {
     loadRegistrations();
   }, [loadRegistrations]);
 
-  usePoll(
-    () => loadRegistrations(),
-    60_000
+  const live = useLiveRefresh(
+    LIVE_TABLES,
+    useCallback(
+      () => loadRegistrations(),
+      [loadRegistrations]
+    )
   );
 
   const getRegistrationStatus =
@@ -243,6 +252,14 @@ export default function RegistrationsPage() {
           </div>
 
           <div className="header-actions">
+            <span
+              className={`pulse${
+                live === "live" ? "" : " pulse-idle"
+              }`}
+            >
+              {live === "live" ? "Live" : "Polling"}
+            </span>
+
             <button
               type="button"
               onClick={() => loadRegistrations(true)}

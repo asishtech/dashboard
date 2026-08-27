@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
-import { usePoll } from "@/lib/use-poll";
+import { useLiveRefresh } from "@/lib/use-realtime";
 import { BoxIcon, ScanIcon } from "@/components/icons";
 
 type InventoryItem = {
@@ -24,6 +24,13 @@ type DashboardData = {
   };
   inventory: InventoryItem[];
 };
+
+const LIVE_TABLES = [
+  "registrations",
+  "registration_items",
+  "distributions",
+  "inventory",
+];
 
 export default function VolunteerPage() {
   const [data, setData] =
@@ -107,9 +114,17 @@ export default function VolunteerPage() {
     loadDashboard("initial");
   }, [loadDashboard]);
 
-  usePoll(
-    () => loadDashboard("silent"),
-    30_000
+  /*
+   * Live updates. The volunteer screen is the one that most needs
+   * to be current: two people scanning at the same counter must see
+   * each other's handovers immediately.
+   */
+  const live = useLiveRefresh(
+    LIVE_TABLES,
+    useCallback(
+      () => loadDashboard("silent"),
+      [loadDashboard]
+    )
   );
 
   async function logout() {
@@ -161,7 +176,13 @@ export default function VolunteerPage() {
           </div>
 
           <div className="header-actions">
-            <span className="pulse">LIVE</span>
+            <span
+              className={`pulse${
+                live === "live" ? "" : " pulse-idle"
+              }`}
+            >
+              {live === "live" ? "Live" : "Polling"}
+            </span>
 
             <button
               type="button"
