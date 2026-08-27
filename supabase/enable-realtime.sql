@@ -17,28 +17,40 @@ begin;
 
 -- 1. Publication -----------------------------------------------------------
 
--- `add table` errors if the table is already a member, so drop and
--- re-add to keep this file safe to re-run.
+-- `alter publication ... add table` has no IF NOT EXISTS form and
+-- errors if the table is already a member; `drop table` likewise has
+-- no IF EXISTS form and errors if it is not. So don't drop at all --
+-- just add each table that is currently missing. Safe to re-run.
 do $$
+declare
+  tbl text;
 begin
-  if exists (
+  if not exists (
     select 1 from pg_publication where pubname = 'supabase_realtime'
   ) then
-    alter publication supabase_realtime drop table if exists
-      public.registrations,
-      public.registration_items,
-      public.distributions,
-      public.inventory;
-  else
     create publication supabase_realtime;
   end if;
-end $$;
 
-alter publication supabase_realtime add table
-  public.registrations,
-  public.registration_items,
-  public.distributions,
-  public.inventory;
+  foreach tbl in array array[
+    'registrations',
+    'registration_items',
+    'distributions',
+    'inventory'
+  ]
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = tbl
+    ) then
+      execute format(
+        'alter publication supabase_realtime add table public.%I',
+        tbl
+      );
+    end if;
+  end loop;
+end $$;
 
 -- 2. Replica identity ------------------------------------------------------
 
