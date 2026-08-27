@@ -1,0 +1,10 @@
+# Netlify picks up Next.js automatically (OpenNext adapter), so most of
+# this is defaults made explicit. The one thing worth pinning is Node:
+# Next 16 requires Node 20.9+, and an unpinned build can drift onto an
+# older default.
+
+[build]
+  command = "next build"
+
+[build.environment]
+  NODE_VERSION = "22"
