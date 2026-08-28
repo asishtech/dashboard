@@ -39,12 +39,8 @@ export async function GET() {
   try {
     const db = supabaseAdmin();
 
-    const [
-      inventoryResult,
-      registrationsResult,
-      itemsResult,
-      qrScansResult,
-    ] = await Promise.all([
+    const [inventoryResult, registrationsResult, itemsResult] =
+      await Promise.all([
         db
           .from("inventory_status")
           .select(
@@ -66,13 +62,6 @@ export async function GET() {
         db
           .from("registration_items")
           .select("quantity,distribution:distributions(status)"),
-
-        db
-          .from("qr_scans")
-          .select(
-            "id,registration_id,event_id,scanned_at",
-            { count: "exact" }
-          ),
       ]);
 
     if (inventoryResult.error) {
@@ -87,10 +76,6 @@ export async function GET() {
       throw itemsResult.error;
     }
 
-    if (qrScansResult.error) {
-      throw qrScansResult.error;
-    }
-
     let totalRevenue = 0;
 
     let eventRevenue = 0;
@@ -100,30 +85,6 @@ export async function GET() {
     let eventRegistrations = 0;
 
     let merchandiseRegistrations = 0;
-
-    /*
-     * QR scan counts
-     *
-     * 513 = Merchandise
-     * 514 = V-TAPP Events
-     */
-
-    let eventQrScanned = 0;
-    let merchandiseQrScanned = 0;
-
-    for (const scan of qrScansResult.data ?? []) {
-      const scanEventId = String(
-        scan.event_id ?? ""
-      );
-
-      if (scanEventId === "514") {
-        eventQrScanned++;
-      }
-
-      if (scanEventId === "513") {
-        merchandiseQrScanned++;
-      }
-    }
 
 
     const eventBreakdown: Record<
@@ -314,21 +275,6 @@ export async function GET() {
 
         merchandiseRegistrations:
           merchandiseRegistrations,
-
-        eventRegistrationCount:
-          eventRegistrations,
-
-        merchandiseRegistrationCount:
-          merchandiseRegistrations,
-
-        eventQrScanned:
-          eventQrScanned,
-
-        merchandiseQrScanned:
-          merchandiseQrScanned,
-
-        qrScans:
-          qrScansResult.count ?? 0,
 
         eventBreakdown:
           Object.values(

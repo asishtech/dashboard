@@ -111,7 +111,13 @@ export default function VolunteerPage() {
   );
 
   useEffect(() => {
-    loadDashboard("initial");
+    const timer = window.setTimeout(() => {
+      loadDashboard("initial");
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [loadDashboard]);
 
   /*

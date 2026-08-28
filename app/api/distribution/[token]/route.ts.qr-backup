@@ -46,13 +46,10 @@ export async function GET(
     .from("registrations")
     .select(
       `
-     id,
-    registration_id,
-    event_id,
-    product_meta,
-    name,
-    email,
-    items:registration_items(
+      registration_id,
+      name,
+      email,
+      items:registration_items(
         id,
         item,
         size,

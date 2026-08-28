@@ -71,7 +71,13 @@ export default function InventoryPage() {
   }
 
   useEffect(() => {
-    loadInventory();
+    const timer = window.setTimeout(() => {
+      loadInventory();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const totals = useMemo(() => {

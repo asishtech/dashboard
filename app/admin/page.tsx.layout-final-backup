@@ -1096,9 +1096,7 @@ export default function AdminPage() {
 
         {/* Merchandise */}
 
-                <div className="dashboard-event-layout mb-8">
-
-          <div className="dashboard-event-left">
+        <div className="grid grid-main mb-8">
 
           <section className="panel">
 
@@ -1192,6 +1190,110 @@ export default function AdminPage() {
 
           </section>
 
+
+          <section className="panel">
+
+            <div className="panel-header">
+
+              <div>
+
+                <h2 className="panel-title">
+                  Ticket Breakdown
+                </h2>
+
+                <p className="panel-subtitle">
+                  Tickets sold and revenue
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div className="panel-body stack">
+
+              {loading ? (
+
+                [1, 2, 3, 4].map((row) => (
+
+                  <div key={row}>
+
+                    <div className="skeleton skeleton-line" />
+
+                    <div className="skeleton skeleton-line" />
+
+                  </div>
+
+                ))
+
+              ) : ticketBreakdown.length === 0 ? (
+
+                <div className="empty">
+
+                  <p className="empty-title">
+                    No ticket data yet
+                  </p>
+
+                </div>
+
+              ) : (
+
+                [...ticketBreakdown]
+                  .sort(
+                    (a, b) =>
+                      b.registrations -
+                      a.registrations
+                  )
+                  .slice(0, 10)
+                  .map((ticket) => (
+
+                    <div
+                      className="meter"
+                      key={ticket.ticket}
+                    >
+
+                      <div className="meter-head">
+
+                        <span className="meter-label">
+                          {ticket.ticket}
+                        </span>
+
+                        <span className="meter-value">
+                          {ticket.registrations}
+                        </span>
+
+                      </div>
+
+                      <div className="meter-foot">
+
+                        <span>
+                          {ticket.registrations} registrations
+                        </span>
+
+                        <span>
+                          {formatAmount(ticket.revenue)}
+                        </span>
+
+                      </div>
+
+                    </div>
+
+                  ))
+
+              )}
+
+            </div>
+
+          </section>
+
+        </div>
+
+
+        {/* Merchandise */}
+
+        <div className="grid grid-main mb-8">
+
+          {/* Stock levels */}
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -1289,7 +1391,6 @@ export default function AdminPage() {
 
 
           {/* Distribution */}
-
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -1351,109 +1452,8 @@ export default function AdminPage() {
               </p>
             </div>
           </section>
-
-          </div>
-
-          <div className="dashboard-event-right">
-
-          <section className="panel">
-
-            <div className="panel-header">
-
-              <div>
-
-                <h2 className="panel-title">
-                  Ticket Breakdown
-                </h2>
-
-                <p className="panel-subtitle">
-                  Tickets sold and revenue
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="panel-body stack">
-
-              {loading ? (
-
-                [1, 2, 3, 4].map((row) => (
-
-                  <div key={row}>
-
-                    <div className="skeleton skeleton-line" />
-
-                    <div className="skeleton skeleton-line" />
-
-                  </div>
-
-                ))
-
-              ) : ticketBreakdown.length === 0 ? (
-
-                <div className="empty">
-
-                  <p className="empty-title">
-                    No ticket data yet
-                  </p>
-
-                </div>
-
-              ) : (
-
-                [...ticketBreakdown]
-                  .sort(
-                    (a, b) =>
-                      b.registrations -
-                      a.registrations
-                  )
-                  .slice(0, 10)
-                  .map((ticket) => (
-
-                    <div
-                      className="meter"
-                      key={ticket.ticket}
-                    >
-
-                      <div className="meter-head">
-
-                        <span className="meter-label">
-                          {ticket.ticket}
-                        </span>
-
-                        <span className="meter-value">
-                          {ticket.registrations}
-                        </span>
-
-                      </div>
-
-                      <div className="meter-foot">
-
-                        <span>
-                          {ticket.registrations} registrations
-                        </span>
-
-                        <span>
-                          {formatAmount(ticket.revenue)}
-                        </span>
-
-                      </div>
-
-                    </div>
-
-                  ))
-
-              )}
-
-            </div>
-
-          </section>
-
-          </div>
-
         </div>
+
 
         {/* Navigation */}
         <section className="grid grid-3">

@@ -1545,3 +1545,34 @@ table,
     background: var(--surface-raised);
   }
 }
+
+/* Dashboard two-column event layout */
+
+.dashboard-event-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.dashboard-event-left,
+.dashboard-event-right {
+  min-width: 0;
+}
+
+.dashboard-event-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.dashboard-event-right {
+  align-self: start;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-event-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
