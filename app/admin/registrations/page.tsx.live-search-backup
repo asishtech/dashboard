@@ -52,9 +52,6 @@ export default function RegistrationsPage() {
   const [registrations, setRegistrations] =
     useState<Registration[]>([]);
 
-  const [expandedBuyer, setExpandedBuyer] =
-    useState<string | null>(null);
-
   const [loading, setLoading] =
     useState(true);
 
@@ -289,6 +286,59 @@ export default function RegistrationsPage() {
     merchandise: number;
   };
 
+  const groupedBuyers = useMemo(() => {
+    const groups = new Map<string, BuyerGroup>();
+
+    for (const registration of registrations) {
+      const email = String(
+        registration.email ?? ""
+      ).trim().toLowerCase();
+
+      const key =
+        email || `registration:${registration.registration_id}`;
+
+      const existing = groups.get(key);
+
+      const eventId = String(
+        registration.event_id ?? ""
+      );
+
+      const isMerchandise = eventId === "513";
+
+      if (existing) {
+        existing.registrations.push(registration);
+        existing.total += Number(
+          registration.total ?? 0
+        );
+
+        if (isMerchandise) {
+          existing.merchandise++;
+        } else {
+          existing.events++;
+        }
+      } else {
+        groups.set(key, {
+          email: String(
+            registration.email ?? ""
+          ),
+          name: String(
+            registration.name ?? "Unknown"
+          ),
+          registrations: [registration],
+          total: Number(
+            registration.total ?? 0
+          ),
+          events: isMerchandise ? 0 : 1,
+          merchandise: isMerchandise ? 1 : 0,
+        });
+      }
+    }
+
+    return Array.from(groups.values()).sort(
+      (a, b) => b.total - a.total
+    );
+  }, [registrations]);
+
   const filtered =
     useMemo(() => {
       const query =
@@ -344,89 +394,6 @@ export default function RegistrationsPage() {
       merchActive,
       itemMatches,
     ]);
-
-  const groupedBuyers = useMemo(() => {
-    /*
-     * Build complete buyer histories from ALL registrations.
-     *
-     * This is deliberately independent from `filtered`.
-     * A buyer who has Event 514 + Merchandise 513 must still
-     * see BOTH registrations after clicking their email.
-     */
-    const allGroups = new Map<string, BuyerGroup>();
-
-    for (const registration of registrations) {
-      const email = String(
-        registration.email ?? ""
-      ).trim().toLowerCase();
-
-      const key =
-        email ||
-        `registration:${registration.registration_id}`;
-
-      const existing = allGroups.get(key);
-
-      const eventId = String(
-        registration.event_id ?? ""
-      );
-
-      const isMerchandise = eventId === "513";
-
-      if (existing) {
-        existing.registrations.push(registration);
-
-        existing.total += Number(
-          registration.total ?? 0
-        );
-
-        if (isMerchandise) {
-          existing.merchandise++;
-        } else {
-          existing.events++;
-        }
-      } else {
-        allGroups.set(key, {
-          email: String(
-            registration.email ?? ""
-          ),
-          name: String(
-            registration.name ?? "Unknown"
-          ),
-          registrations: [registration],
-          total: Number(
-            registration.total ?? 0
-          ),
-          events: isMerchandise ? 0 : 1,
-          merchandise: isMerchandise ? 1 : 0,
-        });
-      }
-    }
-
-    /*
-     * `filtered` determines which buyers are visible.
-     *
-     * It does NOT replace the buyer's complete registration
-     * history.
-     */
-    const visibleKeys = new Set<string>();
-
-    for (const registration of filtered) {
-      const email = String(
-        registration.email ?? ""
-      ).trim().toLowerCase();
-
-      const key =
-        email ||
-        `registration:${registration.registration_id}`;
-
-      visibleKeys.add(key);
-    }
-
-    return Array.from(allGroups.entries())
-      .filter(([key]) => visibleKeys.has(key))
-      .map(([, buyer]) => buyer)
-      .sort((a, b) => b.total - a.total);
-  }, [registrations, filtered]);
 
   const stats = useMemo(() => {
     let revenue = 0;
@@ -977,8 +944,7 @@ export default function RegistrationsPage() {
                       .map(() => "Merchandise");
 
                     return (
-                      <>
-                        <tr key={buyer.email}>
+                      <tr key={buyer.email}>
                         <td>
                           <div className="row-title">
                             {buyer.name}
@@ -1110,155 +1076,19 @@ export default function RegistrationsPage() {
                         </td>
 
                         <td className="table-num">
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() =>
-                              setExpandedBuyer(
-                                expandedBuyer === buyer.email
-                                  ? null
-                                  : buyer.email
+                          <Link
+                            href={
+                              "/admin/registrations/" +
+                              encodeURIComponent(
+                                buyer.registrations[0].registration_id
                               )
                             }
+                            className="btn btn-ghost btn-sm"
                           >
-                            {expandedBuyer === buyer.email
-                              ? "Hide"
-                              : `View ${purchaseCount}`}
-                          </button>
+                            View
+                          </Link>
                         </td>
-                        </tr>
-
-                        {expandedBuyer === buyer.email && (
-                          <tr>
-                            <td colSpan={9}>
-                              <div className="panel">
-                                <div className="panel-header">
-                                  <div>
-                                    <h3 className="panel-title">
-                                      Complete Buyer History
-                                    </h3>
-
-                                    <p className="panel-subtitle">
-                                      {buyer.name} · {buyer.email}
-                                    </p>
-                                  </div>
-
-                                  <span className="badge">
-                                    {purchaseCount} registration
-                                    {purchaseCount === 1 ? "" : "s"}
-                                  </span>
-                                </div>
-
-                                <div className="panel-body">
-                                  <div className="table-wrap">
-                                    <table className="table">
-                                      <thead>
-                                        <tr>
-                                          <th>Registration</th>
-                                          <th>Type</th>
-                                          <th>Ticket</th>
-                                          <th>Merchandise</th>
-                                          <th>Status</th>
-                                          <th className="table-num">
-                                            Total
-                                          </th>
-                                          <th>
-                                            <span className="sr-only">
-                                              Action
-                                            </span>
-                                          </th>
-                                        </tr>
-                                      </thead>
-
-                                      <tbody>
-                                        {buyer.registrations.map(
-                                          (registration) => {
-                                            const eventId = String(
-                                              registration.event_id ?? ""
-                                            );
-
-                                            const isMerchandise =
-                                              eventId === "513";
-
-                                            return (
-                                              <tr
-                                                key={
-                                                  registration.registration_id
-                                                }
-                                              >
-                                                <td>
-                                                  <span className="row-meta">
-                                                    {
-                                                      registration.registration_id
-                                                    }
-                                                  </span>
-                                                </td>
-
-                                                <td>
-                                                  <span className="badge">
-                                                    {isMerchandise
-                                                      ? "Merchandise"
-                                                      : eventId === "514"
-                                                        ? "V-TAPP Event"
-                                                        : `Event ${eventId || "Unknown"}`}
-                                                  </span>
-                                                </td>
-
-                                                <td>
-                                                  {getTicket(registration)}
-                                                </td>
-
-                                                <td>
-                                                  {(registration.items ?? [])
-                                                    .map(
-                                                      (item) =>
-                                                        `${item.item}${item.size ? ` / ${item.size}` : ""} × ${item.quantity}`
-                                                    )
-                                                    .join(", ") || "—"}
-                                                </td>
-
-                                                <td>
-                                                  <span className="badge">
-                                                    {getRegistrationStatus(
-                                                      registration
-                                                    )}
-                                                  </span>
-                                                </td>
-
-                                                <td className="table-num">
-                                                  {formatAmount(
-                                                    Number(
-                                                      registration.total ?? 0
-                                                    )
-                                                  )}
-                                                </td>
-
-                                                <td className="table-num">
-                                                  <Link
-                                                    href={
-                                                      "/admin/registrations/" +
-                                                      encodeURIComponent(
-                                                        registration.registration_id
-                                                      )
-                                                    }
-                                                    className="btn btn-ghost btn-sm"
-                                                  >
-                                                    Open
-                                                  </Link>
-                                                </td>
-                                              </tr>
-                                            );
-                                          }
-                                        )}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
+                      </tr>
                     );
                   })}
                 </tbody>
