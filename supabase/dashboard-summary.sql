@@ -28,7 +28,13 @@ as $$
 with
   reg as (
     select
-      coalesce(nullif(r.event_id, ''), 'unknown') as event_id,
+      /*
+       * `event_id` is text on `registrations` but bigint on
+       * `qr_scans` in some deployments. Cast before comparing so the
+       * same file works against either.
+       */
+      coalesce(nullif(btrim(r.event_id::text), ''), 'unknown')
+        as event_id,
       coalesce(r.total, 0)                        as amount,
       /*
        * Ticket label out of `product_meta`, which looks like
@@ -118,9 +124,9 @@ with
 
   scans as (
     select
-      count(*)                                 as total,
-      count(*) filter (where event_id = '514') as event_scanned,
-      count(*) filter (where event_id = '513') as merch_scanned
+      count(*)                                         as total,
+      count(*) filter (where event_id::text = '514')   as event_scanned,
+      count(*) filter (where event_id::text = '513')   as merch_scanned
     from public.qr_scans
   ),
 

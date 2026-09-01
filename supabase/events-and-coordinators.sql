@@ -106,19 +106,19 @@ commit;
 
 insert into public.events (event_id, name, event_date)
 select
-  r.event_id,
+  r.event_id::text,
   coalesce(
     nullif(
       btrim(split_part(coalesce(r.product_meta, ''), ' - Date:', 1)),
       ''
     ),
-    'Event ' || r.event_id
+    'Event ' || r.event_id::text
   ) as name,
   max(r.event_date) as event_date
 from public.registrations r
 where r.event_id is not null
-  and r.event_id <> ''
-group by r.event_id, 2
+  and btrim(r.event_id::text) <> ''
+group by 1, 2
 on conflict (event_id) do nothing;
 
 -- 5. Per-event aggregates --------------------------------------------------
@@ -134,20 +134,27 @@ parallel safe
 as $$
 with per_event as (
   select
-    r.event_id,
+    /*
+     * `event_id` is text on `registrations` but bigint on `qr_scans`
+     * in some deployments, and `events.event_id` is the canonical
+     * text key. Cast both sides so the joins below hold whatever the
+     * underlying column type happens to be.
+     */
+    r.event_id::text            as event_id,
     count(*)                    as registrations,
     coalesce(sum(r.total), 0)   as revenue,
     count(distinct r.email)     as participants,
     max(r.created_at)           as last_registration
   from public.registrations r
-  where r.event_id is not null and r.event_id <> ''
-  group by r.event_id
+  where r.event_id is not null
+    and btrim(r.event_id::text) <> ''
+  group by 1
 ),
 scans as (
-  select event_id, count(*) as scanned
+  select event_id::text as event_id, count(*) as scanned
   from public.qr_scans
   where event_id is not null
-  group by event_id
+  group by 1
 )
 select coalesce(
   json_agg(
@@ -197,7 +204,7 @@ select coalesce(
   '[]'::json
 )
 from public.registrations r
-where r.event_id = p_event_id;
+where r.event_id::text = p_event_id;
 $$;
 
 revoke all on function public.event_summaries()          from public;
