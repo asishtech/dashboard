@@ -72,7 +72,7 @@ export default function LoginPage() {
           type="button"
           onClick={loginWithGoogle}
           disabled={loading}
-          className="btn btn-block mt-8"
+          className="btn btn-primary btn-block mt-8"
         >
           {loading ? (
             <>

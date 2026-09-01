@@ -26,25 +26,30 @@
 /* 1. Tokens ================================================================ */
 
 :root {
-  /* -- Raw palette. Do not reference these directly in components. -- */
-  --c-bg:             #08090b;
-  --c-surface-1:      #101215;
-  --c-surface-2:      #161a1f;
-  --c-surface-3:      #1d2228;
+  /* -- Raw palette. Do not reference these directly in components. --
+     Surfaces are translucent so the background glow reads through
+     them. Alpha is kept high (0.82) so the composite stays dark and
+     text contrast does not swing depending on where a card lands. */
+  --c-bg:             #0a0910;
+  --c-surface-1:      rgb(22 20 31 / 0.82);
+  --c-surface-2:      rgb(31 28 43 / 0.82);
+  --c-surface-3:      rgb(42 38 56 / 0.80);
 
-  --c-border:         #23272e;
-  --c-border-strong:  #2f343c;
+  --c-border:         rgb(255 255 255 / 0.10);
+  --c-border-strong:  rgb(255 255 255 / 0.20);
 
-  --c-text:           #e8eaed;
-  --c-text-muted:     #9aa2ab;
-  --c-text-dim:       #848c95;
+  --c-text:           #f4f2f8;
+  --c-text-muted:     #b8b2c8;
+  --c-text-dim:       #9a94ad;
 
   --c-accent:         #f97316;
+  --c-accent-2:       #e0399a;
+  --c-accent-3:       #8b5cf6;
   --c-accent-hover:   #fb8c3c;
 
   --c-green:          #4ade80;
   --c-amber:          #e8b45b;
-  --c-red:            #f87171;
+  --c-red:            #ff7a8a;
 
   /* -- Semantic surfaces -- */
   --bg:               var(--c-bg);
@@ -67,9 +72,18 @@
         2.8:1, which fails AA. Dark text on the same fill is 8:1. -- */
   --accent:           var(--c-accent);
   --accent-hover:     var(--c-accent-hover);
-  --accent-soft:      rgb(249 115 22 / 0.12);
-  --accent-line:      rgb(249 115 22 / 0.35);
-  --on-accent:        #1a0f05;
+  --accent-soft:      rgb(249 115 22 / 0.14);
+  --accent-line:      rgb(249 115 22 / 0.38);
+
+  /* White clears 4.5:1 on the darker half of this gradient, so the
+     primary button keeps white text rather than the near-black the
+     flat orange needed. */
+  --on-accent:        #ffffff;
+
+  --gradient:         linear-gradient(100deg, var(--c-accent), var(--c-accent-2));
+  --gradient-wide:    linear-gradient(140deg, var(--c-accent), var(--c-accent-2) 55%, var(--c-accent-3));
+  --gradient-text:    linear-gradient(100deg, #ffffff, #ffd9bd 55%, #e9c8ff);
+  --glow-accent:      0 10px 28px rgb(224 57 154 / 0.40);
 
   /* -- Status. Always paired with an icon or text label, never colour alone. */
   --success:          var(--c-green);
@@ -92,9 +106,9 @@
   --space-16: 64px;
 
   /* -- Radius -- */
-  --radius-sm:   4px;
-  --radius:      8px;
-  --radius-lg:   12px;
+  --radius-sm:   6px;
+  --radius:      12px;
+  --radius-lg:   20px;
   --radius-full: 999px;
 
   /* -- Type scale -- */
@@ -116,9 +130,9 @@
     "Liberation Mono", monospace;
 
   /* -- Elevation -- */
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-2: 0 8px 24px rgb(0 0 0 / 0.45);
-  --shadow-3: 0 24px 64px rgb(0 0 0 / 0.55);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-2: 0 12px 32px rgb(0 0 0 / 0.5);
+  --shadow-3: 0 30px 80px rgb(0 0 0 / 0.6);
 
   /* -- Motion -- */
   --dur-fast: 120ms;
@@ -242,14 +256,25 @@ table,
 /* 3. Layout ================================================================ */
 
 /* Page shell. The grid is a texture, kept far below text contrast. */
+/* Two fixed radial glows behind everything. `fixed` so they stay put
+   while long pages scroll, rather than sliding away. */
 .app {
   flex: 1;
   min-height: 100dvh;
   background-color: var(--bg);
   background-image:
-    linear-gradient(rgb(255 255 255 / 0.016) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.016) 1px, transparent 1px);
-  background-size: 44px 44px;
+    radial-gradient(
+      900px 520px at 12% -8%,
+      rgb(249 115 22 / 0.26),
+      transparent 62%
+    ),
+    radial-gradient(
+      820px 480px at 92% 104%,
+      rgb(139 92 246 / 0.24),
+      transparent 62%
+    );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 .container {
@@ -281,7 +306,7 @@ table,
   display: block;
   margin-bottom: var(--space-2);
 
-  color: var(--accent);
+  color: #f7b98a;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   font-weight: 700;
@@ -289,9 +314,25 @@ table,
   text-transform: uppercase;
 }
 
+/* Gradient headline. Every stop is near-white, so contrast stays
+   high across the whole sweep; `color` is the fallback wherever
+   background-clip is unsupported. */
 .page-title {
   font-size: var(--text-2xl);
-  font-weight: 650;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+
+  color: var(--text);
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@supports not (background-clip: text) {
+  .page-title {
+    -webkit-text-fill-color: currentColor;
+  }
 }
 
 .page-subtitle {
@@ -367,10 +408,15 @@ table,
 
 /* 4. Surfaces ============================================================== */
 
+/* Frosted glass. The blur is what makes the glow read *through* the
+   card instead of stopping at its edge. */
 .panel {
   background: var(--surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
 }
 
 .panel-header {
@@ -416,8 +462,11 @@ table,
   padding: var(--space-5);
 
   background: var(--surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
 
   transition:
     border-color var(--dur) var(--ease),
@@ -485,7 +534,17 @@ table,
 }
 
 .eyebrow-accent {
-  color: var(--accent);
+  color: #f7b98a;
+}
+
+/* On a centred card the eyebrow reads better as a pill. */
+.center-card .eyebrow,
+.center-card .page-eyebrow {
+  display: inline-block;
+  padding: 5px var(--space-3);
+  background: rgb(255 255 255 / 0.07);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: var(--radius-full);
 }
 
 .mono {
@@ -515,8 +574,8 @@ table,
   justify-content: center;
   gap: var(--space-2);
 
-  /* 44px keeps the target comfortable on the volunteers' phones. */
-  min-height: 44px;
+  /* 46px keeps the target comfortable on the volunteers' phones. */
+  min-height: 46px;
   padding: 0 var(--space-4);
 
   background: var(--surface-raised);
@@ -550,19 +609,30 @@ table,
 
 /* One primary action per screen. */
 .btn-primary {
-  background: var(--accent);
+  background: var(--gradient);
   color: var(--on-accent);
-  border-color: var(--accent);
-  font-weight: 650;
+  border-color: transparent;
+  font-weight: 700;
+  box-shadow: var(--glow-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  filter: brightness(1.08);
+  border-color: transparent;
 }
 
 .btn-primary:active:not(:disabled) {
-  background: var(--accent);
+  filter: brightness(0.96);
+}
+
+/* Google's brand guidelines require the coloured mark on a light
+   background. On the gradient button it also just reads as mud, so
+   it gets its own white chip. */
+.btn-primary > svg[aria-hidden]:first-child:not(.btn-spinner) {
+  padding: 3px;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  box-sizing: content-box;
 }
 
 .btn-ghost {
@@ -632,15 +702,23 @@ table,
 .stat {
   padding: var(--space-5);
   background: var(--surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
 }
 
 /* A hairline of accent marks the primary metric on a screen. */
 .stat-feature {
-  border-color: var(--accent-line);
+  border-color: rgb(224 57 154 / 0.32);
   background:
-    linear-gradient(var(--accent-soft), transparent 60%),
+    linear-gradient(
+      150deg,
+      rgb(249 115 22 / 0.16),
+      rgb(224 57 154 / 0.10) 55%,
+      transparent 80%
+    ),
     var(--surface);
 }
 
@@ -714,7 +792,7 @@ table,
 
 .meter-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--gradient);
   border-radius: inherit;
   transition: width var(--dur) var(--ease);
 }
@@ -989,10 +1067,10 @@ table,
 .input,
 .select {
   width: 100%;
-  min-height: 44px;
+  min-height: 46px;
   padding: 0 var(--space-3);
 
-  background: var(--bg);
+  background: rgb(0 0 0 / 0.28);
   color: var(--text);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -1321,8 +1399,10 @@ table,
   text-align: center;
 
   background: var(--surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: calc(var(--radius-lg) + 2px);
   box-shadow: var(--shadow-3);
 }
 
@@ -1333,14 +1413,15 @@ table,
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 64px;
+  height: 64px;
   margin: 0 auto var(--space-5);
 
-  color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
+  color: #fff;
+  background: var(--gradient-wide);
+  border: 0;
   border-radius: var(--radius-lg);
+  box-shadow: 0 12px 32px rgb(224 57 154 / 0.45);
 }
 
 
