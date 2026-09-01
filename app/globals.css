@@ -1312,17 +1312,32 @@ table,
 }
 
 /* Segmented filter control. */
+/* Scrolls rather than overflowing the page. Five filters with counts
+   measure ~389px, which is wider than a 375px phone, and letting that
+   push the document into horizontal scroll is worse than a tab strip
+   the user swipes. */
 .segmented {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+
   padding: 3px;
   background: var(--surface-inset);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+
 .segmented-item {
+  flex: none;
   min-height: 34px;
   padding: 0 var(--space-4);
+  white-space: nowrap;
 
   background: transparent;
   color: var(--text-muted);

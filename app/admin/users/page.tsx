@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import {
   AlertIcon,
   CheckIcon,
+  SearchIcon,
   UsersIcon,
 } from "@/components/icons";
 
 type StaffRole = "admin" | "faculty" | "volunteer" | "buyer";
+
+type Filter = StaffRole | "ALL" | "DISABLED";
 
 type StaffUser = {
   id: number;
@@ -58,6 +61,9 @@ export default function AdminUsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("ALL");
 
   async function loadUsers() {
     try {
@@ -156,7 +162,6 @@ export default function AdminUsersPage() {
       }
 
       setEmail("");
-      setRole("volunteer");
 
       setMessage(
         `${normalizedEmail} added as ${role}.`
@@ -215,9 +220,59 @@ export default function AdminUsersPage() {
     }
   }
 
+  /*
+   * Almost everyone here is faculty -- the coordinator seed created
+   * 129 invites in one go. Without a filter and a search box this is
+   * one long list nobody can find anything in.
+   */
+  const counts = useMemo(() => {
+    const by: Record<string, number> = {
+      admin: 0,
+      faculty: 0,
+      volunteer: 0,
+      buyer: 0,
+    };
+
+    let disabled = 0;
+
+    for (const u of users) {
+      by[u.role] = (by[u.role] ?? 0) + 1;
+      if (!u.active) disabled++;
+    }
+
+    return { by, disabled };
+  }, [users]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return users.filter((u) => {
+      if (filter === "DISABLED" && u.active) return false;
+      if (
+        filter !== "ALL" &&
+        filter !== "DISABLED" &&
+        u.role !== filter
+      ) {
+        return false;
+      }
+
+      if (!q) return true;
+
+      return u.email.toLowerCase().includes(q);
+    });
+  }, [users, search, filter]);
+
+  const tabs: { key: Filter; label: string; n: number }[] = [
+    { key: "ALL", label: "All", n: users.length },
+    { key: "admin", label: "Admins", n: counts.by.admin },
+    { key: "volunteer", label: "Volunteers", n: counts.by.volunteer },
+    { key: "faculty", label: "Faculty", n: counts.by.faculty },
+    { key: "DISABLED", label: "Disabled", n: counts.disabled },
+  ];
+
   return (
     <main className="app">
-      <div className="container container-narrow">
+      <div className="container">
 
         <header className="page-header">
           <div>
@@ -226,11 +281,18 @@ export default function AdminUsersPage() {
             <h1 className="page-title">Staff Accounts</h1>
 
             <p className="page-subtitle">
-              Who can reach the admin and volunteer tools
+              Who can sign in, and what they can reach
             </p>
           </div>
 
           <div className="header-actions">
+            <Link
+              href="/admin/coordinators"
+              className="btn btn-ghost btn-sm"
+            >
+              Coordinators
+            </Link>
+
             <Link href="/admin" className="btn btn-ghost btn-sm">
               Dashboard
             </Link>
@@ -238,7 +300,6 @@ export default function AdminUsersPage() {
             <LogoutButton />
           </div>
         </header>
-
 
         {error && (
           <div className="banner banner-danger" role="alert">
@@ -258,193 +319,261 @@ export default function AdminUsersPage() {
           </div>
         )}
 
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Can sign in</span>
+            <strong className="stat-value">
+              {loading ? "—" : users.length - counts.disabled}
+            </strong>
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : counts.disabled > 0
+                  ? `${counts.disabled} disabled`
+                  : "Nobody disabled"}
+            </span>
+          </div>
 
-        <div className="grid grid-main">
+          <div className="stat">
+            <span className="stat-label">Admins</span>
+            <strong className="stat-value">
+              {loading ? "—" : counts.by.admin}
+            </strong>
+            <span className="stat-meta">Full access</span>
+          </div>
 
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Invite a user</h2>
+          <div className="stat">
+            <span className="stat-label">Volunteers</span>
+            <strong className="stat-value">
+              {loading ? "—" : counts.by.volunteer}
+            </strong>
+            <span className="stat-meta">Scan and distribute</span>
+          </div>
 
-                <p className="panel-subtitle">
-                  The profile is created when they first sign in.
-                </p>
-              </div>
+          <div className="stat">
+            <span className="stat-label">Faculty</span>
+            <strong className="stat-value">
+              {loading ? "—" : counts.by.faculty}
+            </strong>
+            <span className="stat-meta">Their own events</span>
+          </div>
+        </section>
+
+        {/* Invite */}
+        <section className="panel mb-8">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Invite someone</h2>
+
+              <p className="panel-subtitle">
+                The role attaches when they first sign in with Google.
+                Faculty also need an event, which is set on the{" "}
+                <Link href="/admin/coordinators" className="link">
+                  coordinators
+                </Link>{" "}
+                screen.
+              </p>
+            </div>
+          </div>
+
+          <form className="panel-body grant-form" onSubmit={addUser}>
+            <div className="field mb-0">
+              <label className="label" htmlFor="staff-email">
+                Google email
+              </label>
+
+              <input
+                id="staff-email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                className="input"
+                placeholder="name@vitap.ac.in"
+                autoComplete="email"
+                required
+                disabled={saving}
+              />
             </div>
 
-            <form className="panel-body" onSubmit={addUser}>
-              <div className="field">
-                <label className="label" htmlFor="staff-email">
-                  Google email{" "}
-                  <span className="required" aria-hidden="true">
-                    *
-                  </span>
-                </label>
+            <div className="field mb-0">
+              <label className="label" htmlFor="staff-role">
+                Role
+              </label>
 
-                <input
-                  id="staff-email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  type="email"
-                  className="input"
-                  placeholder="name@example.com"
-                  autoComplete="email"
-                  required
-                  disabled={saving}
-                />
-
-                <p className="help">
-                  Must match the Google account they sign in with.
-                </p>
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="staff-role">
-                  Role{" "}
-                  <span className="required" aria-hidden="true">
-                    *
-                  </span>
-                </label>
-
-                <select
-                  id="staff-role"
-                  className="select"
-                  value={role}
-                  onChange={(event) =>
-                    setRole(event.target.value as StaffRole)
-                  }
-                  disabled={saving}
-                >
-                  {ROLES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="help">
-                  {ROLES.find((r) => r.value === role)?.help}
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                className="btn btn-primary btn-block"
+              <select
+                id="staff-role"
+                className="select"
+                value={role}
+                onChange={(event) =>
+                  setRole(event.target.value as StaffRole)
+                }
                 disabled={saving}
               >
-                {saving && <span className="btn-spinner" />}
-                {saving ? "Adding" : "Add user"}
-              </button>
-            </form>
-          </section>
-
-
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Authorized users</h2>
-
-                <p className="panel-subtitle">
-                  {loading
-                    ? " "
-                    : `${users.length} account${
-                        users.length === 1 ? "" : "s"
-                      }`}
-                </p>
-              </div>
+                {ROLES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {loading ? (
-              <div className="panel-body stack">
-                {[1, 2, 3].map((row) => (
-                  <div key={row}>
-                    <div className="skeleton skeleton-line" />
-                    <div
-                      className="skeleton skeleton-line"
-                      style={{ width: "45%" }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : users.length === 0 ? (
-              <div className="empty">
-                <div className="empty-icon">
-                  <UsersIcon size={22} />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving}
+            >
+              {saving && <span className="btn-spinner" />}
+              {saving ? "Adding" : "Invite"}
+            </button>
+          </form>
+
+          <div className="panel-footer">
+            {ROLES.find((r) => r.value === role)?.help}
+          </div>
+        </section>
+
+        {/* List */}
+        <section className="panel">
+          <div className="panel-header">
+            <div className="search" style={{ flex: "1 1 260px" }}>
+              <span className="search-icon">
+                <SearchIcon size={16} />
+              </span>
+
+              <label className="sr-only" htmlFor="staff-search">
+                Search staff by email
+              </label>
+
+              <input
+                id="staff-search"
+                type="search"
+                className="input"
+                placeholder="Search by email"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Filter by role"
+            >
+              {tabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className="segmented-item"
+                  aria-pressed={filter === t.key}
+                  onClick={() => setFilter(t.key)}
+                >
+                  {t.label}
+                  {t.n > 0 ? ` ${t.n}` : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="panel-body stack">
+              {[1, 2, 3, 4].map((row) => (
+                <div key={row}>
+                  <div className="skeleton skeleton-line" />
+                  <div
+                    className="skeleton skeleton-line"
+                    style={{ width: "45%" }}
+                  />
                 </div>
-
-                <p className="empty-title">No staff yet</p>
-
-                <p className="empty-body">
-                  Add a Google email on the left to grant access.
-                </p>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon">
+                <UsersIcon size={22} />
               </div>
-            ) : (
-              <div className="panel-body-flush">
-                {users.map((user) => (
-                  <div className="row-card" key={user.id}>
-                    <label className="access-toggle">
-                      <input
-                        type="checkbox"
-                        checked={user.active}
-                        disabled={savingId === user.id}
-                        onChange={(event) =>
-                          updateUser(user, {
-                            active: event.target.checked,
-                          })
-                        }
-                      />
 
-                      <span className="sr-only">
-                        Allow {user.email} to sign in
-                      </span>
-                    </label>
+              <p className="empty-title">
+                {users.length === 0
+                  ? "No staff yet"
+                  : "Nothing matches this view"}
+              </p>
 
-                    <div className="truncate" style={{ flex: 1 }}>
-                      <div className="row-title truncate">
-                        {user.email}
-                      </div>
-
-                      <div className="row-meta">
-                        {user.active
-                          ? ROLES.find((r) => r.value === user.role)
-                              ?.help ?? user.role
-                          : "No access"}
-                      </div>
-                    </div>
-
-                    <label className="sr-only" htmlFor={`role-${user.id}`}>
-                      Role for {user.email}
-                    </label>
-
-                    <select
-                      id={`role-${user.id}`}
-                      className="select select-inline"
-                      value={user.role}
-                      disabled={savingId === user.id || !user.active}
+              <p className="empty-body">
+                {users.length === 0
+                  ? "Invite a Google email above to grant access."
+                  : "Try a different email or clear the filter."}
+              </p>
+            </div>
+          ) : (
+            <div className="panel-body-flush">
+              {filtered.map((user) => (
+                <div className="row-card" key={user.id}>
+                  <label className="access-toggle">
+                    <input
+                      type="checkbox"
+                      checked={user.active}
+                      disabled={savingId === user.id}
                       onChange={(event) =>
                         updateUser(user, {
-                          role: event.target.value as StaffRole,
+                          active: event.target.checked,
                         })
                       }
-                    >
-                      {ROLES.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            )}
+                    />
 
-            <div className="panel-footer">
-              Unticking revokes access immediately, for people who
-              have already signed in as well as those who have not.
-              You cannot change your own role or disable yourself.
+                    <span className="sr-only">
+                      Allow {user.email} to sign in
+                    </span>
+                  </label>
+
+                  <div className="truncate" style={{ flex: 1 }}>
+                    <div className="row-title truncate">
+                      {user.email}
+                    </div>
+
+                    <div className="row-meta">
+                      {user.active
+                        ? ROLES.find((r) => r.value === user.role)
+                            ?.help ?? user.role
+                        : "No access"}
+                    </div>
+                  </div>
+
+                  <label
+                    className="sr-only"
+                    htmlFor={`role-${user.id}`}
+                  >
+                    Role for {user.email}
+                  </label>
+
+                  <select
+                    id={`role-${user.id}`}
+                    className="select select-inline"
+                    value={user.role}
+                    disabled={savingId === user.id || !user.active}
+                    onChange={(event) =>
+                      updateUser(user, {
+                        role: event.target.value as StaffRole,
+                      })
+                    }
+                  >
+                    {ROLES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
-          </section>
-        </div>
+          )}
+
+          <div className="panel-footer">
+            Showing {filtered.length} of {users.length}. Unticking
+            revokes access immediately, including for people already
+            signed in. You cannot change your own role or disable
+            yourself.
+          </div>
+        </section>
 
       </div>
     </main>
