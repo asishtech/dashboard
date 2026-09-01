@@ -1233,6 +1233,15 @@ table,
   font-variant-numeric: tabular-nums;
 }
 
+/* For controls sitting inside a table row, where the full 46px
+   control height would set the row height for every column. */
+.select-sm {
+  width: auto;
+  min-height: 36px;
+  padding-right: var(--space-7);
+  font-size: var(--text-sm);
+}
+
 .select {
   appearance: none;
   padding-right: var(--space-8);
@@ -1430,6 +1439,18 @@ fieldset.role-picker:disabled .role-chip {
   background: var(--surface-raised);
   color: var(--text);
   box-shadow: var(--shadow-1);
+}
+
+/* How many rows sit behind a filter, so the cost of switching to it
+   is visible before the click. */
+.segmented-count {
+  margin-left: var(--space-2);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented-item[aria-pressed="true"] .segmented-count {
+  color: var(--text-muted);
 }
 
 

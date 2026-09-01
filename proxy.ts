@@ -114,7 +114,27 @@ export async function proxy(request: NextRequest) {
       .maybeSingle());
   }
 
-  if (!profile?.active) {
+  /*
+   * No profile row is not the same as a revoked one.
+   *
+   * On first sign-in the row does not exist yet -- it is written a
+   * moment later by /auth/redirect via staff-sync, or by the database
+   * for buyers. Signing out here destroyed that first session, which
+   * is why signing in appeared to need two attempts: the second
+   * worked only because the first had created the row on its way out.
+   *
+   * So: send them to the page whose job is to provision the profile,
+   * and keep the session. Only an existing-but-deactivated profile is
+   * a real revocation worth signing out for.
+   */
+  if (!profile) {
+    return redirectPreservingCookies(
+      new URL("/auth/redirect", request.url),
+      response
+    );
+  }
+
+  if (!profile.active) {
     await supabase.auth.signOut();
 
     return redirectPreservingCookies(

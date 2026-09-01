@@ -165,6 +165,18 @@ export default function AuthRedirect() {
       }
 
       /*
+       * Faculty and club coordinators land on the events index,
+       * which is scoped to the events assigned to their address.
+       */
+      if (
+        profile.role === "faculty"
+      ) {
+        window.location.href =
+          "/events";
+        return;
+      }
+
+      /*
        * Unknown role.
        */
       await supabase.auth.signOut();

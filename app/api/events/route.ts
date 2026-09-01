@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { allowedEventIds, requireRole } from "@/lib/auth";
+import {
+  classifyPricing,
+  isMixed,
+  type Pricing,
+} from "@/lib/event-pricing";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +18,13 @@ export type EventSummary = {
   revenue: number;
   scanned: number;
   lastRegistration: string | null;
+  /* Admin override; null until someone sets it. */
+  pricing?: string | null;
+  paidRegistrations?: number;
+  freeRegistrations?: number;
 };
+
+const PRICING_FILTERS = ["paid", "free", "unclassified"] as const;
 
 /*
  * GET /api/events
@@ -61,13 +72,50 @@ export async function GET(request: Request) {
       ?.trim()
       .toLowerCase();
 
-    const filtered = query
+    const searched = query
       ? events.filter(
           (event) =>
             event.name.toLowerCase().includes(query) ||
             String(event.event_id).toLowerCase().includes(query)
         )
       : events;
+
+    /*
+     * The paid/free split is resolved here so the list, the detail
+     * screen and the counts below can never disagree about which
+     * bucket an event is in.
+     */
+    const classified = searched.map((event) => ({
+      ...event,
+      pricingResolved: classifyPricing(event),
+      pricingMixed: isMixed(event),
+    }));
+
+    const requested = new URL(request.url).searchParams.get("pricing");
+
+    const pricingFilter = (
+      PRICING_FILTERS as readonly string[]
+    ).includes(requested ?? "")
+      ? (requested as Pricing)
+      : null;
+
+    const filtered = pricingFilter
+      ? classified.filter(
+          (event) => event.pricingResolved === pricingFilter
+        )
+      : classified;
+
+    /*
+     * Counts describe everything the caller may see, not the current
+     * filter, so the tab labels stay stable while switching tabs.
+     */
+    const counts = classified.reduce(
+      (acc, event) => {
+        acc[event.pricingResolved] += 1;
+        return acc;
+      },
+      { paid: 0, free: 0, unclassified: 0 } as Record<Pricing, number>
+    );
 
     /*
      * Coordinators were scoped to participant name, email and
@@ -79,8 +127,10 @@ export async function GET(request: Request) {
     const payload = isAdmin
       ? filtered
       : filtered.map((event) => {
-          const stripped: Partial<EventSummary> = { ...event };
+          const stripped: Partial<typeof event> = { ...event };
           delete stripped.revenue;
+          delete stripped.paidRegistrations;
+          delete stripped.freeRegistrations;
           return stripped;
         });
 
@@ -88,6 +138,8 @@ export async function GET(request: Request) {
       success: true,
       scoped: allowed !== null,
       canSeeRevenue: isAdmin,
+      canSetPricing: isAdmin,
+      pricingCounts: counts,
       count: payload.length,
       events: payload,
     });
