@@ -35,7 +35,14 @@ begin
     'registrations',
     'registration_items',
     'distributions',
-    'inventory'
+    'inventory',
+    /*
+     * The events pages subscribe to these two. Without them a
+     * check-in never pushes, which is the one update that matters
+     * most while the event is actually running.
+     */
+    'qr_scans',
+    'events'
   ]
   loop
     if not exists (
@@ -60,6 +67,8 @@ end $$;
 alter table public.registrations      replica identity full;
 alter table public.registration_items replica identity full;
 alter table public.distributions      replica identity full;
+alter table public.qr_scans           replica identity full;
+alter table public.events             replica identity full;
 alter table public.inventory          replica identity full;
 
 commit;
