@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
@@ -11,6 +10,7 @@ import {
   InboxIcon,
   SearchIcon,
 } from "@/components/icons";
+import { PRICING_LABEL, type Pricing } from "@/lib/event-pricing";
 
 type EventSummary = {
   event_id: string;
@@ -23,9 +23,21 @@ type EventSummary = {
   scanned: number;
   /* Admins only; the API omits it for coordinators. */
   revenue?: number;
+  /* Resolved server-side so every screen agrees on the bucket. */
+  pricingResolved: Pricing;
+  pricingMixed?: boolean;
 };
 
+type PricingCounts = Record<Pricing, number>;
+
 const LIVE_TABLES = ["registrations", "qr_scans", "events"];
+
+const PRICING_TABS: { key: Pricing | "all"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "paid", label: "Paid" },
+  { key: "free", label: "Free" },
+  { key: "unclassified", label: "Unclassified" },
+];
 
 export default function EventsPage() {
   const [events, setEvents] = useState<EventSummary[]>([]);
@@ -35,6 +47,15 @@ export default function EventsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [canSetPricing, setCanSetPricing] = useState(false);
+  const [pricingTab, setPricingTab] = useState<Pricing | "all">("all");
+  const [saving, setSaving] = useState("");
+
+  const [counts, setCounts] = useState<PricingCounts>({
+    paid: 0,
+    free: 0,
+    unclassified: 0,
+  });
 
   const loadEvents = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -53,6 +74,12 @@ export default function EventsPage() {
       setEvents(data.events ?? []);
       setScoped(Boolean(data.scoped));
       setCanSeeRevenue(Boolean(data.canSeeRevenue));
+      setCanSetPricing(Boolean(data.canSetPricing));
+
+      if (data.pricingCounts) {
+        setCounts(data.pricingCounts);
+      }
+
       setError("");
     } catch (err) {
       setError(
@@ -82,18 +109,31 @@ export default function EventsPage() {
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    if (!query) return events;
+    return events.filter((event) => {
+      if (
+        pricingTab !== "all" &&
+        event.pricingResolved !== pricingTab
+      ) {
+        return false;
+      }
 
-    return events.filter(
-      (event) =>
+      if (!query) return true;
+
+      return (
         event.name.toLowerCase().includes(query) ||
         String(event.event_id).toLowerCase().includes(query)
-    );
-  }, [events, search]);
+      );
+    });
+  }, [events, search, pricingTab]);
 
+  /*
+   * Totals follow the visible tab. Reading "Revenue" while the Free
+   * tab is open and seeing the paid events' money would be worse
+   * than useless.
+   */
   const totals = useMemo(
     () =>
-      events.reduce(
+      filtered.reduce(
         (acc, event) => {
           acc.registrations += Number(event.registrations ?? 0);
           acc.scanned += Number(event.scanned ?? 0);
@@ -102,8 +142,55 @@ export default function EventsPage() {
         },
         { registrations: 0, scanned: 0, revenue: 0 }
       ),
-    [events]
+    [filtered]
   );
+
+  /*
+   * Only ever needed for events with no registrations. Once tickets
+   * sell, the totals classify the event and this override should be
+   * cleared rather than fought with.
+   */
+  async function setPricing(
+    eventId: string,
+    pricing: Pricing | null
+  ) {
+    if (saving) return;
+
+    setSaving(eventId);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pricing: pricing === "unclassified" ? null : pricing,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to update event");
+      }
+
+      await loadEvents(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to update event"
+      );
+    } finally {
+      setSaving("");
+    }
+  }
+
+  const scopeLabel =
+    pricingTab === "all"
+      ? "All listed events"
+      : `${PRICING_LABEL[pricingTab]} events only`;
 
   const formatAmount = (amount: number) =>
     new Intl.NumberFormat("en-IN", {
@@ -114,6 +201,8 @@ export default function EventsPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -152,15 +241,7 @@ export default function EventsPage() {
               {refreshing ? "Refreshing" : "Refresh"}
             </button>
 
-            {!scoped && (
-              <Link href="/admin" className="btn btn-ghost btn-sm">
-                Dashboard
-              </Link>
-            )}
 
-            <RoleSwitcher />
-
-            <LogoutButton />
           </div>
         </header>
 
@@ -177,7 +258,10 @@ export default function EventsPage() {
               <span className="stat-label">Events</span>
               <strong className="stat-value">{events.length}</strong>
               <span className="stat-meta">
-                {scoped ? "Assigned to you" : "Across V-TAPP"}
+                {counts.paid} paid · {counts.free} free
+                {counts.unclassified > 0
+                  ? ` · ${counts.unclassified} unclassified`
+                  : ""}
               </span>
             </div>
 
@@ -186,7 +270,7 @@ export default function EventsPage() {
               <strong className="stat-value">
                 {totals.registrations}
               </strong>
-              <span className="stat-meta">All listed events</span>
+              <span className="stat-meta">{scopeLabel}</span>
             </div>
 
             <div className="stat">
@@ -203,13 +287,41 @@ export default function EventsPage() {
                 <strong className="stat-value">
                   {formatAmount(totals.revenue)}
                 </strong>
-                <span className="stat-meta">All listed events</span>
+                <span className="stat-meta">{scopeLabel}</span>
               </div>
             )}
           </section>
         )}
 
         <section className="panel">
+          <div className="panel-header">
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Filter events by price"
+            >
+              {PRICING_TABS.map((tab) => {
+                const total =
+                  tab.key === "all"
+                    ? events.length
+                    : counts[tab.key];
+
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className="segmented-item"
+                    aria-pressed={pricingTab === tab.key}
+                    onClick={() => setPricingTab(tab.key)}
+                  >
+                    {tab.label}
+                    <span className="segmented-count">{total}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="panel-header">
             <div className="search" style={{ flex: "1 1 280px" }}>
               <span className="search-icon">
@@ -260,7 +372,11 @@ export default function EventsPage() {
                   ? scoped
                     ? "No events assigned to you yet"
                     : "No events yet"
-                  : "Nothing matches that search"}
+                  : pricingTab === "all"
+                    ? "Nothing matches that search"
+                    : `No ${PRICING_LABEL[
+                        pricingTab
+                      ].toLowerCase()} events here`}
               </p>
 
               <p className="empty-body">
@@ -268,7 +384,9 @@ export default function EventsPage() {
                   ? scoped
                     ? "An administrator needs to assign you an event before it appears here."
                     : "Events appear here after a V-TAPP sync brings registrations in."
-                  : "Try a different name or event ID."}
+                  : pricingTab === "all"
+                    ? "Try a different name or event ID."
+                    : "Switch to All, or widen the search."}
               </p>
             </div>
           ) : (
@@ -281,6 +399,7 @@ export default function EventsPage() {
                 <thead>
                   <tr>
                     <th scope="col">Event</th>
+                    <th scope="col">Price</th>
                     <th scope="col" className="table-num">
                       Registrations
                     </th>
@@ -326,6 +445,56 @@ export default function EventsPage() {
                               .filter(Boolean)
                               .join(" · ") || "No schedule recorded"}
                           </div>
+                        </td>
+
+                        <td>
+                          {canSetPricing ? (
+                            <>
+                              <label
+                                className="sr-only"
+                                htmlFor={`pricing-${event.event_id}`}
+                              >
+                                Price for {event.name}
+                              </label>
+
+                              <select
+                                id={`pricing-${event.event_id}`}
+                                className="select select-sm"
+                                value={event.pricingResolved}
+                                disabled={saving === event.event_id}
+                                onChange={(change) =>
+                                  setPricing(
+                                    event.event_id,
+                                    change.target.value as Pricing
+                                  )
+                                }
+                              >
+                                <option value="paid">Paid</option>
+                                <option value="free">Free</option>
+                                <option value="unclassified">
+                                  Unclassified
+                                </option>
+                              </select>
+
+                              {event.pricingMixed && (
+                                <div className="row-meta">
+                                  Mixed tiers
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <span
+                              className={`badge ${
+                                event.pricingResolved === "paid"
+                                  ? "badge-accent"
+                                  : event.pricingResolved === "free"
+                                    ? "badge-success"
+                                    : "badge-plain"
+                              }`}
+                            >
+                              {PRICING_LABEL[event.pricingResolved]}
+                            </span>
+                          )}
                         </td>
 
                         <td className="table-num">{registrations}</td>

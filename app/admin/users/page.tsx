@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import {
   AlertIcon,
   CheckIcon,
@@ -290,6 +289,8 @@ export default function AdminUsersPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -304,20 +305,7 @@ export default function AdminUsersPage() {
           </div>
 
           <div className="header-actions">
-            <Link
-              href="/admin/coordinators"
-              className="btn btn-ghost btn-sm"
-            >
-              Coordinators
-            </Link>
 
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              Dashboard
-            </Link>
-
-            <RoleSwitcher />
-
-            <LogoutButton />
           </div>
         </header>
 

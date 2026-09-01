@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import { AlertIcon, BoxIcon } from "@/components/icons";
 
 type Item = {
@@ -227,6 +226,8 @@ export default function RegistrationDetailPage({
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container container-narrow">
 
         <header className="page-header">
@@ -248,9 +249,7 @@ export default function RegistrationDetailPage({
               All registrations
             </Link>
 
-            <RoleSwitcher />
 
-            <LogoutButton />
           </div>
         </header>
 

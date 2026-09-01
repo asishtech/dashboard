@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
@@ -681,6 +680,8 @@ export default function RegistrationsPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -715,20 +716,7 @@ export default function RegistrationsPage() {
               {refreshing ? "Refreshing" : "Refresh"}
             </button>
 
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              Dashboard
-            </Link>
 
-            <Link
-              href="/admin/inventory"
-              className="btn btn-ghost btn-sm"
-            >
-              Inventory
-            </Link>
-
-            <RoleSwitcher />
-
-            <LogoutButton />
           </div>
         </header>
 

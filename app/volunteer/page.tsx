@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useLiveRefresh } from "@/lib/use-realtime";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import { BoxIcon, ScanIcon } from "@/components/icons";
 
 type InventoryItem = {
@@ -134,15 +133,6 @@ export default function VolunteerPage() {
     )
   );
 
-  async function logout() {
-    const supabase =
-      createSupabaseBrowser();
-
-    await supabase.auth.signOut();
-
-    window.location.href = "/login";
-  }
-
   const given =
     data?.distribution.given ?? 0;
 
@@ -165,6 +155,8 @@ export default function VolunteerPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -199,20 +191,6 @@ export default function VolunteerPage() {
             >
               {refreshing && <span className="btn-spinner" />}
               {refreshing ? "Refreshing" : "Refresh"}
-            </button>
-
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              Admin
-            </Link>
-
-            <RoleSwitcher />
-
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={logout}
-            >
-              Sign out
             </button>
           </div>
         </header>
