@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertIcon } from "@/components/icons";
+import { AlertIcon, CheckIcon } from "@/components/icons";
 
 type Item = {
   id: number;
@@ -18,6 +18,8 @@ type Registration = {
   name: string;
   email: string;
   items: Item[];
+  /* True when the QR belongs to an event booking with no merchandise. */
+  isEventOnly?: boolean;
 };
 
 export default function ScannerPage() {
@@ -173,9 +175,10 @@ export default function ScannerPage() {
                 mountedRef.current
               ) {
                 setError("");
-                setRegistration(
-                  data.registration
-                );
+                setRegistration({
+                  ...data.registration,
+                  isEventOnly: Boolean(data.isEventOnly),
+                });
               }
 
             } catch (err) {
@@ -451,6 +454,21 @@ export default function ScannerPage() {
               </button>
             </div>
 
+            {registration.items.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">
+                  <CheckIcon size={22} />
+                </div>
+
+                <p className="empty-title">Checked in</p>
+
+                <p className="empty-body">
+                  {registration.isEventOnly
+                    ? "This is an event booking, so there is no merchandise to hand over. The scan has been recorded."
+                    : "No merchandise is attached to this registration."}
+                </p>
+              </div>
+            ) : (
             <div className="panel-body stack-tight stack">
               {registration.items.map((item) => {
                 const given = item.status === "GIVEN";
@@ -494,6 +512,7 @@ export default function ScannerPage() {
                 );
               })}
             </div>
+            )}
           </section>
         )}
 

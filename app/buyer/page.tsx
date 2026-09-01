@@ -188,7 +188,14 @@ export default function BuyerPage() {
                 </div>
 
                 <div className="panel-body stack-tight stack">
-                  {registration.items.map((item) => {
+                  {(registration.items ?? []).length === 0 && (
+                    <p className="help">
+                      This is an event booking, so there is no
+                      merchandise to collect.
+                    </p>
+                  )}
+
+                  {(registration.items ?? []).map((item) => {
                     const given = item.status === "GIVEN";
 
                     return (

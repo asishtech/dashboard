@@ -180,28 +180,6 @@ export default function AdminPage() {
   ] = useState(0);
 
   const [
-    eventRegistrations,
-    setEventRegistrations,
-  ] = useState(0);
-
-  const [
-    merchandiseRegistrations,
-    setMerchandiseRegistrations,
-  ] = useState(0);
-
-  const [
-    eventBreakdown,
-    setEventBreakdown,
-  ] = useState<
-    {
-      event_id: string;
-      name: string;
-      registrations: number;
-      revenue: number;
-    }[]
-  >([]);
-
-  const [
     ticketBreakdown,
     setTicketBreakdown,
   ] = useState<
@@ -321,22 +299,6 @@ export default function AdminPage() {
           Number(
             data.merchandiseRevenue ?? 0
           )
-        );
-
-        setEventRegistrations(
-          Number(
-            data.eventRegistrations ?? 0
-          )
-        );
-
-        setMerchandiseRegistrations(
-          Number(
-            data.merchandiseRegistrations ?? 0
-          )
-        );
-
-        setEventBreakdown(
-          data.eventBreakdown ?? []
         );
 
         setTicketBreakdown(
@@ -615,20 +577,48 @@ export default function AdminPage() {
 
   const busy = syncing || refreshing;
 
+  const scanned = eventQrScanned + merchandiseQrScanned;
+
+  /*
+   * Events and merchandise are two different businesses sharing one
+   * feed, so the dashboard compares them side by side rather than
+   * burying both in a single running total.
+   */
+  const streams = [
+    {
+      key: "events",
+      label: "Events",
+      registrations: eventRegistrationCount,
+      revenue: eventRevenue,
+      scanned: eventQrScanned,
+      href: "/events",
+    },
+    {
+      key: "merchandise",
+      label: "Merchandise",
+      registrations: merchandiseRegistrationCount,
+      revenue: merchandiseRevenue,
+      scanned: merchandiseQrScanned,
+      href: "/admin/inventory",
+    },
+  ];
+
+  const topTickets = ticketBreakdown.slice(0, 8);
+
   return (
     <main className="app">
       <div className="container">
 
         <header className="page-header">
           <div>
-            <span className="page-eyebrow">
-              V-TAPP / Control
-            </span>
+            <span className="page-eyebrow">V-TAPP / Control</span>
 
             <h1 className="page-title">Admin Dashboard</h1>
 
             <p className="page-subtitle">
-              {adminName ? `Signed in as ${adminName}` : " "}
+              {adminName
+                ? `Signed in as ${adminName}`
+                : "Loading your account..."}
             </p>
           </div>
 
@@ -649,18 +639,15 @@ export default function AdminPage() {
               </span>
             )}
 
+            <Link href="/events" className="btn btn-ghost btn-sm">
+              Events
+            </Link>
+
             <Link
               href="/admin/registrations"
               className="btn btn-ghost btn-sm"
             >
               Registrations
-            </Link>
-
-            <Link
-              href="/admin/inventory"
-              className="btn btn-ghost btn-sm"
-            >
-              Inventory
             </Link>
 
             <button
@@ -689,513 +676,194 @@ export default function AdminPage() {
         )}
 
 
-        {/* Key figures */}
-
+        {/* Headline figures */}
         <section className="stat-grid">
-
           <div className="stat stat-feature">
-
-            <span className="stat-label">
-              Total Revenue
-            </span>
+            <span className="stat-label">Total revenue</span>
 
             <strong className="stat-value">
-              {loading
-                ? "—"
-                : formatAmount(totalAmount)}
+              {loading ? "—" : formatAmount(totalAmount)}
             </strong>
 
-            <span className="stat-meta">
-              Events + merchandise
-            </span>
-
+            <span className="stat-meta">Events and merchandise</span>
           </div>
-
 
           <div className="stat">
-
-            <span className="stat-label">
-              Event Revenue
-            </span>
+            <span className="stat-label">Registrations</span>
 
             <strong className="stat-value">
-              {loading
-                ? "—"
-                : formatAmount(eventRevenue)}
+              {loading ? "—" : registrations}
             </strong>
 
-            <span className="stat-meta">
-              {loading
-                ? "—"
-                : eventRegistrationCount}
-              {" "}registrations
-            </span>
-
+            <span className="stat-meta">Across both streams</span>
           </div>
-
 
           <div className="stat">
+            <span className="stat-label">Checked in</span>
 
-            <span className="stat-label">
-              Merchandise Revenue
-            </span>
-
-            <strong className="stat-value">
-              {loading
-                ? "—"
-                : formatAmount(merchandiseRevenue)}
+            <strong className="stat-value stat-success">
+              {loading ? "—" : scanned}
             </strong>
 
-            <span className="stat-meta">
-              {loading
-                ? "—"
-                : merchandiseRegistrationCount}
-              {" "}orders
-            </span>
-
+            <span className="stat-meta">QR codes scanned</span>
           </div>
-
 
           <div className="stat">
-
-            <span className="stat-label">
-              Total Registrations
-            </span>
+            <span className="stat-label">Merch remaining</span>
 
             <strong className="stat-value">
-              {loading
-                ? "—"
-                : registrations}
+              {loading ? "—" : totalRemaining}
             </strong>
 
             <span className="stat-meta">
-              All V-TAPP registrations
+              {loading
+                ? " "
+                : `${totalSold} sold of ${totalStock}`}
             </span>
-
           </div>
-
         </section>
 
 
-        {/* QR & Distribution */}
+        <div className="grid grid-main mb-8">
 
-        <section className="panel mb-8">
-
-          <div className="panel-header">
-
-            <div>
-
-              <span className="page-eyebrow">
-                V-TAPP / Operations
-              </span>
-
-              <h2 className="panel-title">
-                QR & Distribution
-              </h2>
-
-              <p className="panel-subtitle">
-                Live QR scanning and merchandise collection
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="stat-grid">
-
-
-            <div className="stat">
-
-              <span className="stat-label">
-                Merchandise QR Scanned
-              </span>
-
-              <strong className="stat-value">
-                {loading
-                  ? "—"
-                  : merchandiseQrScanned}
-              </strong>
-
-              <span className="stat-meta">
-                Event ID 513
-              </span>
-
-            </div>
-
-
-            <div className="stat">
-
-              <span className="stat-label">
-                Merchandise Given
-              </span>
-
-              <strong className="stat-value stat-success">
-                {loading
-                  ? "—"
-                  : distribution.given}
-              </strong>
-
-              <span className="stat-meta">
-                Items handed over
-              </span>
-
-            </div>
-
-
-            <div className="stat">
-
-              <span className="stat-label">
-                Merchandise Pending
-              </span>
-
-              <strong className="stat-value stat-warning">
-                {loading
-                  ? "—"
-                  : distribution.pending}
-              </strong>
-
-              <span className="stat-meta">
-                Items remaining
-              </span>
-
-            </div>
-
-
-            <div className="stat">
-
-              <span className="stat-label">
-                Event QR Scanned
-              </span>
-
-              <strong className="stat-value">
-                {loading
-                  ? "—"
-                  : eventQrScanned}
-              </strong>
-
-              <span className="stat-meta">
-                Event ID 514
-              </span>
-
-            </div>
-
-
-            <div className="stat">
-
-              <span className="stat-label">
-                Event Registrations
-              </span>
-
-              <strong className="stat-value">
-                {loading
-                  ? "—"
-                  : eventRegistrationCount}
-              </strong>
-
-              <span className="stat-meta">
-                Event ID 514
-              </span>
-
-            </div>
-
-
-            <div className="stat">
-
-              <span className="stat-label">
-                Event QR Pending
-              </span>
-
-              <strong className="stat-value stat-warning">
-                {loading
-                  ? "—"
-                  : Math.max(
-                      eventRegistrationCount -
-                      eventQrScanned,
-                      0
-                    )}
-              </strong>
-
-              <span className="stat-meta">
-                Not yet scanned
-              </span>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* Event Operations */}
-
-        <section className="panel mb-8">
-
-          <div className="panel-header">
-
-            <div>
-
-              <span className="page-eyebrow">
-                V-TAPP / Events
-              </span>
-
-              <h2 className="panel-title">
-                Event Operations
-              </h2>
-
-              <p className="panel-subtitle">
-                Event ID 514 and Merchandise ID 513
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="table-wrap">
-
-            <table className="table">
-
-              <thead>
-
-                <tr>
-
-                  <th>Category</th>
-
-                  <th>Event ID</th>
-
-                  <th>Registrations</th>
-
-                  <th>QR Scanned</th>
-
-                  <th>Pending</th>
-
-                </tr>
-
-              </thead>
-
-              <tbody>
-
-                <tr>
-
-                  <td>
-
-                    <div className="row-title">
-                      V-TAPP Events
-                    </div>
-
-                    <div className="row-meta">
-                      Event registration
-                    </div>
-
-                  </td>
-
-                  <td className="mono">
-                    514
-                  </td>
-
-                  <td>
-                    {loading
-                      ? "—"
-                      : eventRegistrationCount}
-                  </td>
-
-                  <td>
-
-                    <span className="badge badge-success">
-
-                      {loading
-                        ? "—"
-                        : eventQrScanned}
-
-                    </span>
-
-                  </td>
-
-                  <td>
-
-                    <span className="badge badge-warning">
-
-                      {loading
-                        ? "—"
-                        : Math.max(
-                            eventRegistrationCount -
-                            eventQrScanned,
-                            0
-                          )}
-
-                    </span>
-
-                  </td>
-
-                </tr>
-
-
-                <tr>
-
-                  <td>
-
-                    <div className="row-title">
-                      Merchandise
-                    </div>
-
-                    <div className="row-meta">
-                      Merchandise collection
-                    </div>
-
-                  </td>
-
-                  <td className="mono">
-                    513
-                  </td>
-
-                  <td>
-                    {loading
-                      ? "—"
-                      : merchandiseRegistrationCount}
-                  </td>
-
-                  <td>
-
-                    <span className="badge badge-success">
-
-                      {loading
-                        ? "—"
-                        : merchandiseQrScanned}
-
-                    </span>
-
-                  </td>
-
-                  <td>
-
-                    <span className="badge badge-warning">
-
-                      {loading
-                        ? "—"
-                        : Math.max(
-                            merchandiseRegistrationCount -
-                            merchandiseQrScanned,
-                            0
-                          )}
-
-                    </span>
-
-                  </td>
-
-                </tr>
-
-              </tbody>
-
-            </table>
-
-          </div>
-
-        </section>
-
-
-        {/* Merchandise */}
-
-                <div className="dashboard-event-layout mb-8">
-
-          <div className="dashboard-event-left">
-
+          {/* Events vs merchandise */}
           <section className="panel">
-
             <div className="panel-header">
-
               <div>
-
-                <h2 className="panel-title">
-                  Event Overview
-                </h2>
+                <h2 className="panel-title">Where it comes from</h2>
 
                 <p className="panel-subtitle">
-                  Revenue and registrations by event
+                  Events and merchandise compared
                 </p>
-
               </div>
-
             </div>
 
-
             <div className="panel-body stack">
+              {streams.map((stream) => {
+                const share =
+                  totalAmount > 0
+                    ? Math.round(
+                        (stream.revenue / totalAmount) * 100
+                      )
+                    : 0;
 
-              {loading ? (
-
-                [1, 2].map((row) => (
-
-                  <div key={row}>
-
-                    <div className="skeleton skeleton-line" />
-
-                    <div className="skeleton skeleton-line" />
-
-                  </div>
-
-                ))
-
-              ) : eventBreakdown.length === 0 ? (
-
-                <div className="empty">
-
-                  <p className="empty-title">
-                    No event data yet
-                  </p>
-
-                  <p className="empty-body">
-                    Run Sync V-TAPP to load event data.
-                  </p>
-
-                </div>
-
-              ) : (
-
-                eventBreakdown.map((event) => (
-
-                  <div
-                    className="meter"
-                    key={event.event_id}
-                  >
-
+                return (
+                  <div className="meter" key={stream.key}>
                     <div className="meter-head">
-
-                      <span className="meter-label">
-                        {event.name}
-                      </span>
+                      <Link
+                        href={stream.href}
+                        className="meter-label link"
+                      >
+                        {stream.label}
+                      </Link>
 
                       <span className="meter-value">
-                        {formatAmount(event.revenue)}
+                        {loading
+                          ? "—"
+                          : formatAmount(stream.revenue)}
                       </span>
+                    </div>
 
+                    <div
+                      className="meter-track"
+                      role="progressbar"
+                      aria-valuenow={share}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${stream.label} share of revenue`}
+                    >
+                      <div
+                        className="meter-fill"
+                        style={{ width: `${share}%` }}
+                      />
                     </div>
 
                     <div className="meter-foot">
-
                       <span>
-                        Event {event.event_id}
+                        {stream.registrations} registrations
                       </span>
 
-                      <span>
-                        {event.registrations} registrations
-                      </span>
-
+                      <span>{stream.scanned} checked in</span>
                     </div>
-
                   </div>
-
-                ))
-
-              )}
-
+                );
+              })}
             </div>
-
           </section>
 
+
+          {/* Merchandise distribution */}
           <section className="panel">
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">Merchandise Stock</h2>
+                <h2 className="panel-title">Handover</h2>
+
+                <p className="panel-subtitle">
+                  Merchandise given to buyers
+                </p>
+              </div>
+            </div>
+
+            <div className="panel-body">
+              <div className="meter">
+                <div className="meter-head">
+                  <span className="meter-label">Handed over</span>
+
+                  <span className="meter-value">
+                    {loading ? "—" : `${Math.round(givenPercent)}%`}
+                  </span>
+                </div>
+
+                <div
+                  className="meter-track"
+                  role="progressbar"
+                  aria-valuenow={Math.round(givenPercent)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Merchandise handed over"
+                >
+                  <div
+                    className="meter-fill meter-fill-success"
+                    style={{ width: `${givenPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="split">
+                <div className="split-item">
+                  <span className="stat-label">Given</span>
+
+                  <strong className="split-value stat-success">
+                    {loading ? "—" : givenCount}
+                  </strong>
+                </div>
+
+                <div className="split-item">
+                  <span className="stat-label">Pending</span>
+
+                  <strong className="split-value stat-warning">
+                    {loading ? "—" : pendingCount}
+                  </strong>
+                </div>
+              </div>
+
+              <p className="help mt-4">
+                {loading
+                  ? " "
+                  : `${distributionTotal} items across all merchandise orders.`}
+              </p>
+            </div>
+          </section>
+        </div>
+
+
+        <div className="grid grid-main mb-8">
+
+          {/* Stock */}
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Stock levels</h2>
 
                 <p className="panel-subtitle">
                   Remaining against configured capacity
@@ -1288,184 +956,118 @@ export default function AdminPage() {
           </section>
 
 
-          {/* Distribution */}
-
+          {/* Best selling tickets */}
           <section className="panel">
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">Merchandise Distribution</h2>
+                <h2 className="panel-title">Top tickets</h2>
 
                 <p className="panel-subtitle">
-                  Merchandise handed over
+                  By revenue, across both streams
                 </p>
               </div>
+
+              <Link href="/events" className="btn btn-ghost btn-sm">
+                All events
+              </Link>
             </div>
 
-            <div className="panel-body">
-              <div className="meter">
-                <div className="meter-head">
-                  <span className="meter-label">Handed over</span>
-
-                  <span className="meter-value">
-                    {loading ? "—" : `${Math.round(givenPercent)}%`}
-                  </span>
-                </div>
-
-                <div
-                  className="meter-track"
-                  role="progressbar"
-                  aria-valuenow={Math.round(givenPercent)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Items distributed"
-                >
-                  <div
-                    className="meter-fill meter-fill-success"
-                    style={{ width: `${givenPercent}%` }}
-                  />
-                </div>
+            {loading ? (
+              <div className="panel-body stack">
+                {[1, 2, 3, 4].map((row) => (
+                  <div className="skeleton skeleton-line" key={row} />
+                ))}
               </div>
-
-              <div className="split">
-                <div className="split-item">
-                  <span className="stat-label">Given</span>
-
-                  <strong className="split-value stat-success">
-                    {loading ? "—" : givenCount}
-                  </strong>
+            ) : topTickets.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">
+                  <ListIcon size={22} />
                 </div>
 
-                <div className="split-item">
-                  <span className="stat-label">Pending</span>
+                <p className="empty-title">Nothing sold yet</p>
 
-                  <strong className="split-value stat-warning">
-                    {loading ? "—" : pendingCount}
-                  </strong>
-                </div>
-              </div>
-
-              <p className="help mt-4">
-                {loading
-                  ? " "
-                  : `${distributionTotal} items across all registrations.`}
-              </p>
-            </div>
-          </section>
-
-          </div>
-
-          <div className="dashboard-event-right">
-
-          <section className="panel">
-
-            <div className="panel-header">
-
-              <div>
-
-                <h2 className="panel-title">
-                  Ticket Breakdown
-                </h2>
-
-                <p className="panel-subtitle">
-                  Tickets sold and revenue
+                <p className="empty-body">
+                  Run a V-TAPP sync to pull registrations in.
                 </p>
-
               </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <caption className="sr-only">
+                    Tickets by revenue
+                  </caption>
 
-            </div>
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket</th>
+                      <th scope="col" className="table-num">
+                        Sold
+                      </th>
+                      <th scope="col" className="table-num">
+                        Revenue
+                      </th>
+                    </tr>
+                  </thead>
 
+                  <tbody>
+                    {topTickets.map((ticket) => (
+                      <tr key={ticket.ticket}>
+                        <td>
+                          <div className="row-title truncate">
+                            {ticket.ticket}
+                          </div>
+                        </td>
 
-            <div className="panel-body stack">
-
-              {loading ? (
-
-                [1, 2, 3, 4].map((row) => (
-
-                  <div key={row}>
-
-                    <div className="skeleton skeleton-line" />
-
-                    <div className="skeleton skeleton-line" />
-
-                  </div>
-
-                ))
-
-              ) : ticketBreakdown.length === 0 ? (
-
-                <div className="empty">
-
-                  <p className="empty-title">
-                    No ticket data yet
-                  </p>
-
-                </div>
-
-              ) : (
-
-                [...ticketBreakdown]
-                  .sort(
-                    (a, b) =>
-                      b.registrations -
-                      a.registrations
-                  )
-                  .slice(0, 10)
-                  .map((ticket) => (
-
-                    <div
-                      className="meter"
-                      key={ticket.ticket}
-                    >
-
-                      <div className="meter-head">
-
-                        <span className="meter-label">
-                          {ticket.ticket}
-                        </span>
-
-                        <span className="meter-value">
+                        <td className="table-num">
                           {ticket.registrations}
-                        </span>
+                        </td>
 
-                      </div>
+                        <td className="table-num">
+                          {formatAmount(Number(ticket.revenue ?? 0))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-                      <div className="meter-foot">
-
-                        <span>
-                          {ticket.registrations} registrations
-                        </span>
-
-                        <span>
-                          {formatAmount(ticket.revenue)}
-                        </span>
-
-                      </div>
-
-                    </div>
-
-                  ))
-
-              )}
-
-            </div>
-
+            {!loading && ticketBreakdown.length > topTickets.length && (
+              <div className="panel-footer">
+                Showing top {topTickets.length} of{" "}
+                {ticketBreakdown.length} tickets
+              </div>
+            )}
           </section>
-
-          </div>
-
         </div>
 
+
         {/* Navigation */}
-        <section className="grid grid-3">
-          <Link href="/admin/registrations" className="card-link">
+        <section className="grid grid-4">
+          <Link href="/events" className="card-link card-link-feature">
             <ListIcon size={20} />
+
+            <div className="card-link-title mt-4">Events</div>
+
+            <p className="card-link-body">
+              Every event, searchable, with its participant list.
+            </p>
+
+            <span className="card-link-cta">
+              Open
+              <ArrowRightIcon size={13} />
+            </span>
+          </Link>
+
+          <Link href="/admin/registrations" className="card-link">
+            <UsersIcon size={20} />
 
             <div className="card-link-title mt-4">
               Registrations
             </div>
 
             <p className="card-link-body">
-              Every buyer, their merchandise and distribution state.
+              Every buyer and their distribution state.
             </p>
 
             <span className="card-link-cta">
@@ -1489,48 +1091,13 @@ export default function AdminPage() {
             </span>
           </Link>
 
-          <Link href="/admin/users" className="card-link">
-            <UsersIcon size={20} />
-
-            <div className="card-link-title mt-4">
-              Staff accounts
-            </div>
-
-            <p className="card-link-body">
-              Invite admins and volunteers by email.
-            </p>
-
-            <span className="card-link-cta">
-              Open
-              <ArrowRightIcon size={13} />
-            </span>
-          </Link>
-
-          <Link href="/events" className="card-link">
-            <ListIcon size={20} />
-
-            <div className="card-link-title mt-4">Events</div>
-
-            <p className="card-link-body">
-              Every event, searchable, with per-event registrations
-              and check-in progress.
-            </p>
-
-            <span className="card-link-cta">
-              Open
-              <ArrowRightIcon size={13} />
-            </span>
-          </Link>
-
           <Link href="/admin/coordinators" className="card-link">
             <UsersIcon size={20} />
 
-            <div className="card-link-title mt-4">
-              Club coordinators
-            </div>
+            <div className="card-link-title mt-4">Coordinators</div>
 
             <p className="card-link-body">
-              Give a club coordinator read access to their own event.
+              Give a club coordinator access to their event.
             </p>
 
             <span className="card-link-cta">

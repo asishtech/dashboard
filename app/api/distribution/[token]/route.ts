@@ -71,20 +71,51 @@ export async function GET(
     );
   }
 
+  /*
+   * Record the scan.
+   *
+   * Nothing wrote `qr_scans` before this, so every check-in metric on
+   * the admin dashboard and the events pages sat at zero permanently.
+   * Looking up a QR *is* the check-in, so that is where it belongs.
+   *
+   * Deliberately not awaited into the response path: a volunteer at
+   * the door must never be blocked, or shown an error, because the
+   * attendance log failed to write.
+   */
+  void supabaseAdmin()
+    .from("qr_scans")
+    .insert({
+      registration_id: registration.id,
+      event_id: registration.event_id,
+    })
+    .then(({ error: scanError }) => {
+      if (scanError) {
+        console.error("Could not record QR scan:", scanError);
+      }
+    });
+
+  const items = ((registration.items ?? []) as ItemRow[]).map(
+    (item) => ({
+      ...item,
+      status: toArray(item.distribution).find(
+        (distribution) => distribution?.status === "GIVEN"
+      )
+        ? "GIVEN"
+        : "PENDING",
+    })
+  );
+
   return NextResponse.json({
     registration: {
       ...registration,
-      items: ((registration.items ?? []) as ItemRow[]).map(
-        (item) => ({
-          ...item,
-          status:
-            toArray(item.distribution).find(
-              (distribution) => distribution?.status === "GIVEN"
-            )
-              ? "GIVEN"
-              : "PENDING",
-        })
-      ),
+      items,
     },
+
+    /*
+     * An event registration carries no merchandise. Without this the
+     * scanner rendered an empty panel and left the volunteer guessing
+     * whether the scan had worked.
+     */
+    isEventOnly: items.length === 0,
   });
 }
