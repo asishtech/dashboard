@@ -27,7 +27,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ event_id: string }> }
 ) {
-  const auth = await requireRole("admin", "coordinator");
+  const auth = await requireRole("admin", "faculty");
 
   if (auth instanceof NextResponse) {
     return auth;

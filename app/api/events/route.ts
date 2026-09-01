@@ -26,7 +26,7 @@ export type EventSummary = {
  * place.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole("admin", "coordinator");
+  const auth = await requireRole("admin", "faculty");
 
   if (auth instanceof NextResponse) {
     return auth;

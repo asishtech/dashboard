@@ -22,7 +22,7 @@ function needsRole(path: string) {
 function destinationFor(role: string) {
   if (role === "admin") return "/admin";
   if (role === "volunteer") return "/volunteer";
-  if (role === "coordinator") return "/events";
+  if (role === "faculty") return "/events";
   if (role === "buyer") return "/buyer";
 
   return "/login";
@@ -149,7 +149,7 @@ export async function proxy(request: NextRequest) {
   if (
     path.startsWith("/events") &&
     role !== "admin" &&
-    role !== "coordinator"
+    role !== "faculty"
   ) {
     return redirectPreservingCookies(
       new URL(destinationFor(role), request.url),

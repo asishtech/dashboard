@@ -141,10 +141,10 @@ export async function POST(request: Request) {
     if (!invite) {
       const { error } = await db
         .from("staff_invites")
-        .insert({ email, role: "coordinator", active: true });
+        .insert({ email, role: "faculty", active: true });
 
       if (error) throw error;
-    } else if (invite.role === "coordinator") {
+    } else if (invite.role === "faculty") {
       const { error } = await db
         .from("staff_invites")
         .update({ active: true })

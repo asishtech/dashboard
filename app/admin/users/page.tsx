@@ -9,19 +9,50 @@ import {
   UsersIcon,
 } from "@/components/icons";
 
+type StaffRole = "admin" | "faculty" | "volunteer" | "buyer";
+
 type StaffUser = {
   id: number;
   email: string;
-  role: "admin" | "volunteer";
+  role: StaffRole;
   active: boolean;
   created_at: string;
 };
 
+/*
+ * What each role gets, shown next to the picker so the choice is not
+ * guesswork.
+ */
+const ROLES: { value: StaffRole; label: string; help: string }[] = [
+  {
+    value: "admin",
+    label: "Admin",
+    help: "Everything, including staff and roles.",
+  },
+  {
+    value: "faculty",
+    label: "Faculty",
+    help: "Only the events they are assigned to.",
+  },
+  {
+    value: "volunteer",
+    label: "Volunteer",
+    help: "Scan QR codes and hand merchandise over.",
+  },
+  {
+    value: "buyer",
+    label: "Buyer",
+    help: "Only their own registrations.",
+  },
+];
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [email, setEmail] = useState("");
-  const [role, setRole] =
-    useState<"volunteer" | "admin">("volunteer");
+  const [role, setRole] = useState<StaffRole>("faculty");
+
+  /* Row currently being saved, so only that row shows a spinner. */
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -143,44 +174,44 @@ export default function AdminUsersPage() {
     }
   }
 
-  async function toggleUser(
-    user: StaffUser
+  async function updateUser(
+    user: StaffUser,
+    patch: { active?: boolean; role?: StaffRole }
   ) {
     setError("");
     setMessage("");
+    setSavingId(user.id);
 
     try {
-      const response = await fetch(
-        "/api/admin/users",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            id: user.id,
-            active: !user.active,
-          }),
-        }
-      );
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, ...patch }),
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data.error ||
-            "Unable to update account"
-        );
+        throw new Error(data.error || "Unable to update account");
       }
 
+      setMessage(
+        patch.role
+          ? `${user.email} is now ${patch.role}.`
+          : patch.active
+            ? `${user.email} can sign in.`
+            : `${user.email} can no longer sign in.`
+      );
+
       await loadUsers();
-    } catch (error) {
+    } catch (err) {
       setError(
-        error instanceof Error
-          ? error.message
+        err instanceof Error
+          ? err.message
           : "Unable to update account"
       );
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -280,19 +311,19 @@ export default function AdminUsersPage() {
                   className="select"
                   value={role}
                   onChange={(event) =>
-                    setRole(
-                      event.target.value as "volunteer" | "admin"
-                    )
+                    setRole(event.target.value as StaffRole)
                   }
                   disabled={saving}
                 >
-                  <option value="volunteer">Volunteer</option>
-                  <option value="admin">Admin</option>
+                  {ROLES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
 
                 <p className="help">
-                  Volunteers can scan and distribute. Admins can do
-                  everything, including managing this list.
+                  {ROLES.find((r) => r.value === role)?.help}
                 </p>
               </div>
 
@@ -351,47 +382,66 @@ export default function AdminUsersPage() {
               <div className="panel-body-flush">
                 {users.map((user) => (
                   <div className="row-card" key={user.id}>
-                    <div className="truncate">
+                    <label className="access-toggle">
+                      <input
+                        type="checkbox"
+                        checked={user.active}
+                        disabled={savingId === user.id}
+                        onChange={(event) =>
+                          updateUser(user, {
+                            active: event.target.checked,
+                          })
+                        }
+                      />
+
+                      <span className="sr-only">
+                        Allow {user.email} to sign in
+                      </span>
+                    </label>
+
+                    <div className="truncate" style={{ flex: 1 }}>
                       <div className="row-title truncate">
                         {user.email}
                       </div>
 
                       <div className="row-meta">
-                        <span
-                          className={`badge ${
-                            user.role === "admin"
-                              ? "badge-accent"
-                              : "badge-plain"
-                          }`}
-                        >
-                          {user.role}
-                        </span>{" "}
-                        {!user.active && (
-                          <span className="badge badge-danger">
-                            Disabled
-                          </span>
-                        )}
+                        {user.active
+                          ? ROLES.find((r) => r.value === user.role)
+                              ?.help ?? user.role
+                          : "No access"}
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => toggleUser(user)}
-                      className={`btn btn-sm ${
-                        user.active ? "btn-danger" : "btn-ghost"
-                      }`}
+                    <label className="sr-only" htmlFor={`role-${user.id}`}>
+                      Role for {user.email}
+                    </label>
+
+                    <select
+                      id={`role-${user.id}`}
+                      className="select select-inline"
+                      value={user.role}
+                      disabled={savingId === user.id || !user.active}
+                      onChange={(event) =>
+                        updateUser(user, {
+                          role: event.target.value as StaffRole,
+                        })
+                      }
                     >
-                      {user.active ? "Disable" : "Enable"}
-                    </button>
+                      {ROLES.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 ))}
               </div>
             )}
 
             <div className="panel-footer">
-              Disabling revokes the invite. Someone who has already
-              signed in keeps their role until their profile is
-              deactivated too.
+              Unticking revokes access immediately, for people who
+              have already signed in as well as those who have not.
+              You cannot change your own role or disable yourself.
             </div>
           </section>
         </div>

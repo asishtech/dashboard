@@ -10,7 +10,13 @@ export type Role =
   | "admin"
   | "volunteer"
   | "buyer"
-  | "coordinator";
+  /*
+   * Event coordinators, staff and student alike. The assignment
+   * table is still `event_coordinators` because that describes the
+   * relationship (who runs which event); this is the role they sign
+   * in as.
+   */
+  | "faculty";
 
 export type Profile = {
   role: Role;
@@ -128,6 +134,11 @@ export async function requireRole(
 export async function allowedEventIds(
   session: Session
 ): Promise<string[] | null> {
+  /*
+   * Admin is a superset. Someone can be both an admin and listed as
+   * an event's coordinator; the admin role wins and they see
+   * everything.
+   */
   if (session.profile.role === "admin") {
     return null;
   }
