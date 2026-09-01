@@ -19,6 +19,17 @@ const HOME: Record<Role, string> = {
   buyer: "/buyer",
 };
 
+type Props = {
+  /*
+   * NavBar has already asked /api/auth/role, so it hands the answer
+   * down rather than making every bar cost two identical requests.
+   * Used standalone (the collection pass), these are omitted and the
+   * switcher fetches for itself.
+   */
+  roles?: Role[];
+  activeRole?: Role | null;
+};
+
 /*
  * Only renders for accounts holding more than one role, so the common
  * case shows nothing at all rather than a control with one option.
@@ -27,20 +38,24 @@ const HOME: Record<Role, string> = {
  * the active role, so staying put would often mean sitting on a page
  * the new role cannot open.
  */
-export default function RoleSwitcher() {
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [active, setActive] = useState<Role | null>(null);
+export default function RoleSwitcher({ roles, activeRole }: Props) {
+  const provided = roles !== undefined;
+
+  const [ownRoles, setOwnRoles] = useState<Role[]>([]);
+  const [ownActive, setOwnActive] = useState<Role | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (provided) return;
+
     let cancelled = false;
 
     fetch("/api/auth/role", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data?.success) return;
-        setRoles(data.roles ?? []);
-        setActive(data.activeRole ?? null);
+        setOwnRoles(data.roles ?? []);
+        setOwnActive(data.activeRole ?? null);
       })
       .catch(() => {
         /* The switcher is optional chrome; never block the page. */
@@ -49,9 +64,12 @@ export default function RoleSwitcher() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [provided]);
 
-  if (roles.length < 2 || !active) {
+  const held = provided ? roles : ownRoles;
+  const active = provided ? (activeRole ?? null) : ownActive;
+
+  if (held.length < 2 || !active) {
     return null;
   }
 
@@ -91,7 +109,7 @@ export default function RoleSwitcher() {
         onChange={(e) => switchTo(e.target.value as Role)}
         title="Switch which role you are acting as"
       >
-        {roles.map((r) => (
+        {held.map((r) => (
           <option key={r} value={r}>
             Acting as {LABEL[r]}
           </option>

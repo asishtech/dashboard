@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import {
   AlertIcon,
   CheckIcon,
@@ -230,6 +228,8 @@ export default function CoordinatorsPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -244,17 +244,7 @@ export default function CoordinatorsPage() {
           </div>
 
           <div className="header-actions">
-            <Link href="/events" className="btn btn-ghost btn-sm">
-              Events
-            </Link>
 
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              Dashboard
-            </Link>
-
-            <RoleSwitcher />
-
-            <LogoutButton />
           </div>
         </header>
 

@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertIcon, CheckIcon } from "@/components/icons";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 
 type Item = {
   id: number;
@@ -380,6 +379,8 @@ export default function ScannerPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container container-narrow">
 
         <header className="page-header">
@@ -396,11 +397,6 @@ export default function ScannerPage() {
           </div>
 
           <div className="header-actions">
-            <Link href="/volunteer" className="btn btn-ghost btn-sm">
-              Back to dashboard
-            </Link>
-
-            <RoleSwitcher />
           </div>
         </header>
 

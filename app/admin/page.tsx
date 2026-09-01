@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
@@ -608,6 +607,8 @@ export default function AdminPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -640,17 +641,6 @@ export default function AdminPage() {
               </span>
             )}
 
-            <Link href="/events" className="btn btn-ghost btn-sm">
-              Events
-            </Link>
-
-            <Link
-              href="/admin/registrations"
-              className="btn btn-ghost btn-sm"
-            >
-              Registrations
-            </Link>
-
             <button
               type="button"
               onClick={forceRefresh}
@@ -665,9 +655,7 @@ export default function AdminPage() {
                   : "Sync V-TAPP"}
             </button>
 
-            <RoleSwitcher />
 
-            <LogoutButton />
           </div>
         </header>
 

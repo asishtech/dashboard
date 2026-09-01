@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import NavBar from "@/components/NavBar";
 import {
   AlertIcon,
   BoxIcon,
@@ -202,6 +200,8 @@ export default function InventoryPage() {
 
   return (
     <main className="app">
+      <NavBar />
+
       <div className="container">
 
         <header className="page-header">
@@ -218,20 +218,7 @@ export default function InventoryPage() {
           </div>
 
           <div className="header-actions">
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              Dashboard
-            </Link>
 
-            <Link
-              href="/admin/registrations"
-              className="btn btn-ghost btn-sm"
-            >
-              Registrations
-            </Link>
-
-            <RoleSwitcher />
-
-            <LogoutButton />
           </div>
         </header>
 
