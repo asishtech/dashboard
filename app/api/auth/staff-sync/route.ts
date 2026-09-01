@@ -32,7 +32,7 @@ export async function POST() {
 
     const { data: invite, error: inviteError } = await db
       .from("staff_invites")
-      .select("role,active")
+      .select("role,roles,active")
       .eq("email", email)
       .maybeSingle();
 
@@ -68,6 +68,14 @@ export async function POST() {
       .upsert(
         {
           id: user.id,
+          /*
+           * Copy the whole set. Sending only the primary role would
+           * quietly drop every other role the moment they signed in.
+           */
+          roles:
+            Array.isArray(invite.roles) && invite.roles.length > 0
+              ? invite.roles
+              : [invite.role],
           role: invite.role,
           active: true,
         },
@@ -83,6 +91,7 @@ export async function POST() {
       invited: true,
       active: true,
       role: invite.role,
+      roles: invite.roles ?? [invite.role],
     });
   } catch (error) {
     console.error("Staff sync failed:", error);

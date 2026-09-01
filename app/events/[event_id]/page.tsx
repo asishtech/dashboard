@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
@@ -209,6 +210,8 @@ export default function EventDetailPage({
             <Link href="/events" className="btn btn-ghost btn-sm">
               All events
             </Link>
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>

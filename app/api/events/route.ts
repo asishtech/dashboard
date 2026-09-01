@@ -74,7 +74,7 @@ export async function GET(request: Request) {
      * registration number, so revenue is dropped from the payload
      * rather than hidden by the UI.
      */
-    const isAdmin = auth.profile.role === "admin";
+    const isAdmin = auth.activeRole === "admin";
 
     const payload = isAdmin
       ? filtered

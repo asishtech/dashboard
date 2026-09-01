@@ -1270,6 +1270,76 @@ table,
 }
 
 /* Compact select for inline use inside a row. */
+/* Role checkboxes drawn as toggle chips. One account can hold
+   several roles, so a set of toggles says that where a dropdown
+   implied a single choice. */
+.role-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  min-height: 36px;
+  padding: 0 var(--space-3);
+
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.role-chip input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: inherit;
+}
+
+.role-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.role-chip.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+
+.role-picker:disabled .role-chip,
+fieldset.role-picker:disabled .role-chip {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Sits in a header row beside the buttons, so it matches their
+   height rather than the taller form-field size. */
+.role-switcher {
+  min-width: 150px;
+  min-height: 34px;
+  font-size: var(--text-sm);
+  border-color: var(--accent-line);
+  background-color: var(--accent-soft);
+}
+
 .select-inline {
   width: auto;
   min-width: 132px;

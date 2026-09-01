@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { AlertIcon, InboxIcon } from "@/components/icons";
 
 type Item = {
@@ -127,7 +128,9 @@ export default function BuyerPage() {
             </p>
           </div>
 
-          <LogoutButton />
+          <RoleSwitcher />
+
+            <LogoutButton />
         </header>
 
 

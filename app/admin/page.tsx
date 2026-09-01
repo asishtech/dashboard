@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
@@ -663,6 +664,8 @@ export default function AdminPage() {
                   ? "Refreshing"
                   : "Sync V-TAPP"}
             </button>
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>

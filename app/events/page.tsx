@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
@@ -156,6 +157,8 @@ export default function EventsPage() {
                 Dashboard
               </Link>
             )}
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>

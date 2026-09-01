@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import {
   AlertIcon,
   BoxIcon,
@@ -227,6 +228,8 @@ export default function InventoryPage() {
             >
               Registrations
             </Link>
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>

@@ -115,7 +115,7 @@ export default async function ClaimPage({
   ] = await Promise.all([
     db
       .from("profiles")
-      .select("role,active")
+      .select("role,roles,active")
       .eq("id", user.id)
       .maybeSingle(),
 
@@ -171,10 +171,23 @@ export default async function ClaimPage({
    * Buyers can only access their own QR.
    */
 
+  /*
+   * Any granted role counts here, not the active one. This is a
+   * one-off page reached by scanning, and a volunteer who happens to
+   * be viewing as a buyer should still be able to do their job at
+   * the counter.
+   */
+  const heldRoles: string[] =
+    Array.isArray(profile?.roles) && profile.roles.length > 0
+      ? profile.roles
+      : profile?.role
+        ? [profile.role]
+        : [];
+
   const isPrivileged =
     profile?.active === true &&
-    (profile.role === "admin" ||
-      profile.role === "volunteer");
+    (heldRoles.includes("admin") ||
+      heldRoles.includes("volunteer"));
 
   const registrationEmail =
     registration.email

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { AlertIcon, BoxIcon } from "@/components/icons";
 
 type Item = {
@@ -246,6 +247,8 @@ export default function RegistrationDetailPage({
             >
               All registrations
             </Link>
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>

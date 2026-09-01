@@ -97,7 +97,7 @@ export async function proxy(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role,active")
+    .select("role,roles,active")
     .eq("id", claims.sub)
     .maybeSingle();
 
@@ -110,7 +110,28 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  const role = profile.role as string;
+  /*
+   * Route by the *active* role, matching what the API enforces. The
+   * cookie only selects among roles the profile actually holds;
+   * anything else falls back to the primary one, so a forged cookie
+   * gains nothing.
+   */
+  const held: string[] =
+    Array.isArray(profile.roles) && profile.roles.length > 0
+      ? (profile.roles as string[])
+      : [profile.role as string].filter(Boolean);
+
+  const requested = request.cookies.get(
+    "vtapp_active_role"
+  )?.value;
+
+  const role =
+    requested && held.includes(requested)
+      ? requested
+      : (["admin", "faculty", "volunteer", "buyer"].find((r) =>
+          held.includes(r)
+        ) ??
+        (profile.role as string));
 
   if (path.startsWith("/admin") && role !== "admin") {
     return redirectPreservingCookies(

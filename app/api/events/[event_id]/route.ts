@@ -92,7 +92,7 @@ export async function GET(
 
     const attendees = (attendeesResult.data ?? []) as Attendee[];
 
-    const isAdmin = auth.profile.role === "admin";
+    const isAdmin = auth.activeRole === "admin";
 
     return NextResponse.json({
       success: true,

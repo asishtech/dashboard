@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import {
   AlertIcon,
   CheckIcon,
@@ -250,6 +251,8 @@ export default function CoordinatorsPage() {
             <Link href="/admin" className="btn btn-ghost btn-sm">
               Dashboard
             </Link>
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>

@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-const STAFF_COLUMNS = "id,email,role,active,created_at";
+const STAFF_COLUMNS = "id,email,role,roles,active,created_at";
 
 /* Roles an admin may hand out from the staff screen. */
 const ASSIGNABLE: Role[] = [
@@ -76,9 +76,22 @@ export async function POST(request: Request) {
         ? body.email.trim().toLowerCase()
         : "";
 
-    const role: Role | null = ASSIGNABLE.includes(body.role)
-      ? (body.role as Role)
-      : null;
+    /*
+     * `roles` is the set; `role` remains accepted so older callers
+     * keep working. A database trigger derives the primary role from
+     * the set, so nothing here has to.
+     */
+    const requested: Role[] = Array.isArray(body.roles)
+      ? body.roles
+      : body.role
+        ? [body.role]
+        : [];
+
+    const roles = requested.filter((r) =>
+      ASSIGNABLE.includes(r)
+    ) as Role[];
+
+    const role: Role | null = roles.length > 0 ? roles[0] : null;
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
@@ -89,7 +102,9 @@ export async function POST(request: Request) {
 
     if (!role) {
       return NextResponse.json(
-        { error: `Role must be one of: ${ASSIGNABLE.join(", ")}` },
+        {
+          error: `Pick at least one role from: ${ASSIGNABLE.join(", ")}`,
+        },
         { status: 400 }
       );
     }
@@ -107,7 +122,7 @@ export async function POST(request: Request) {
     if (existing) {
       const { data, error } = await db
         .from("staff_invites")
-        .update({ role, active: true })
+        .update({ roles, active: true })
         .eq("id", existing.id)
         .select(STAFF_COLUMNS)
         .single();
@@ -123,7 +138,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await db
       .from("staff_invites")
-      .insert({ email, role, active: true })
+      .insert({ email, roles, active: true })
       .select(STAFF_COLUMNS)
       .single();
 
@@ -176,23 +191,28 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const patch: { active?: boolean; role?: Role } = {};
+    const patch: { active?: boolean; roles?: Role[] } = {};
 
     if (typeof body.active === "boolean") {
       patch.active = body.active;
     }
 
-    if (body.role !== undefined) {
-      if (!ASSIGNABLE.includes(body.role)) {
+    if (body.roles !== undefined) {
+      const next = (
+        Array.isArray(body.roles) ? body.roles : []
+      ).filter((r: Role) => ASSIGNABLE.includes(r)) as Role[];
+
+      if (next.length === 0) {
         return NextResponse.json(
           {
-            error: `Role must be one of: ${ASSIGNABLE.join(", ")}`,
+            error:
+              "Keep at least one role. Untick the access box to remove them instead.",
           },
           { status: 400 }
         );
       }
 
-      patch.role = body.role as Role;
+      patch.roles = next;
     }
 
     if (Object.keys(patch).length === 0) {
@@ -206,7 +226,7 @@ export async function PATCH(request: Request) {
 
     const { data: target, error: targetError } = await db
       .from("staff_invites")
-      .select("id,email,role")
+      .select("id,email,role,roles")
       .eq("id", id)
       .maybeSingle();
 
@@ -228,7 +248,11 @@ export async function PATCH(request: Request) {
       auth.user.email?.trim().toLowerCase() ===
       String(target.email).trim().toLowerCase();
 
-    if (self && (patch.active === false || patch.role !== "admin")) {
+    if (
+      self &&
+      (patch.active === false ||
+        (patch.roles && !patch.roles.includes("admin")))
+    ) {
       return NextResponse.json(
         {
           error:
@@ -242,15 +266,21 @@ export async function PATCH(request: Request) {
      * The last admin must stay an admin, or nobody can administer
      * anything.
      */
+    const targetIsAdmin = (
+      Array.isArray(target.roles) && target.roles.length > 0
+        ? target.roles
+        : [target.role]
+    ).includes("admin");
+
     if (
-      target.role === "admin" &&
+      targetIsAdmin &&
       (patch.active === false ||
-        (patch.role && patch.role !== "admin"))
+        (patch.roles && !patch.roles.includes("admin")))
     ) {
       const { count, error: countError } = await db
         .from("staff_invites")
         .select("id", { count: "exact", head: true })
-        .eq("role", "admin")
+        .contains("roles", ["admin"])
         .eq("active", true);
 
       if (countError) throw countError;
@@ -280,7 +310,7 @@ export async function PATCH(request: Request) {
      * is what actually gates access, so someone already signed in
      * keeps their old role until this runs too.
      */
-    if (patch.role || patch.active === false) {
+    if (patch.roles || patch.active === false) {
       const { data: authUser } = await db.auth.admin.listUsers();
 
       const match = authUser?.users?.find(
@@ -293,7 +323,7 @@ export async function PATCH(request: Request) {
         const { error: profileError } = await db
           .from("profiles")
           .update({
-            ...(patch.role ? { role: patch.role } : {}),
+            ...(patch.roles ? { roles: patch.roles } : {}),
             ...(patch.active !== undefined
               ? { active: patch.active }
               : {}),

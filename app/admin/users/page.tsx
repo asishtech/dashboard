@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import {
   AlertIcon,
   CheckIcon,
@@ -17,10 +18,18 @@ type Filter = StaffRole | "ALL" | "DISABLED";
 type StaffUser = {
   id: number;
   email: string;
+  /* Primary role, derived from `roles` by the database. */
   role: StaffRole;
+  /* Every role this person may act as. */
+  roles: StaffRole[] | null;
   active: boolean;
   created_at: string;
 };
+
+/* Tolerates rows a migration has not reached yet. */
+function rolesOf(u: StaffUser): StaffRole[] {
+  return u.roles && u.roles.length > 0 ? u.roles : [u.role];
+}
 
 /*
  * What each role gets, shown next to the picker so the choice is not
@@ -52,7 +61,9 @@ const ROLES: { value: StaffRole; label: string; help: string }[] = [
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<StaffRole>("faculty");
+  const [newRoles, setNewRoles] = useState<StaffRole[]>([
+    "faculty",
+  ]);
 
   /* Row currently being saved, so only that row shows a spinner. */
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -134,6 +145,11 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (newRoles.length === 0) {
+      setError("Pick at least one role.");
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -147,7 +163,7 @@ export default function AdminUsersPage() {
           },
           body: JSON.stringify({
             email: normalizedEmail,
-            role,
+            roles: newRoles,
           }),
         }
       );
@@ -164,7 +180,7 @@ export default function AdminUsersPage() {
       setEmail("");
 
       setMessage(
-        `${normalizedEmail} added as ${role}.`
+        `${normalizedEmail} added as ${newRoles.join(" + ")}.`
       );
 
       await loadUsers();
@@ -181,7 +197,7 @@ export default function AdminUsersPage() {
 
   async function updateUser(
     user: StaffUser,
-    patch: { active?: boolean; role?: StaffRole }
+    patch: { active?: boolean; roles?: StaffRole[] }
   ) {
     setError("");
     setMessage("");
@@ -201,8 +217,8 @@ export default function AdminUsersPage() {
       }
 
       setMessage(
-        patch.role
-          ? `${user.email} is now ${patch.role}.`
+        patch.roles
+          ? `${user.email} is now ${patch.roles.join(" + ")}.`
           : patch.active
             ? `${user.email} can sign in.`
             : `${user.email} can no longer sign in.`
@@ -236,7 +252,9 @@ export default function AdminUsersPage() {
     let disabled = 0;
 
     for (const u of users) {
-      by[u.role] = (by[u.role] ?? 0) + 1;
+      for (const r of rolesOf(u)) {
+        by[r] = (by[r] ?? 0) + 1;
+      }
       if (!u.active) disabled++;
     }
 
@@ -251,7 +269,7 @@ export default function AdminUsersPage() {
       if (
         filter !== "ALL" &&
         filter !== "DISABLED" &&
-        u.role !== filter
+        !rolesOf(u).includes(filter)
       ) {
         return false;
       }
@@ -296,6 +314,8 @@ export default function AdminUsersPage() {
             <Link href="/admin" className="btn btn-ghost btn-sm">
               Dashboard
             </Link>
+
+            <RoleSwitcher />
 
             <LogoutButton />
           </div>
@@ -396,25 +416,37 @@ export default function AdminUsersPage() {
             </div>
 
             <div className="field mb-0">
-              <label className="label" htmlFor="staff-role">
-                Role
-              </label>
+              <span className="label">Roles</span>
 
-              <select
-                id="staff-role"
-                className="select"
-                value={role}
-                onChange={(event) =>
-                  setRole(event.target.value as StaffRole)
-                }
-                disabled={saving}
-              >
-                {ROLES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="role-picker">
+                {ROLES.map((option) => {
+                  const on = newRoles.includes(option.value);
+
+                  return (
+                    <label
+                      key={option.value}
+                      className={`role-chip${on ? " is-on" : ""}`}
+                      title={option.help}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={saving}
+                        onChange={() =>
+                          setNewRoles((current) =>
+                            current.includes(option.value)
+                              ? current.filter(
+                                  (r) => r !== option.value
+                                )
+                              : [...current, option.value]
+                          )
+                        }
+                      />
+                      {option.label}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
             <button
@@ -428,7 +460,14 @@ export default function AdminUsersPage() {
           </form>
 
           <div className="panel-footer">
-            {ROLES.find((r) => r.value === role)?.help}
+            {newRoles.length === 0
+              ? "Pick at least one role."
+              : newRoles
+                  .map(
+                    (r) => ROLES.find((o) => o.value === r)?.help
+                  )
+                  .filter(Boolean)
+                  .join(" ")}
           </div>
         </section>
 
@@ -532,36 +571,46 @@ export default function AdminUsersPage() {
 
                     <div className="row-meta">
                       {user.active
-                        ? ROLES.find((r) => r.value === user.role)
-                            ?.help ?? user.role
+                        ? `Acts as ${rolesOf(user).join(", ")}`
                         : "No access"}
                     </div>
                   </div>
 
-                  <label
-                    className="sr-only"
-                    htmlFor={`role-${user.id}`}
-                  >
-                    Role for {user.email}
-                  </label>
+                  <fieldset className="role-picker" disabled={
+                    savingId === user.id || !user.active
+                  }>
+                    <legend className="sr-only">
+                      Roles for {user.email}
+                    </legend>
 
-                  <select
-                    id={`role-${user.id}`}
-                    className="select select-inline"
-                    value={user.role}
-                    disabled={savingId === user.id || !user.active}
-                    onChange={(event) =>
-                      updateUser(user, {
-                        role: event.target.value as StaffRole,
-                      })
-                    }
-                  >
-                    {ROLES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    {ROLES.map((option) => {
+                      const held = rolesOf(user);
+                      const on = held.includes(option.value);
+
+                      return (
+                        <label
+                          key={option.value}
+                          className={`role-chip${on ? " is-on" : ""}`}
+                          title={option.help}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() =>
+                              updateUser(user, {
+                                roles: on
+                                  ? held.filter(
+                                      (r) => r !== option.value
+                                    )
+                                  : [...held, option.value],
+                              })
+                            }
+                          />
+                          {option.label}
+                        </label>
+                      );
+                    })}
+                  </fieldset>
                 </div>
               ))}
             </div>

@@ -19,14 +19,46 @@ export type Role =
   | "faculty";
 
 export type Profile = {
+  /* Primary role, the highest-privilege one they hold. */
   role: Role;
+  /* Every role they may use. */
+  roles: Role[];
   active: boolean;
 };
 
 export type Session = {
   user: User;
   profile: Profile;
+
+  /*
+   * The role this request acts as. Chosen by the user from the roles
+   * they hold, and re-validated here on every request -- the cookie
+   * is a request, not a grant.
+   */
+  activeRole: Role;
 };
+
+/* Cookie carrying the chosen role. Value is never trusted as-is. */
+export const ROLE_COOKIE = "vtapp_active_role";
+
+/*
+ * Highest privilege first. Used to pick a default when no role has
+ * been chosen, and to resolve the primary role.
+ */
+const ROLE_ORDER: Role[] = [
+  "admin",
+  "faculty",
+  "volunteer",
+  "buyer",
+];
+
+export function primaryRole(roles: Role[]): Role | null {
+  for (const r of ROLE_ORDER) {
+    if (roles.includes(r)) return r;
+  }
+
+  return roles[0] ?? null;
+}
 
 /*
  * Request-scoped Supabase client that reads and refreshes the
@@ -79,7 +111,7 @@ export async function getSession(): Promise<Session | null> {
 
   const { data: profile } = await supabaseAdmin()
     .from("profiles")
-    .select("role,active")
+    .select("role,roles,active")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -87,7 +119,44 @@ export async function getSession(): Promise<Session | null> {
     return null;
   }
 
-  return { user, profile: profile as Profile };
+  /*
+   * `roles` was added later, so fall back to the single `role` for
+   * any row a migration has not reached.
+   */
+  const roles = (
+    Array.isArray(profile.roles) && profile.roles.length > 0
+      ? profile.roles
+      : [profile.role]
+  ).filter(Boolean) as Role[];
+
+  if (roles.length === 0) {
+    return null;
+  }
+
+  /*
+   * Resolve the active role. The cookie only decides *which of their
+   * own roles* applies; anything it asks for that they do not hold is
+   * discarded and the primary role is used instead.
+   */
+  const cookieStore = await cookies();
+  const requested = cookieStore.get(ROLE_COOKIE)?.value as
+    | Role
+    | undefined;
+
+  const activeRole =
+    requested && roles.includes(requested)
+      ? requested
+      : (primaryRole(roles) as Role);
+
+  return {
+    user,
+    profile: {
+      role: (profile.role ?? activeRole) as Role,
+      roles,
+      active: profile.active,
+    },
+    activeRole,
+  };
 }
 
 /*
@@ -112,7 +181,12 @@ export async function requireRole(
     );
   }
 
-  if (!allowed.includes(session.profile.role)) {
+  /*
+   * Deliberately the active role, not the set. Switching to Faculty
+   * is meant to actually reduce what you can reach, otherwise the
+   * switcher is decoration.
+   */
+  if (!allowed.includes(session.activeRole)) {
     return NextResponse.json(
       { error: "Insufficient permissions" },
       { status: 403 }
@@ -139,7 +213,7 @@ export async function allowedEventIds(
    * an event's coordinator; the admin role wins and they see
    * everything.
    */
-  if (session.profile.role === "admin") {
+  if (session.activeRole === "admin") {
     return null;
   }
 
