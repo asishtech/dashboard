@@ -30,11 +30,23 @@ export async function POST() {
 
     const db = supabaseAdmin();
 
-    const { data: invite, error: inviteError } = await db
+    /*
+     * `roles` only exists after supabase/multi-role.sql. Without the
+     * fallback a missing column would stop anyone signing in at all.
+     */
+    let { data: invite, error: inviteError } = await db
       .from("staff_invites")
       .select("role,roles,active")
       .eq("email", email)
       .maybeSingle();
+
+    if (inviteError?.code === "42703") {
+      ({ data: invite, error: inviteError } = await db
+        .from("staff_invites")
+        .select("role,active")
+        .eq("email", email)
+        .maybeSingle());
+    }
 
     if (inviteError) {
       console.error("Staff invite lookup failed:", inviteError);
@@ -72,10 +84,10 @@ export async function POST() {
            * Copy the whole set. Sending only the primary role would
            * quietly drop every other role the moment they signed in.
            */
-          roles:
-            Array.isArray(invite.roles) && invite.roles.length > 0
-              ? invite.roles
-              : [invite.role],
+          ...(Array.isArray(invite.roles) &&
+          invite.roles.length > 0
+            ? { roles: invite.roles }
+            : {}),
           role: invite.role,
           active: true,
         },

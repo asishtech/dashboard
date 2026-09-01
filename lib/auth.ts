@@ -91,6 +91,66 @@ export async function createSupabaseServer() {
 }
 
 /*
+ * True once we have seen that `profiles.roles` is absent.
+ *
+ * The multi-role migration adds that column. Selecting a column that
+ * does not exist makes PostgREST reject the whole query, which would
+ * mean nobody -- including the admin who has to run the migration --
+ * could sign in. So the first failure is remembered and every later
+ * read skips straight to the single-role shape.
+ */
+let rolesColumnMissing = false;
+
+/* Postgres: undefined_column. */
+const UNDEFINED_COLUMN = "42703";
+
+type ProfileRow = {
+  role: Role | null;
+  roles?: Role[] | null;
+  active: boolean | null;
+};
+
+async function readProfile(
+  userId: string
+): Promise<ProfileRow | null> {
+  const db = supabaseAdmin();
+
+  if (!rolesColumnMissing) {
+    const { data, error } = await db
+      .from("profiles")
+      .select("role,roles,active")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!error) {
+      return data as ProfileRow | null;
+    }
+
+    if (error.code !== UNDEFINED_COLUMN) {
+      throw error;
+    }
+
+    console.warn(
+      "profiles.roles is missing; falling back to the single role. Run supabase/multi-role.sql to enable role switching."
+    );
+
+    rolesColumnMissing = true;
+  }
+
+  const { data, error } = await db
+    .from("profiles")
+    .select("role,active")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as ProfileRow | null;
+}
+
+/*
  * Resolve the signed-in user together with their profile.
  *
  * Returns null when the caller is anonymous, has no profile, or
@@ -109,20 +169,12 @@ export async function getSession(): Promise<Session | null> {
     return null;
   }
 
-  const { data: profile } = await supabaseAdmin()
-    .from("profiles")
-    .select("role,roles,active")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await readProfile(user.id);
 
   if (!profile?.active) {
     return null;
   }
 
-  /*
-   * `roles` was added later, so fall back to the single `role` for
-   * any row a migration has not reached.
-   */
   const roles = (
     Array.isArray(profile.roles) && profile.roles.length > 0
       ? profile.roles

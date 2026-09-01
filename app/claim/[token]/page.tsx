@@ -115,7 +115,7 @@ export default async function ClaimPage({
   ] = await Promise.all([
     db
       .from("profiles")
-      .select("role,roles,active")
+      .select("role,active")
       .eq("id", user.id)
       .maybeSingle(),
 
@@ -177,12 +177,13 @@ export default async function ClaimPage({
    * be viewing as a buyer should still be able to do their job at
    * the counter.
    */
-  const heldRoles: string[] =
-    Array.isArray(profile?.roles) && profile.roles.length > 0
-      ? profile.roles
-      : profile?.role
-        ? [profile.role]
-        : [];
+  /*
+   * Only the primary role is read here. It is the highest-privilege
+   * one the account holds, so an admin or volunteer still passes;
+   * selecting `roles` would fail outright wherever the multi-role
+   * migration has not run.
+   */
+  const heldRoles: string[] = profile?.role ? [profile.role] : [];
 
   const isPrivileged =
     profile?.active === true &&

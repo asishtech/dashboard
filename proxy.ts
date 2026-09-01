@@ -95,11 +95,24 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const { data: profile } = await supabase
+  /*
+   * `roles` only exists after supabase/multi-role.sql. Selecting a
+   * missing column makes PostgREST reject the query, which here would
+   * sign everybody out, so fall back to the single-role shape.
+   */
+  let { data: profile } = await supabase
     .from("profiles")
     .select("role,roles,active")
     .eq("id", claims.sub)
     .maybeSingle();
+
+  if (!profile) {
+    ({ data: profile } = await supabase
+      .from("profiles")
+      .select("role,active")
+      .eq("id", claims.sub)
+      .maybeSingle());
+  }
 
   if (!profile?.active) {
     await supabase.auth.signOut();

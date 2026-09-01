@@ -27,10 +27,19 @@ export async function GET() {
   }
 
   try {
-    const { data, error } = await supabaseAdmin()
+    const first = await supabaseAdmin()
       .from("staff_invites")
       .select(STAFF_COLUMNS)
       .order("created_at", { ascending: false });
+
+    /* 42703: `roles` is absent until supabase/multi-role.sql runs. */
+    const { data, error } =
+      first.error?.code === "42703"
+        ? await supabaseAdmin()
+            .from("staff_invites")
+            .select("id,email,role,active,created_at")
+            .order("created_at", { ascending: false })
+        : first;
 
     if (error) throw error;
 
