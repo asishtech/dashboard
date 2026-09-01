@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useLiveRefresh } from "@/lib/use-realtime";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { BoxIcon, ScanIcon } from "@/components/icons";
 
 type InventoryItem = {
@@ -203,6 +204,8 @@ export default function VolunteerPage() {
             <Link href="/admin" className="btn btn-ghost btn-sm">
               Admin
             </Link>
+
+            <RoleSwitcher />
 
             <button
               type="button"

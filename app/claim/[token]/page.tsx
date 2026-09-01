@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import Link from "next/link";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import {
   ArrowLeftIcon,
   BoxIcon,
@@ -338,6 +339,8 @@ export default async function ClaimPage({
               <ArrowLeftIcon size={15} />
               {backLabel}
             </Link>
+
+            <RoleSwitcher />
           </div>
         </header>
 
