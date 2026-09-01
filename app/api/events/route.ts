@@ -5,6 +5,7 @@ import {
   isMixed,
   type Pricing,
 } from "@/lib/event-pricing";
+import { merchandiseEventIds } from "@/lib/events";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -44,17 +45,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { data, error } = await supabaseAdmin().rpc(
-      "event_summaries"
-    );
+    const [summaries, merchIds, allowed] = await Promise.all([
+      supabaseAdmin().rpc("event_summaries"),
+      merchandiseEventIds(),
+      allowedEventIds(auth),
+    ]);
 
-    if (error) {
-      throw error;
+    if (summaries.error) {
+      throw summaries.error;
     }
 
-    const allowed = await allowedEventIds(auth);
-
-    const all = (data ?? []) as EventSummary[];
+    /*
+     * Merchandise is a row in `events` for the resolver's benefit, not
+     * something to browse alongside Art Attack. It has its own screens
+     * (Registrations, Inventory), so it is dropped here -- which also
+     * keeps the revenue total on this page to actual event revenue.
+     */
+    const all = ((summaries.data ?? []) as EventSummary[]).filter(
+      (event) => !merchIds.has(String(event.event_id))
+    );
 
     const events =
       allowed === null

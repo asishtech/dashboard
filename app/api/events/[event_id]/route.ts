@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canReadEvent, requireRole } from "@/lib/auth";
 import { classifyPricing, isMixed } from "@/lib/event-pricing";
+import { merchandiseEventIds } from "@/lib/events";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,21 @@ export async function GET(
       return NextResponse.json(
         { error: "You do not have access to this event" },
         { status: 403 }
+      );
+    }
+
+    /*
+     * The merchandise row exists so the resolver can map hoodie
+     * orders; it is not an event. Dropping it from the list is not
+     * enough on its own -- an old bookmark would still open it here.
+     */
+    if ((await merchandiseEventIds()).has(event_id)) {
+      return NextResponse.json(
+        {
+          error:
+            "Merchandise is not an event. See Registrations and Inventory.",
+        },
+        { status: 404 }
       );
     }
 
