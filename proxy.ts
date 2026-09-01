@@ -14,13 +14,15 @@ function needsRole(path: string) {
     path === "/" ||
     path.startsWith("/admin") ||
     path.startsWith("/volunteer") ||
-    path.startsWith("/buyer")
+    path.startsWith("/buyer") ||
+    path.startsWith("/events")
   );
 }
 
 function destinationFor(role: string) {
   if (role === "admin") return "/admin";
   if (role === "volunteer") return "/volunteer";
+  if (role === "coordinator") return "/events";
   if (role === "buyer") return "/buyer";
 
   return "/login";
@@ -132,6 +134,22 @@ export async function proxy(request: NextRequest) {
     path.startsWith("/buyer") &&
     role !== "buyer" &&
     role !== "admin"
+  ) {
+    return redirectPreservingCookies(
+      new URL(destinationFor(role), request.url),
+      response
+    );
+  }
+
+  /*
+   * Events are shared between admins and club coordinators. The API
+   * scopes a coordinator to their own assignments; this only decides
+   * who may open the page at all.
+   */
+  if (
+    path.startsWith("/events") &&
+    role !== "admin" &&
+    role !== "coordinator"
   ) {
     return redirectPreservingCookies(
       new URL(destinationFor(role), request.url),

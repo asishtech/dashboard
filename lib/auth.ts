@@ -6,7 +6,11 @@ import type { User } from "@supabase/supabase-js";
 import { supabaseAnonKey, supabaseUrl } from "./env";
 import { supabaseAdmin } from "./supabase";
 
-export type Role = "admin" | "volunteer" | "buyer";
+export type Role =
+  | "admin"
+  | "volunteer"
+  | "buyer"
+  | "coordinator";
 
 export type Profile = {
   role: Role;
@@ -110,4 +114,50 @@ export async function requireRole(
   }
 
   return session;
+}
+
+/*
+ * Events a coordinator is allowed to see.
+ *
+ * Admins are not restricted; everyone else is limited to their
+ * explicit assignments in `event_coordinators`. Returning null means
+ * "no restriction", which is different from returning [] ("assigned
+ * to nothing"), and the two must not be conflated -- collapsing them
+ * would hand a coordinator with no assignments the full dataset.
+ */
+export async function allowedEventIds(
+  session: Session
+): Promise<string[] | null> {
+  if (session.profile.role === "admin") {
+    return null;
+  }
+
+  const email = session.user.email?.trim().toLowerCase();
+
+  if (!email) {
+    return [];
+  }
+
+  const { data, error } = await supabaseAdmin()
+    .from("event_coordinators")
+    .select("event_id")
+    .eq("email", email);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => String(row.event_id));
+}
+
+/*
+ * Whether this session may read a specific event.
+ */
+export async function canReadEvent(
+  session: Session,
+  eventId: string
+): Promise<boolean> {
+  const allowed = await allowedEventIds(session);
+
+  return allowed === null || allowed.includes(eventId);
 }

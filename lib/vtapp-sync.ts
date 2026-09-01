@@ -792,6 +792,79 @@ async function runSync() {
     }
   }
 
+  /*
+   * Record every event the feed mentions.
+   *
+   * The upstream payload has no event name; the name is the
+   * `product_meta` prefix:
+   *   'Robotics Club Expo - Date: 11 Sep 2026 - Ticket: General'
+   *    ^^^^^^^^^^^^^^^^^^
+   *
+   * `name_locked` guards an admin's rename from being overwritten on
+   * the next sync.
+   */
+  const eventRows = new Map<
+    string,
+    { event_id: string; name: string; event_date: string | null }
+  >();
+
+  for (const entry of entries) {
+    const eventId = String(entry.row.event_id ?? "").trim();
+
+    if (!eventId) {
+      continue;
+    }
+
+    if (eventRows.has(eventId)) {
+      continue;
+    }
+
+    const meta = String(entry.row.product_meta ?? "");
+
+    const name =
+      meta.split(" - Date:")[0].trim() || `Event ${eventId}`;
+
+    eventRows.set(eventId, {
+      event_id: eventId,
+      name,
+      event_date:
+        (entry.row.event_date as string | null) ?? null,
+    });
+  }
+
+  if (eventRows.size > 0) {
+    await clock.time("upsertEvents", async () => {
+      /*
+       * Insert unseen events only. A plain upsert would clobber
+       * `name` for every event on every sync, including renamed ones.
+       */
+      const { data: known, error: knownError } = await db
+        .from("events")
+        .select("event_id")
+        .in("event_id", [...eventRows.keys()]);
+
+      if (knownError) {
+        throw knownError;
+      }
+
+      const seen = new Set(
+        (known ?? []).map((row) => String(row.event_id))
+      );
+
+      const fresh = [...eventRows.values()].filter(
+        (row) => !seen.has(row.event_id)
+      );
+
+      if (fresh.length > 0) {
+        const { error } = await db.from("events").insert(fresh);
+
+        if (error) {
+          throw error;
+        }
+      }
+    });
+  }
+
   const registrationIds = [...idByRegistrationId.values()];
 
   /*

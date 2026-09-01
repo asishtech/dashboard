@@ -1505,6 +1505,39 @@ export default function AdminPage() {
               <ArrowRightIcon size={13} />
             </span>
           </Link>
+
+          <Link href="/events" className="card-link">
+            <ListIcon size={20} />
+
+            <div className="card-link-title mt-4">Events</div>
+
+            <p className="card-link-body">
+              Every event, searchable, with per-event registrations
+              and check-in progress.
+            </p>
+
+            <span className="card-link-cta">
+              Open
+              <ArrowRightIcon size={13} />
+            </span>
+          </Link>
+
+          <Link href="/admin/coordinators" className="card-link">
+            <UsersIcon size={20} />
+
+            <div className="card-link-title mt-4">
+              Club coordinators
+            </div>
+
+            <p className="card-link-body">
+              Give a club coordinator read access to their own event.
+            </p>
+
+            <span className="card-link-cta">
+              Open
+              <ArrowRightIcon size={13} />
+            </span>
+          </Link>
         </section>
 
       </div>
