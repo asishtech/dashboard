@@ -22,6 +22,7 @@ type EventDetail = {
   event_id: string;
   name: string;
   event_date: string | null;
+  venue: string | null;
   registrations: number;
   participants: number;
   scanned: number;
@@ -198,7 +199,9 @@ export default function EventDetailPage({
             <h1 className="page-title">{event.name}</h1>
 
             <p className="page-subtitle">
-              {event.event_date || "No date recorded"}
+              {[event.event_date, event.venue]
+                .filter(Boolean)
+                .join(" · ") || "No schedule recorded"}
             </p>
           </div>
 

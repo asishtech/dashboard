@@ -52,3 +52,7 @@ next-env.d.ts
 
 # Upstream data dumps. These contain real names and email addresses.
 vtapp*.json
+
+# Seed files generated from the organisers' spreadsheet. These hold
+# real student and faculty email addresses and must stay local.
+supabase/local/

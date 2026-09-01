@@ -14,7 +14,9 @@ import {
 type EventSummary = {
   event_id: string;
   name: string;
+  /* The day the event runs, e.g. "D1", "D1 + D2". */
   event_date: string | null;
+  venue: string | null;
   registrations: number;
   participants: number;
   scanned: number;
@@ -316,11 +318,10 @@ export default function EventsPage() {
                             {event.name}
                           </div>
 
-                          <div className="row-meta mono">
-                            #{event.event_id}
-                            {event.event_date
-                              ? ` · ${event.event_date}`
-                              : ""}
+                          <div className="row-meta">
+                            {[event.event_date, event.venue]
+                              .filter(Boolean)
+                              .join(" · ") || "No schedule recorded"}
                           </div>
                         </td>
 
