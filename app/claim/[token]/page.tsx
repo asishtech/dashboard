@@ -3,7 +3,12 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { BoxIcon, LockIcon } from "@/components/icons";
+import Link from "next/link";
+import {
+  ArrowLeftIcon,
+  BoxIcon,
+  LockIcon,
+} from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -222,7 +227,21 @@ export default async function ClaimPage({
             merchandise.
           </p>
 
-          <a href="/login" className="btn btn-block mt-8">
+          {/*
+            * Two ways out. Signing out is the fix when you are in the
+            * wrong Google account, but someone who simply opened a
+            * colleague's link should not have to do that to get back
+            * to their own.
+            */}
+          <Link
+            href="/buyer"
+            className="btn btn-primary btn-block mt-8"
+          >
+            <ArrowLeftIcon size={14} />
+            My merchandise
+          </Link>
+
+          <a href="/login" className="btn btn-block mt-4">
             Switch account
           </a>
         </div>
@@ -266,6 +285,9 @@ export default async function ClaimPage({
       requestHeaders.get("host") ?? ""
     }`;
 
+  const backHref = isPrivileged ? "/volunteer/scan" : "/buyer";
+  const backLabel = isPrivileged ? "Scan another" : "My merchandise";
+
   const qr = await QRCode.toDataURL(
     `${origin}/claim/${token}`,
     {
@@ -291,13 +313,32 @@ export default async function ClaimPage({
             </p>
           </div>
 
-          <span
-            className={`badge ${
-              allGiven ? "badge-success" : "badge-warning"
-            }`}
-          >
-            {allGiven ? "Collected" : `${pendingItems} to collect`}
-          </span>
+          <div className="header-actions">
+            <span
+              className={`badge ${
+                allGiven ? "badge-success" : "badge-warning"
+              }`}
+            >
+              {allGiven ? "Collected" : `${pendingItems} to collect`}
+            </span>
+
+            {/*
+              * A real destination rather than history.back(): this page
+              * is often opened straight from a QR scan, where there is
+              * no history to go back to. Staff arrived by scanning, so
+              * they go to the scanner; a buyer came from their own
+              * orders.
+              */}
+            {/*
+              * Full size, not btn-sm. Unlike the admin screens this
+              * page is opened on a phone at the counter, so the one
+              * navigation control on it gets a proper 46px target.
+              */}
+            <Link href={backHref} className="btn btn-ghost">
+              <ArrowLeftIcon size={15} />
+              {backLabel}
+            </Link>
+          </div>
         </header>
 
 
