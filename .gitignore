@@ -56,3 +56,6 @@ vtapp*.json
 # Seed files generated from the organisers' spreadsheet. These hold
 # real student and faculty email addresses and must stay local.
 supabase/local/
+
+# Supabase CLI scratch state
+supabase/.temp/
