@@ -49,3 +49,6 @@ next-env.d.ts
 *.before-*
 *.orig
 *.rej
+
+# Upstream data dumps. These contain real names and email addresses.
+vtapp*.json
