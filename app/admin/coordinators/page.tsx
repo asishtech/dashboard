@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import {
   AlertIcon,
   CheckIcon,
+  InboxIcon,
+  SearchIcon,
   UsersIcon,
 } from "@/components/icons";
 
@@ -22,6 +24,11 @@ type EventOption = {
   name: string;
 };
 
+type Person = {
+  email: string;
+  assignments: Assignment[];
+};
+
 export default function CoordinatorsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [events, setEvents] = useState<EventOption[]>([]);
@@ -31,8 +38,12 @@ export default function CoordinatorsPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState<"PEOPLE" | "GAPS">("PEOPLE");
 
   const load = useCallback(async () => {
     try {
@@ -50,9 +61,8 @@ export default function CoordinatorsPage() {
 
       setAssignments(data.coordinators ?? []);
       setEvents(data.events ?? []);
-
-      setEventId((current) =>
-        current || (data.events?.[0]?.event_id ?? "")
+      setEventId(
+        (current) => current || (data.events?.[0]?.event_id ?? "")
       );
     } catch (err) {
       setError(
@@ -70,9 +80,72 @@ export default function CoordinatorsPage() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  async function addCoordinator(event: React.FormEvent) {
-    event.preventDefault();
+  /*
+   * One row per person, not per assignment. Several people coordinate
+   * four or five events each, and a flat list of every assignment ran
+   * to 177 rows with no way to find anyone in it.
+   */
+  const people = useMemo(() => {
+    const byEmail = new Map<string, Person>();
 
+    for (const a of assignments) {
+      const person = byEmail.get(a.email) ?? {
+        email: a.email,
+        assignments: [],
+      };
+
+      person.assignments.push(a);
+      byEmail.set(a.email, person);
+    }
+
+    return [...byEmail.values()].sort((a, b) =>
+      a.email.localeCompare(b.email)
+    );
+  }, [assignments]);
+
+  /*
+   * Events nobody is responsible for. This is the thing worth
+   * noticing on this screen, and the old flat list could not show it
+   * at all.
+   */
+  const uncovered = useMemo(() => {
+    const covered = new Set(
+      assignments.map((a) => String(a.event_id))
+    );
+
+    return events.filter(
+      (e) => !covered.has(String(e.event_id))
+    );
+  }, [assignments, events]);
+
+  const filteredPeople = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return people;
+
+    return people.filter(
+      (p) =>
+        p.email.toLowerCase().includes(q) ||
+        p.assignments.some((a) =>
+          a.event_name.toLowerCase().includes(q)
+        )
+    );
+  }, [people, search]);
+
+  const filteredUncovered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return uncovered;
+
+    return uncovered.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        String(e.event_id).toLowerCase().includes(q)
+    );
+  }, [uncovered, search]);
+
+  async function grant(event: React.FormEvent) {
+    event.preventDefault();
     setError("");
     setMessage("");
 
@@ -106,10 +179,9 @@ export default function CoordinatorsPage() {
       }
 
       setEmail("");
-
       setMessage(
         data.alreadyAssigned
-          ? `${normalized} already had access to ${data.event}.`
+          ? `${normalized} already had ${data.event}.`
           : `${normalized} can now see ${data.event}.`
       );
 
@@ -125,13 +197,14 @@ export default function CoordinatorsPage() {
     }
   }
 
-  async function revoke(assignment: Assignment) {
+  async function revoke(a: Assignment) {
     setError("");
     setMessage("");
+    setBusyId(a.id);
 
     try {
       const response = await fetch(
-        `/api/admin/coordinators?id=${assignment.id}`,
+        `/api/admin/coordinators?id=${a.id}`,
         { method: "DELETE" }
       );
 
@@ -141,10 +214,7 @@ export default function CoordinatorsPage() {
         throw new Error(data.error || "Unable to revoke access");
       }
 
-      setMessage(
-        `Removed ${assignment.email} from ${assignment.event_name}.`
-      );
-
+      setMessage(`Removed ${a.email} from ${a.event_name}.`);
       await load();
     } catch (err) {
       setError(
@@ -152,12 +222,14 @@ export default function CoordinatorsPage() {
           ? err.message
           : "Unable to revoke access"
       );
+    } finally {
+      setBusyId(null);
     }
   }
 
   return (
     <main className="app">
-      <div className="container container-narrow">
+      <div className="container">
 
         <header className="page-header">
           <div>
@@ -166,7 +238,7 @@ export default function CoordinatorsPage() {
             <h1 className="page-title">Club Coordinators</h1>
 
             <p className="page-subtitle">
-              Grant an email read access to a single event
+              Who can see which event
             </p>
           </div>
 
@@ -201,172 +273,283 @@ export default function CoordinatorsPage() {
           </div>
         )}
 
-        <div className="grid grid-main">
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Coordinators</span>
+            <strong className="stat-value">
+              {loading ? "—" : people.length}
+            </strong>
+            <span className="stat-meta">
+              {loading ? " " : `${assignments.length} assignments`}
+            </span>
+          </div>
 
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Grant access</h2>
+          <div className="stat">
+            <span className="stat-label">Events covered</span>
+            <strong className="stat-value stat-success">
+              {loading ? "—" : events.length - uncovered.length}
+            </strong>
+            <span className="stat-meta">of {events.length}</span>
+          </div>
 
-                <p className="panel-subtitle">
-                  They sign in with Google using this address.
-                </p>
-              </div>
+          <div className="stat">
+            <span className="stat-label">No coordinator</span>
+            <strong
+              className={`stat-value ${
+                uncovered.length > 0 ? "stat-warning" : ""
+              }`}
+            >
+              {loading ? "—" : uncovered.length}
+            </strong>
+            <span className="stat-meta">Nobody assigned yet</span>
+          </div>
+        </section>
+
+        {/* Grant access */}
+        <section className="panel mb-8">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Grant access</h2>
+              <p className="panel-subtitle">
+                They see participant name, email and registration
+                number for this event only.
+              </p>
+            </div>
+          </div>
+
+          <form className="panel-body grant-form" onSubmit={grant}>
+            <div className="field mb-0">
+              <label className="label" htmlFor="coordinator-email">
+                Coordinator email
+              </label>
+
+              <input
+                id="coordinator-email"
+                type="email"
+                className="input"
+                placeholder="name@vitap.ac.in"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={saving}
+                required
+              />
             </div>
 
-            <form className="panel-body" onSubmit={addCoordinator}>
-              <div className="field">
-                <label className="label" htmlFor="coordinator-email">
-                  Coordinator email{" "}
-                  <span className="required" aria-hidden="true">
-                    *
-                  </span>
-                </label>
+            <div className="field mb-0">
+              <label className="label" htmlFor="coordinator-event">
+                Event
+              </label>
 
-                <input
-                  id="coordinator-email"
-                  type="email"
-                  className="input"
-                  placeholder="coordinator@vitap.ac.in"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={saving}
-                  required
-                />
-
-                <p className="help">
-                  Must match the Google account they sign in with.
-                </p>
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="coordinator-event">
-                  Event{" "}
-                  <span className="required" aria-hidden="true">
-                    *
-                  </span>
-                </label>
-
-                <select
-                  id="coordinator-event"
-                  className="select"
-                  value={eventId}
-                  onChange={(e) => setEventId(e.target.value)}
-                  disabled={saving || events.length === 0}
-                >
-                  {events.length === 0 ? (
-                    <option value="">No events yet</option>
-                  ) : (
-                    events.map((option) => (
-                      <option
-                        key={option.event_id}
-                        value={option.event_id}
-                      >
-                        {option.name} (#{option.event_id})
-                      </option>
-                    ))
-                  )}
-                </select>
-
-                <p className="help">
-                  Add the same address again to give them a second
-                  event.
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                className="btn btn-primary btn-block"
+              <select
+                id="coordinator-event"
+                className="select"
+                value={eventId}
+                onChange={(e) => setEventId(e.target.value)}
                 disabled={saving || events.length === 0}
               >
-                {saving && <span className="btn-spinner" />}
-                {saving ? "Granting" : "Grant access"}
-              </button>
-
-              <p className="help mt-4">
-                Coordinators see participant name, email and
-                registration number for their event only. Mobile
-                numbers, payment records and other events are never
-                sent to them.
-              </p>
-            </form>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Who has access</h2>
-
-                <p className="panel-subtitle">
-                  {loading
-                    ? " "
-                    : `${assignments.length} assignment${
-                        assignments.length === 1 ? "" : "s"
-                      }`}
-                </p>
-              </div>
+                {events.length === 0 ? (
+                  <option value="">No events yet</option>
+                ) : (
+                  events.map((o) => (
+                    <option key={o.event_id} value={o.event_id}>
+                      {o.name}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
 
-            {loading ? (
-              <div className="panel-body stack">
-                {[1, 2, 3].map((row) => (
-                  <div key={row}>
-                    <div className="skeleton skeleton-line" />
-                    <div
-                      className="skeleton skeleton-line"
-                      style={{ width: "45%" }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : assignments.length === 0 ? (
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving || events.length === 0}
+            >
+              {saving && <span className="btn-spinner" />}
+              {saving ? "Granting" : "Grant"}
+            </button>
+          </form>
+        </section>
+
+        {/* People / gaps */}
+        <section className="panel">
+          <div className="panel-header">
+            <div className="search" style={{ flex: "1 1 280px" }}>
+              <span className="search-icon">
+                <SearchIcon size={16} />
+              </span>
+
+              <label className="sr-only" htmlFor="coordinator-search">
+                Search coordinators and events
+              </label>
+
+              <input
+                id="coordinator-search"
+                type="search"
+                className="input"
+                placeholder="Search by email or event"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Choose a view"
+            >
+              <button
+                type="button"
+                className="segmented-item"
+                aria-pressed={view === "PEOPLE"}
+                onClick={() => setView("PEOPLE")}
+              >
+                People
+              </button>
+
+              <button
+                type="button"
+                className="segmented-item"
+                aria-pressed={view === "GAPS"}
+                onClick={() => setView("GAPS")}
+              >
+                No coordinator
+                {uncovered.length > 0 ? ` (${uncovered.length})` : ""}
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="panel-body stack">
+              {[1, 2, 3, 4].map((r) => (
+                <div key={r}>
+                  <div className="skeleton skeleton-line" />
+                  <div
+                    className="skeleton skeleton-line"
+                    style={{ width: "40%" }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : view === "GAPS" ? (
+            filteredUncovered.length === 0 ? (
               <div className="empty">
                 <div className="empty-icon">
-                  <UsersIcon size={22} />
+                  <CheckIcon size={22} />
                 </div>
 
-                <p className="empty-title">No coordinators yet</p>
+                <p className="empty-title">
+                  {uncovered.length === 0
+                    ? "Every event has a coordinator"
+                    : "Nothing matches that search"}
+                </p>
 
                 <p className="empty-body">
-                  Add an email on the left to give a club coordinator
-                  access to their event.
+                  {uncovered.length === 0
+                    ? "All 90 events have somebody assigned."
+                    : "Try a different event name."}
                 </p>
               </div>
             ) : (
               <div className="panel-body-flush">
-                {assignments.map((assignment) => (
-                  <div className="row-card" key={assignment.id}>
-                    <div className="truncate">
+                {filteredUncovered.map((e) => (
+                  <div className="row-card" key={e.event_id}>
+                    <div className="truncate" style={{ flex: 1 }}>
                       <div className="row-title truncate">
-                        {assignment.email}
+                        {e.name}
                       </div>
-
                       <div className="row-meta">
-                        <span className="badge badge-accent">
-                          {assignment.event_name}
-                        </span>
+                        Nobody can see this event
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={() => revoke(assignment)}
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        setEventId(e.event_id);
+                        setView("PEOPLE");
+                        document
+                          .getElementById("coordinator-email")
+                          ?.focus();
+                      }}
                     >
-                      Revoke
+                      Assign
                     </button>
                   </div>
                 ))}
               </div>
-            )}
+            )
+          ) : filteredPeople.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon">
+                {people.length === 0 ? (
+                  <UsersIcon size={22} />
+                ) : (
+                  <InboxIcon size={22} />
+                )}
+              </div>
 
-            <div className="panel-footer">
-              Revoking removes this event only. If it was their last
-              one they keep the coordinator role but see nothing.
+              <p className="empty-title">
+                {people.length === 0
+                  ? "No coordinators yet"
+                  : "Nothing matches that search"}
+              </p>
+
+              <p className="empty-body">
+                {people.length === 0
+                  ? "Grant access above to give a coordinator their event."
+                  : "Try a different email or event name."}
+              </p>
             </div>
-          </section>
-        </div>
+          ) : (
+            <div className="panel-body-flush">
+              {filteredPeople.map((person) => (
+                <div className="person-row" key={person.email}>
+                  <div className="truncate">
+                    <div className="row-title truncate">
+                      {person.email}
+                    </div>
+
+                    <div className="row-meta">
+                      {person.assignments.length} event
+                      {person.assignments.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+
+                  <div className="chips">
+                    {person.assignments.map((a) => (
+                      <span className="chip" key={a.id}>
+                        <span className="truncate">
+                          {a.event_name}
+                        </span>
+
+                        <button
+                          type="button"
+                          className="chip-remove"
+                          disabled={busyId === a.id}
+                          onClick={() => revoke(a)}
+                          aria-label={`Remove ${a.email} from ${a.event_name}`}
+                          title="Revoke"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loading && view === "PEOPLE" && people.length > 0 && (
+            <div className="panel-footer">
+              Showing {filteredPeople.length} of {people.length}{" "}
+              coordinators. Removing every event leaves the person
+              signed in but seeing nothing.
+            </div>
+          )}
+        </section>
 
       </div>
     </main>

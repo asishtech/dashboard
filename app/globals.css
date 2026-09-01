@@ -1018,6 +1018,124 @@ table,
   font-size: var(--text-sm);
 }
 
+/* Coordinator row: email on the left, their events as chips. One
+   row per person rather than per assignment, which at 177
+   assignments across 129 people is the difference between a list you
+   can scan and one you cannot. */
+.person-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.person-row:last-child {
+  border-bottom: 0;
+}
+
+.person-row:hover {
+  background: var(--surface-raised);
+}
+
+.person-row > .truncate {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  /* 12px keeps the 44px hit areas from overlapping each other. */
+  gap: var(--space-3);
+  justify-content: flex-end;
+  flex: 1 1 340px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 260px;
+
+  padding: 4px 4px 4px var(--space-3);
+
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-full);
+
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+/* Revoking is destructive, so the target has to be forgiving even
+   though the chip is small. The button draws at 22px and extends its
+   hit area to 44px with a pseudo-element, rather than inflating the
+   chip or shipping something easy to mis-tap on a phone. */
+.chip-remove {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+
+  background: transparent;
+  color: var(--text-muted);
+  border: 0;
+  border-radius: var(--radius-full);
+
+  font-size: 15px;
+  line-height: 1;
+
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.chip-remove::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.chip-remove:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.chip-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Grant form: three fields on one line on desktop, stacked on
+   mobile, with the button aligned to the inputs rather than labels. */
+.grant-form {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) auto;
+  align-items: end;
+}
+
+@media (max-width: 720px) {
+  .grant-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chips {
+    justify-content: flex-start;
+  }
+}
+
 /* Small key/value list inside cards. */
 .kv {
   display: grid;
