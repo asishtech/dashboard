@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { readAll } from "@/lib/paged";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -65,10 +66,11 @@ export async function GET(request: Request) {
       eventMapResult,
     ] = await Promise.all([
         (() => {
-          const query = db
-            .from("registrations")
-            .select(
-              `
+          const select = () => {
+            const query = db
+              .from("registrations")
+              .select(
+                `
               id,
               registration_id,
               name,
@@ -85,13 +87,43 @@ export async function GET(request: Request) {
                 distribution:distributions(status)
               )
             `,
-              { count: "exact" }
-            )
-            .order("created_at", { ascending: false });
+                { count: "exact" }
+              )
+              /*
+               * created_at alone is not a total order -- a sync writes
+               * many rows in the same instant -- and ties let rows swap
+               * between pages, dropping some and repeating others. id
+               * breaks them.
+               */
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: false });
 
-          return limit
-            ? query.range(offset, offset + limit - 1)
-            : query;
+            return query;
+          };
+
+          /* An explicit page is honoured as asked for. */
+          if (limit) {
+            return select()
+              .range(offset, offset + limit - 1)
+              .then((r) => ({
+                data: r.data,
+                error: r.error,
+                count: r.count,
+              }));
+          }
+
+          /*
+           * Otherwise every row, in pages. PostgREST stops at 1000 and
+           * says nothing, so an unpaged read silently lost everyone
+           * past the thousandth registration.
+           */
+          return readAll<Record<string, unknown>>((from, to) =>
+            select().range(from, to)
+          ).then(({ rows, total }) => ({
+            data: rows,
+            error: null,
+            count: total,
+          }));
         })(),
 
         db

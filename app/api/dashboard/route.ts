@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireRole } from "@/lib/auth";
+import { readAll } from "@/lib/paged";
+
+/*
+ * readAll, wrapped to look like a single supabase result so callers
+ * that already read .data / .error / .count need no changes.
+ */
+async function paged<T>(
+  build: (
+    from: number,
+    to: number
+  ) => PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+    count?: number | null;
+  }>
+) {
+  const { rows, total } = await readAll<T>(build);
+  return { data: rows, error: null as { message: string } | null, count: total };
+}
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -153,15 +172,42 @@ async function viaScan(db: SupabaseClient): Promise<Summary> {
       )
       .order("item"),
 
-    db
-      .from("registrations")
-      .select("event_id,product_meta,total", { count: "exact" }),
+    /*
+     * Paged, and shaped like a normal result so nothing downstream
+     * changes. This is the fallback used when dashboard_summary() is
+     * missing; a truncated read would not fail here, it would quietly
+     * report a smaller fest, which is the worst of both.
+     */
+    paged<{
+      event_id: string | null;
+      product_meta: string | null;
+      total: number | null;
+    }>((from, to) =>
+      db
+        .from("registrations")
+        .select("event_id,product_meta,total", { count: "exact" })
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
 
-    db
-      .from("registration_items")
-      .select("quantity,distribution:distributions(status)"),
+    paged<{ quantity: number | string | null; distribution: unknown }>(
+      (from, to) =>
+        db
+          .from("registration_items")
+          .select("quantity,distribution:distributions(status)", {
+            count: "exact",
+          })
+          .order("id", { ascending: true })
+          .range(from, to)
+    ),
 
-    db.from("qr_scans").select("event_id", { count: "exact" }),
+    paged<{ event_id: number | string | null }>((from, to) =>
+      db
+        .from("qr_scans")
+        .select("event_id", { count: "exact" })
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
   ]);
 
   if (inventoryResult.error) throw inventoryResult.error;
@@ -319,8 +365,17 @@ async function readPeople(
          * access, and buyer is the default rather than a grant, so
          * anyone who simply bought something never appears there --
          * counting it from that table gave a number that meant nothing.
+         *
+         * Paged: PostgREST stops at 1000 rows, so at 1060 registrations
+         * this head count was quietly computed from a subset.
          */
-        db.from("registrations").select("email"),
+        readAll<{ email: string | null }>((from, to) =>
+          db
+            .from("registrations")
+            .select("email")
+            .order("id", { ascending: true })
+            .range(from, to)
+        ),
 
         db
           .from("profiles")
@@ -329,7 +384,7 @@ async function readPeople(
       ]);
 
     const buyerEmails = new Set(
-      (buyers.error ? [] : (buyers.data ?? []))
+      buyers.rows
         .map((row) => String(row.email ?? "").trim().toLowerCase())
         .filter(Boolean)
     );
