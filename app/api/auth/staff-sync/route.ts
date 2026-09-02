@@ -58,12 +58,59 @@ export async function POST() {
     }
 
     /*
-     * No invitation: leave any existing role untouched.
+     * No invitation: this is an ordinary attendee.
+     *
+     * Buyer is the default, and it is granted here rather than left to
+     * a database trigger on auth.users. Whether that trigger exists has
+     * never been confirmed, and without a profile row /auth/redirect
+     * gives up after five polls and signs the person out with
+     * ?error=profile -- a student turned away from their own pass.
+     *
+     * Only ever inserts. An existing profile is left exactly as it is,
+     * so this can never demote an admin who happens to have no invite
+     * row.
      */
     if (!invite) {
+      const { data: existing, error: existingError } = await db
+        .from("profiles")
+        .select("id,role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (existing) {
+        return NextResponse.json({
+          success: true,
+          invited: false,
+          role: existing.role,
+        });
+      }
+
+      const created = await db
+        .from("profiles")
+        .insert({ id: user.id, role: "buyer", roles: ["buyer"], active: true });
+
+      /* 42703: `roles` is absent until supabase/multi-role.sql runs. */
+      const { error: insertError } =
+        created.error?.code === "42703"
+          ? await db
+              .from("profiles")
+              .insert({ id: user.id, role: "buyer", active: true })
+          : created;
+
+      /*
+       * 23505 means the database trigger got there first, which is the
+       * outcome we wanted anyway.
+       */
+      if (insertError && insertError.code !== "23505") {
+        throw insertError;
+      }
+
       return NextResponse.json({
         success: true,
         invited: false,
+        role: "buyer",
       });
     }
 

@@ -538,6 +538,18 @@ table,
   gap: var(--space-2);
 }
 
+/* Actions inside a centred block, such as an empty state. The plain
+   row is a flex container spanning the full width, so its buttons pack
+   to the left of a panel whose text is centred -- 336px off-centre at
+   880px wide. */
+.actions-centred {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
 /* Section heading --------------------------------------------------------- */
 
 .section-header {

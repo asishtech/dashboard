@@ -41,6 +41,14 @@ type MerchOrder = {
 };
 
 /*
+ * Where a student goes to register or buy. Overridable, because a fest
+ * portal URL is exactly the kind of thing that changes a week out.
+ */
+const PORTAL_URL =
+  process.env.NEXT_PUBLIC_EVENTS_PORTAL_URL ||
+  "https://events.vitap.ac.in";
+
+/*
  * Everything one Google account owns, in two sections that never mix.
  * A person can register for six events and buy two hoodies; those are
  * different kinds of thing with different questions attached ("where
@@ -163,11 +171,38 @@ export default function BuyerPage() {
               <p className="empty-title">Nothing here yet</p>
 
               <p className="empty-body">
-                We couldn&apos;t find any V-TAPP events or merchandise
-                for {user?.email ?? "your Google account"}. If you
-                registered with a different address, sign in with that
-                account instead.
+                Nothing is registered to{" "}
+                <strong>{user?.email ?? "your Google account"}</strong>.
               </p>
+
+              <p className="empty-body mt-4">
+                The commonest reason is a different address: passes are
+                matched to the email you used on the Events Portal, not
+                the one you signed in with here.
+              </p>
+
+              <div className="actions-centred mt-8">
+                <a
+                  href={PORTAL_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-primary"
+                >
+                  Register or buy merchandise
+                </a>
+
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={async () => {
+                    const supabase = createSupabaseBrowser();
+                    await supabase.auth.signOut();
+                    window.location.href = "/login";
+                  }}
+                >
+                  Sign in with another email
+                </button>
+              </div>
             </div>
           </section>
         ) : (
@@ -401,8 +436,24 @@ export default function BuyerPage() {
                   <p className="empty-title">No merchandise</p>
 
                   <p className="empty-body">
-                    You have event bookings but nothing to collect
-                    from the merchandise counter.
+                    You have event bookings but nothing to collect from
+                    the merchandise counter.
+                  </p>
+
+                  <div className="actions-centred mt-8">
+                    <a
+                      href={PORTAL_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-primary"
+                    >
+                      Buy merchandise
+                    </a>
+                  </div>
+
+                  <p className="help mt-4">
+                    Already bought some? It may sit under the email you
+                    used on the Events Portal.
                   </p>
                 </div>
               </section>
