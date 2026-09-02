@@ -268,7 +268,7 @@ async function viaScan(db: SupabaseClient): Promise<Summary> {
 }
 
 export async function GET() {
-  const auth = await requireRole("admin", "volunteer");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

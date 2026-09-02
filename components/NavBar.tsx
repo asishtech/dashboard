@@ -54,14 +54,12 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/events", label: "Events", icon: TicketIcon },
   ],
 
+  /*
+   * One screen, one job. A volunteer scans; they have no reason to see
+   * registrations, revenue or stock levels at the counter.
+   */
   volunteer: [
-    {
-      href: "/volunteer",
-      label: "Overview",
-      icon: ListIcon,
-      exact: true,
-    },
-    { href: "/volunteer/scan", label: "Scan", icon: ScanIcon },
+    { href: "/volunteer", label: "Scan", icon: ScanIcon },
   ],
 
   buyer: [

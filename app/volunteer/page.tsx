@@ -1,405 +1,491 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { useLiveRefresh } from "@/lib/use-realtime";
+import { useCallback, useEffect, useRef, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { BoxIcon, ScanIcon } from "@/components/icons";
+import { AlertIcon, CheckIcon, ScanIcon } from "@/components/icons";
 
-type InventoryItem = {
+type Item = {
   id: number;
   item: string;
-  initial_stock: number;
-  sold: number;
-  remaining: number;
-  remaining_percentage: number;
+  size: string | null;
+  quantity: number;
+  status: string;
 };
 
-type DashboardData = {
-  registrations: number;
-  distribution: {
-    given: number;
-    pending: number;
-    total: number;
-  };
-  inventory: InventoryItem[];
+type Registration = {
+  registration_id: string;
+  name: string;
+  email: string;
+  items: Item[];
+  /* True when the QR belongs to an event booking with no merchandise. */
+  isEventOnly?: boolean;
 };
 
-const LIVE_TABLES = [
-  "registrations",
-  "registration_items",
-  "distributions",
-  "inventory",
-];
+/* Minimal surface of Html5Qrcode, so the import stays lazy. */
+type Scanner = {
+  start: (
+    camera: string | { facingMode: string },
+    config: { fps: number; qrbox: number | { width: number; height: number } },
+    onSuccess: (text: string) => void,
+    onFailure: (message: string) => void
+  ) => Promise<void>;
+  stop: () => Promise<void>;
+  clear: () => void;
+  getState: () => number;
+};
 
+const READER_ID = "qr-reader";
+
+/*
+ * The volunteer screen is the scanner.
+ *
+ * It used to be a dashboard -- distribution counts, buyer totals, a
+ * stock table -- with the scanner one tap away. None of that is a
+ * volunteer's job at the counter, and the numbers were coming from
+ * /api/dashboard, which also carries revenue. One task, one screen.
+ */
 export default function VolunteerPage() {
-  const [data, setData] =
-    useState<DashboardData | null>(null);
+  const [registration, setRegistration] =
+    useState<Registration | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [error, setError] = useState("");
+  const [starting, setStarting] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const scannerRef = useRef<Scanner | null>(null);
+  const handlingRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  const loadDashboard = useCallback(
-    async (
-      mode: "initial" | "silent" | "manual" = "manual"
-    ) => {
+  /*
+   * handleToken has to restart the camera after a bad code, and
+   * startScanner needs handleToken as its success callback. Going
+   * through a ref breaks that cycle instead of declaring one of them
+   * before it exists.
+   */
+  const restartRef = useRef<() => void>(() => {});
+
+  const stopScanner = useCallback(async () => {
+    const scanner = scannerRef.current;
+
+    if (!scanner) return;
+
+    scannerRef.current = null;
+
+    try {
+      /* 2 === SCANNING. Stopping an already-stopped scanner throws. */
+      if (scanner.getState() === 2) {
+        await scanner.stop();
+      }
+
+      scanner.clear();
+    } catch {
+      /* Already torn down, or the element is gone. Nothing to do. */
+    }
+  }, []);
+
+  const handleToken = useCallback(
+    async (decodedText: string) => {
+      /* One QR at a time; the camera fires this many times a second. */
+      if (handlingRef.current) return;
+
+      handlingRef.current = true;
+
+      await stopScanner();
+
       try {
         /*
-         * The first load leaves the state alone: `loading`
-         * already starts true, and setting it again from the
-         * mount effect forces an extra render pass.
+         * The QR encodes a claim URL, but a bare token is accepted
+         * too -- a volunteer should not be stuck because a code was
+         * generated slightly differently.
          */
-        if (mode === "silent") {
-          setRefreshing(true);
-        } else if (mode === "manual") {
-          setLoading(true);
+        let token = decodedText.trim();
+
+        if (/^https?:\/\//i.test(token)) {
+          const parts = new URL(token).pathname.split("/");
+          const index = parts.indexOf("claim");
+
+          token = index >= 0 ? (parts[index + 1] ?? "") : "";
+        }
+
+        if (!token) {
+          throw new Error("That is not a V-TAPP QR code");
         }
 
         const response = await fetch(
-          "/api/dashboard",
-          {
-            cache: "no-store",
-          }
+          `/api/distribution/${encodeURIComponent(token)}`,
+          { cache: "no-store" }
         );
+
+        const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(
-            "Unable to load dashboard"
-          );
+          throw new Error(data.error || "Invalid QR code");
         }
 
-        const result =
-          await response.json();
+        if (!mountedRef.current) return;
 
-        setData({
-          registrations:
-            Number(
-              result.registrations ?? 0
-            ),
-
-          distribution: {
-            given: Number(
-              result.distribution?.given ?? 0
-            ),
-
-            pending: Number(
-              result.distribution?.pending ?? 0
-            ),
-
-            total: Number(
-              result.distribution?.total ?? 0
-            ),
-          },
-
-          inventory:
-            result.inventory ?? [],
+        setError("");
+        setRegistration({
+          ...data.registration,
+          isEventOnly: Boolean(data.isEventOnly),
         });
-      } catch (error) {
-        console.error(
-          "Volunteer dashboard error:",
-          error
+      } catch (err) {
+        if (!mountedRef.current) return;
+
+        setError(
+          err instanceof Error ? err.message : "Invalid QR code"
         );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+
+        /* A bad code should not end the shift. Let them try again. */
+        handlingRef.current = false;
+        restartRef.current();
       }
     },
-    []
+    [stopScanner]
   );
 
+  const startScanner = useCallback(async () => {
+    setStarting(true);
+    setError("");
+
+    /*
+     * getUserMedia only exists in a secure context. Served over plain
+     * http from a laptop's LAN address -- which is exactly how someone
+     * tests this on a phone -- the camera silently does not exist, and
+     * the old UI just sat there. Say so instead.
+     */
+    if (
+      typeof window !== "undefined" &&
+      !window.isSecureContext &&
+      window.location.hostname !== "localhost"
+    ) {
+      setStarting(false);
+      setError(
+        "The camera needs a secure connection. Open this page over https, not a plain http address."
+      );
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStarting(false);
+      setError("This browser cannot open the camera.");
+      return;
+    }
+
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+
+      if (!mountedRef.current) return;
+
+      const scanner = new Html5Qrcode(READER_ID) as unknown as Scanner;
+
+      scannerRef.current = scanner;
+
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+      /*
+       * Rear camera, chosen for the volunteer rather than offered as a
+       * dropdown -- they are pointing a phone at a printout, and it is
+       * never the selfie camera.
+       */
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          config,
+          handleToken,
+          () => {
+            /* Fires continuously while no code is in frame. */
+          }
+        );
+      } catch {
+        /*
+         * Some laptops and older Androids reject the facingMode
+         * constraint outright. Fall back to the last camera in the
+         * list, which is the rear one on essentially every phone.
+         */
+        const cameras = await (
+          Html5Qrcode as unknown as {
+            getCameras: () => Promise<{ id: string }[]>;
+          }
+        ).getCameras();
+
+        if (cameras.length === 0) {
+          throw new Error("No camera found on this device");
+        }
+
+        await scanner.start(
+          cameras[cameras.length - 1].id,
+          config,
+          handleToken,
+          () => {}
+        );
+      }
+
+      if (mountedRef.current) setStarting(false);
+    } catch (err) {
+      if (!mountedRef.current) return;
+
+      setStarting(false);
+
+      const message = err instanceof Error ? err.message : String(err);
+
+      /*
+       * The raw errors here are unreadable at a counter. Translate the
+       * two that actually happen.
+       */
+      setError(
+        /NotAllowedError|Permission/i.test(message)
+          ? "Camera access was blocked. Allow the camera for this site in your browser settings, then reload."
+          : /NotFoundError|No camera/i.test(message)
+            ? "No camera found on this device."
+            : `Could not start the camera. ${message}`
+      );
+    }
+  }, [handleToken]);
+
   useEffect(() => {
+    mountedRef.current = true;
+
+    restartRef.current = () => {
+      void startScanner();
+    };
+
+    /*
+     * Deferred a tick rather than called inline: startScanner sets
+     * state on its first line, and doing that synchronously inside an
+     * effect triggers a cascading render. Same pattern the other
+     * screens use for their initial load.
+     */
     const timer = window.setTimeout(() => {
-      loadDashboard("initial");
+      void startScanner();
     }, 0);
 
     return () => {
       window.clearTimeout(timer);
+      mountedRef.current = false;
+      void stopScanner();
     };
-  }, [loadDashboard]);
+  }, [startScanner, stopScanner]);
 
-  /*
-   * Live updates. The volunteer screen is the one that most needs
-   * to be current: two people scanning at the same counter must see
-   * each other's handovers immediately.
-   */
-  const live = useLiveRefresh(
-    LIVE_TABLES,
-    useCallback(
-      () => loadDashboard("silent"),
-      [loadDashboard]
-    )
-  );
+  function scanAnother() {
+    setRegistration(null);
+    setError("");
+    handlingRef.current = false;
+    void startScanner();
+  }
 
-  const given =
-    data?.distribution.given ?? 0;
+  async function markGiven(itemId: number) {
+    if (busy) return;
 
-  const pending =
-    data?.distribution.pending ?? 0;
+    setBusy(true);
+    setError("");
 
-  const total =
-    data?.distribution.total ??
-    given + pending;
+    try {
+      const response = await fetch("/api/distribution", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registrationItemId: itemId }),
+      });
 
-  const percentage =
-    total > 0
-      ? Math.round(
-          (given / total) * 100
-        )
-      : 0;
+      const data = await response.json();
 
-  const inventory =
-    data?.inventory ?? [];
+      /*
+       * 409 means someone already handed it over. That is the correct
+       * outcome, not an error to argue with.
+       */
+      if (response.ok || response.status === 409) {
+        setRegistration((current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.id === itemId
+                    ? { ...item, status: "GIVEN" }
+                    : item
+                ),
+              }
+            : current
+        );
+
+        return;
+      }
+
+      throw new Error(data.error || "Could not mark that item");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not mark that item"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const allGiven =
+    registration !== null &&
+    registration.items.length > 0 &&
+    registration.items.every((item) => item.status === "GIVEN");
 
   return (
     <main className="app">
       <NavBar />
 
-      <div className="container">
+      <div className="container container-narrow">
 
         <header className="page-header">
           <div>
-            <span className="page-eyebrow">
-              V-TAPP / 2026
-            </span>
+            <span className="page-eyebrow">V-TAPP / Volunteer</span>
 
-            <h1 className="page-title">
-              Volunteer Operations
-            </h1>
+            <h1 className="page-title">Scan</h1>
 
             <p className="page-subtitle">
-              Merchandise distribution control
+              Point the camera at the buyer&apos;s QR code.
             </p>
-          </div>
-
-          <div className="header-actions">
-            <span
-              className={`pulse${
-                live === "live" ? "" : " pulse-idle"
-              }`}
-            >
-              {live === "live" ? "Live" : "Polling"}
-            </span>
-
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => loadDashboard("silent")}
-              disabled={refreshing}
-            >
-              {refreshing && <span className="btn-spinner" />}
-              {refreshing ? "Refreshing" : "Refresh"}
-            </button>
           </div>
         </header>
 
 
-        {/* Primary action. One per screen. */}
-        <Link
-          href="/volunteer/scan"
-          className="card-link card-link-feature mb-8"
+        {error && (
+          <div className="banner banner-danger" role="alert">
+            <AlertIcon size={18} />
+            <span>{error}</span>
+          </div>
+        )}
+
+
+        {/* The reader element must stay mounted: html5-qrcode attaches
+            the video stream to it by id, and unmounting it mid-scan is
+            what produced the NotFoundError teardown races. */}
+        <section
+          className="panel"
+          hidden={registration !== null}
         >
-          <div className="row-between">
-            <div>
-              <span className="eyebrow eyebrow-accent">
-                Distribution action
-              </span>
-
-              <div className="page-title mt-2">Scan QR</div>
-
-              <p className="card-link-body">
-                Open the camera and hand merchandise over.
-              </p>
-            </div>
-
-            <ScanIcon size={34} />
-          </div>
-        </Link>
-
-
-        {/* Distribution progress */}
-        <section className="panel mb-8">
           <div className="panel-body">
-            <div className="meter">
-              <div className="meter-head">
-                <span className="meter-label">
-                  Distribution progress
-                </span>
+            <div id={READER_ID} className="scanner" />
 
-                <span className="meter-value">
-                  {loading ? "—" : `${percentage}%`}
-                </span>
-              </div>
-
-              <div
-                className="meter-track"
-                role="progressbar"
-                aria-valuenow={percentage}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Items distributed"
-              >
-                <div
-                  className="meter-fill"
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-
-              <div className="meter-foot">
-                <span>{given} given</span>
-                <span>{total} total</span>
-              </div>
-            </div>
-
-            <div className="split">
-              <div className="split-item">
-                <span className="stat-label">Given</span>
-
-                <strong className="split-value stat-success">
-                  {loading ? "—" : given}
-                </strong>
-
-                <span className="stat-meta">
-                  Items distributed
-                </span>
-              </div>
-
-              <div className="split-item">
-                <span className="stat-label">Pending</span>
-
-                <strong className="split-value stat-warning">
-                  {loading ? "—" : pending}
-                </strong>
-
-                <span className="stat-meta">
-                  Awaiting distribution
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-        {/* Totals */}
-        <section className="stat-grid">
-          <div className="stat">
-            <span className="stat-label">Total items</span>
-
-            <strong className="stat-value">
-              {loading ? "—" : total}
-            </strong>
-
-            <span className="stat-meta">Current allocation</span>
-          </div>
-
-          <div className="stat">
-            <span className="stat-label">Buyers</span>
-
-            <strong className="stat-value">
-              {loading ? "—" : data?.registrations ?? 0}
-            </strong>
-
-            <span className="stat-meta">
-              Completed registrations
-            </span>
-          </div>
-        </section>
-
-
-        {/* Inventory */}
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <h2 className="panel-title">Inventory</h2>
-
-              <p className="panel-subtitle">
-                Remaining stock by item
+            {starting && (
+              <p className="help mt-4" style={{ textAlign: "center" }}>
+                Starting the camera...
               </p>
-            </div>
+            )}
 
-            <Link
-              href="/admin/inventory"
-              className="btn btn-ghost btn-sm"
-            >
-              View all
-            </Link>
-          </div>
+            {!starting && !error && (
+              <p className="help mt-4" style={{ textAlign: "center" }}>
+                <ScanIcon size={14} /> Ready
+              </p>
+            )}
 
-          <div className="panel-body stack">
-            {loading ? (
-              [1, 2, 3, 4, 5].map((item) => (
-                <div key={item}>
-                  <div className="skeleton skeleton-line" />
-                  <div className="skeleton meter-track" />
-                </div>
-              ))
-            ) : inventory.length === 0 ? (
-              <div className="empty">
-                <div className="empty-icon">
-                  <BoxIcon size={22} />
-                </div>
-
-                <p className="empty-title">No inventory yet</p>
-
-                <p className="empty-body">
-                  Stock appears here once items are configured.
-                </p>
-              </div>
-            ) : (
-              inventory.map((item) => {
-                const remainingPercent = Math.max(
-                  0,
-                  Math.min(
-                    100,
-                    Number(item.remaining_percentage ?? 0)
-                  )
-                );
-
-                const level =
-                  remainingPercent <= 15
-                    ? "meter-fill-danger"
-                    : remainingPercent <= 40
-                      ? "meter-fill-warning"
-                      : "meter-fill-success";
-
-                return (
-                  <div className="meter" key={item.id}>
-                    <div className="meter-head">
-                      <span className="meter-label">
-                        {item.item}
-                      </span>
-
-                      <span className="meter-value">
-                        {item.remaining} / {item.initial_stock}
-                      </span>
-                    </div>
-
-                    <div
-                      className="meter-track"
-                      role="progressbar"
-                      aria-valuenow={remainingPercent}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label={`${item.item} stock remaining`}
-                    >
-                      <div
-                        className={`meter-fill ${level}`}
-                        style={{ width: `${remainingPercent}%` }}
-                      />
-                    </div>
-
-                    <div className="meter-foot">
-                      <span>{item.sold} sold</span>
-                      <span>{remainingPercent}% left</span>
-                    </div>
-                  </div>
-                );
-              })
+            {error && (
+              <button
+                type="button"
+                className="btn btn-primary btn-block mt-4"
+                onClick={() => {
+                  handlingRef.current = false;
+                  void startScanner();
+                }}
+              >
+                Try again
+              </button>
             )}
           </div>
         </section>
+
+
+        {registration && (
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">{registration.name}</h2>
+
+                <p className="panel-subtitle">{registration.email}</p>
+
+                <p className="mono dim mt-2">
+                  #{registration.registration_id}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={scanAnother}
+              >
+                Scan another
+              </button>
+            </div>
+
+            {registration.items.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">
+                  <CheckIcon size={22} />
+                </div>
+
+                <p className="empty-title">Checked in</p>
+
+                <p className="empty-body">
+                  {registration.isEventOnly
+                    ? "This is an event booking, so there is nothing to hand over. The scan has been recorded."
+                    : "No merchandise is attached to this registration."}
+                </p>
+              </div>
+            ) : (
+              <div className="panel-body stack-tight stack">
+                {registration.items.map((item) => {
+                  const given = item.status === "GIVEN";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`scan-item${
+                        given ? " scan-item-given" : ""
+                      }`}
+                    >
+                      <div>
+                        <div className="scan-item-name">{item.item}</div>
+
+                        <div className="scan-item-meta">
+                          {item.size ? `Size ${item.size}` : "One size"}
+                          {item.quantity > 1
+                            ? ` · Qty ${item.quantity}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      {given ? (
+                        <span className="badge badge-success">Given</span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => markGiven(item.id)}
+                          className="btn btn-primary btn-sm"
+                        >
+                          {busy && <span className="btn-spinner" />}
+                          {busy ? "Saving" : "Mark as given"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/*
+              Returning to the camera is a deliberate tap, not a timer.
+              The old screen navigated away 700ms after the last item,
+              which took the confirmation off the screen before the
+              volunteer had finished handing the bag over.
+            */}
+            <div className="panel-footer">
+              <button
+                type="button"
+                className="btn btn-block"
+                onClick={scanAnother}
+              >
+                <ScanIcon size={16} />
+                {allGiven ? "Done - scan the next code" : "Scan next code"}
+              </button>
+            </div>
+          </section>
+        )}
 
       </div>
     </main>
