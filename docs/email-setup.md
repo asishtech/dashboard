@@ -1,42 +1,92 @@
 # Email setup
 
-Mail is sent from `registration.vtapp@vitap.ac.in` over Gmail SMTP,
-using an App Password. This needs access to that account only — no
-Workspace admin console, no DNS changes on `vitap.ac.in`.
+Mail is sent as `registration.vtapp@vitap.ac.in`. Three ways to
+authenticate; the code takes any of them and only environment variables
+change.
 
-## 1. Create the App Password
+| Route | Needs | Sender address |
+|---|---|---|
+| OAuth2 refresh token | a Google Cloud project | the real one |
+| Transactional provider | an account, plus DNS for the real address | see below |
+| App Password | 2SV on the account | the real one |
 
-1. Sign in as `registration.vtapp@vitap.ac.in`.
-2. Turn on **2-Step Verification** at
-   <https://myaccount.google.com/signinoptions/two-step-verification>.
-   App Passwords do not exist as an option until this is on.
-3. Go to <https://myaccount.google.com/apppasswords>, create one named
-   `V-TAPP Dashboard`, and copy the 16-character value.
+**IT has declined App Passwords for this domain**, so that route is at
+the bottom in case the decision changes. Start with OAuth2.
 
-If the App Passwords page says the option is not available, the
-Workspace admin has disabled it for the domain. That is the one thing
-that needs IT: ask them to allow App Passwords for this account, or to
-set up an SMTP relay instead.
+## 1. OAuth2 (try this first)
 
-## 2. Set the environment variables
+OAuth is a narrower grant than an App Password, not a workaround for
+it: this asks only for `gmail.send`, it is revocable from the account
+without changing a password, and no reusable password is stored. Worth
+saying plainly if you have to go back to IT -- it is the more
+conservative request of the two.
+
+1. At <https://console.cloud.google.com>, create a project.
+2. **APIs & Services → Library**, enable **Gmail API**.
+3. **OAuth consent screen** → Internal, if offered.
+4. **Credentials → Create credentials → OAuth client ID → Web
+   application**, redirect URI `http://localhost:53682/callback`.
+5. Run this, signing in as `registration.vtapp@vitap.ac.in`:
+
+   ```bash
+   node scripts/get-gmail-refresh-token.mjs <client-id> <client-secret>
+   ```
+
+   It opens consent, catches the redirect, and prints the variables.
+
+If consent fails with `admin_policy_enforced` or `access_denied`, the
+Workspace blocks third-party apps too and this route is closed the same
+way the first was. Use a provider instead.
+
+## 2. Transactional provider (no Google permission at all)
+
+Resend, Brevo and SendGrid all speak SMTP, so **this needs no code
+change** -- point the existing variables at them:
+
+```
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=587
+SMTP_USER=resend
+SMTP_PASSWORD=<api key>
+```
+
+The catch is the sender address. Sending *as* `@vitap.ac.in` needs SPF
+and DKIM records on the university's DNS. That is a smaller ask than
+account credentials -- it grants access to nothing -- but it is still
+an ask. Without it, send from a domain you control, set `MAIL_FROM` to
+that, and replies still go wherever you point them.
+
+## 3. App Password (currently refused)
+
+Turn on 2-Step Verification, then create one at
+<https://myaccount.google.com/apppasswords> and set `SMTP_PASSWORD`.
+Nothing else differs.
+
+## 4. Set the environment variables
 
 Locally in `.env.local`, and on Netlify under
 **Site settings → Environment variables**:
 
 ```
 SMTP_USER=registration.vtapp@vitap.ac.in
-SMTP_PASSWORD=<the 16-character App Password, no spaces>
 MAIL_FROM=registration.vtapp@vitap.ac.in
 ALERT_EMAIL=<where sync failures should go>
 NEXT_PUBLIC_APP_URL=https://vtapp-dashboard.netlify.app
+
+# then one credential, not both:
+SMTP_OAUTH_CLIENT_ID=...
+SMTP_OAUTH_CLIENT_SECRET=...
+SMTP_OAUTH_REFRESH_TOKEN=...
+# or
+SMTP_PASSWORD=<16-character App Password, no spaces>
 ```
 
 `SMTP_HOST` and `SMTP_PORT` default to `smtp.gmail.com` and `587`.
 
-Until `SMTP_USER` and `SMTP_PASSWORD` are both set, nothing sends: every
-send returns `skipped` and the app runs exactly as it does today.
+Until `SMTP_USER` and one credential are set, nothing sends: every send
+returns `skipped` and the app runs exactly as it does today.
 
-## 3. Run the migration
+## 5. Run the migration
 
 `supabase/email-log.sql`. It creates `email_log`, which is what stops a
 re-sync mailing several hundred people a second copy of their pass.

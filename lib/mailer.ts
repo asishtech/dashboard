@@ -38,7 +38,21 @@ function transport(): Transporter | null {
     port: config.port,
     /* 587 is STARTTLS, 465 is implicit TLS. */
     secure: config.port === 465,
-    auth: { user: config.user, pass: config.pass },
+
+    /*
+     * OAuth2 when a refresh token is configured, a password otherwise.
+     * Nodemailer exchanges the refresh token for an access token
+     * itself and renews it, so nothing here has to track expiry.
+     */
+    auth: config.oauth
+      ? {
+          type: "OAuth2",
+          user: config.user,
+          clientId: config.oauth.clientId,
+          clientSecret: config.oauth.clientSecret,
+          refreshToken: config.oauth.refreshToken,
+        }
+      : { user: config.user, pass: config.pass ?? undefined },
   };
 
   /*

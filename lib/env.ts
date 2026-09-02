@@ -50,23 +50,48 @@ export function vtappApi() {
 /*
  * Mail.
  *
- * Optional on purpose: the app has to run before anyone has set up an
- * App Password, so this reports "not configured" rather than throwing
- * the way the Supabase accessors do. Every caller checks first.
+ * Two ways to authenticate as the same mailbox:
+ *
+ *   SMTP_PASSWORD          -- a Gmail App Password.
+ *   SMTP_OAUTH_*           -- an OAuth2 refresh token, for when the
+ *                             Workspace admin will not allow App
+ *                             Passwords. Same sender, same SMTP host;
+ *                             only the credential differs.
+ *
+ * Also works unchanged with a transactional provider's SMTP (Resend,
+ * Brevo, SendGrid): point SMTP_HOST/PORT/USER/PASSWORD at them.
+ *
+ * Optional on purpose: the app has to run before any of this exists,
+ * so this reports "not configured" rather than throwing the way the
+ * Supabase accessors do. Every caller checks first.
  */
 export function mailConfig() {
   const user = process.env.SMTP_USER;
+
+  if (!user) return null;
+
   const pass = process.env.SMTP_PASSWORD;
 
-  if (!user || !pass) {
-    return null;
-  }
+  const oauth =
+    process.env.SMTP_OAUTH_CLIENT_ID &&
+    process.env.SMTP_OAUTH_CLIENT_SECRET &&
+    process.env.SMTP_OAUTH_REFRESH_TOKEN
+      ? {
+          clientId: process.env.SMTP_OAUTH_CLIENT_ID,
+          clientSecret: process.env.SMTP_OAUTH_CLIENT_SECRET,
+          refreshToken: process.env.SMTP_OAUTH_REFRESH_TOKEN,
+        }
+      : null;
+
+  /* Neither credential present means mail is simply off. */
+  if (!pass && !oauth) return null;
 
   return {
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: Number(process.env.SMTP_PORT || 587),
     user,
-    pass,
+    pass: pass ?? null,
+    oauth,
     /* Gmail rewrites From to the authenticated account anyway, so a
        mismatch here would silently be ignored rather than honoured. */
     from: process.env.MAIL_FROM || user,
