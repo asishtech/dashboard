@@ -659,15 +659,42 @@ export async function syncVtapp() {
      * `sync_state` was only written on success, so `last_success`
      * could never actually become false.
      */
-    await recordSyncState(
-      false,
-      error instanceof Error ? error.message : "Sync failed"
-    ).catch((stateError) => {
+    const message =
+      error instanceof Error ? error.message : "Sync failed";
+
+    await recordSyncState(false, message).catch((stateError) => {
       console.error(
         "Unable to record sync failure:",
         stateError
       );
     });
+
+    /*
+     * Tell the organisers. A sync that quietly stops working means
+     * registrations stop arriving and nobody notices until someone is
+     * turned away at a gate.
+     *
+     * Throttled to one message an hour by sendAlert, because a broken
+     * upstream fails on every poll and the daily quota belongs to the
+     * students' passes, not to this.
+     */
+    try {
+      const { sendAlert } = await import("./mailer");
+
+      await sendAlert(
+        "V-TAPP sync failed",
+        [
+          `The registration sync failed at ${new Date().toISOString()}.`,
+          "",
+          message,
+          "",
+          "Registrations are not being updated until this succeeds.",
+        ].join("\n")
+      );
+    } catch (alertError) {
+      /* Never let the alert mask the failure it is reporting. */
+      console.error("Unable to send sync alert:", alertError);
+    }
 
     throw error;
   }
