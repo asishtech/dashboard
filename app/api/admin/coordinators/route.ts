@@ -21,13 +21,16 @@ export async function GET() {
   try {
     const db = supabaseAdmin();
 
-    const [assignments, events] = await Promise.all([
+    const [assignments, events, directory, gaps] = await Promise.all([
       db
         .from("event_coordinators")
         .select("id,email,event_id,created_at")
         .order("email"),
 
       db.from("events").select("event_id,name").order("name"),
+
+      db.rpc("coordinator_directory"),
+      db.rpc("coordinator_gaps"),
     ]);
 
     if (assignments.error) throw assignments.error;
@@ -40,8 +43,22 @@ export async function GET() {
       ])
     );
 
+    /*
+     * 42883 / PGRST202: supabase/coordinator-details.sql has not run.
+     * The flat assignment list still works, so the screen degrades to
+     * what it showed before rather than failing.
+     */
+    const detailsMissing =
+      directory.error?.code === "42883" ||
+      directory.error?.code === "PGRST202";
+
     return NextResponse.json({
       success: true,
+
+      detailsAvailable: !detailsMissing,
+
+      directory: detailsMissing ? [] : (directory.data ?? []),
+      gaps: gaps.error ? [] : (gaps.data ?? []),
 
       coordinators: (assignments.data ?? []).map((row) => ({
         ...row,
@@ -237,6 +254,121 @@ export async function DELETE(request: Request) {
           error instanceof Error
             ? error.message
             : "Unable to remove coordinator",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/*
+ * PATCH /api/admin/coordinators
+ *
+ * Record a coordinator's name, phone or kind.
+ *
+ * Keyed on email, not on one assignment row: the same person appears
+ * once per event they run, and an admin typing a phone number means it
+ * for the person, not for one of their four rows.
+ */
+export async function PATCH(request: Request) {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
+  try {
+    const body = await request.json();
+
+    const email =
+      typeof body.email === "string"
+        ? body.email.trim().toLowerCase()
+        : "";
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "email is required" },
+        { status: 400 }
+      );
+    }
+
+    const patch: {
+      name?: string | null;
+      phone?: string | null;
+      kind?: string | null;
+    } = {};
+
+    if (body.name !== undefined) {
+      patch.name =
+        typeof body.name === "string" && body.name.trim()
+          ? body.name.trim()
+          : null;
+    }
+
+    if (body.phone !== undefined) {
+      patch.phone =
+        typeof body.phone === "string" && body.phone.trim()
+          ? body.phone.trim()
+          : null;
+    }
+
+    if (body.kind !== undefined) {
+      if (
+        body.kind !== null &&
+        body.kind !== "faculty" &&
+        body.kind !== "student"
+      ) {
+        return NextResponse.json(
+          { error: "kind must be 'faculty', 'student' or null" },
+          { status: 400 }
+        );
+      }
+
+      patch.kind = body.kind;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json(
+        { error: "Nothing to change" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin()
+      .from("event_coordinators")
+      .update(patch)
+      .eq("email", email)
+      .select("id");
+
+    /* 42703: supabase/coordinator-details.sql has not been run. */
+    if (error?.code === "42703") {
+      return NextResponse.json(
+        {
+          error:
+            "Run supabase/coordinator-details.sql before editing details.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: "No assignments found for that address" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, updated: data.length });
+  } catch (error) {
+    console.error("Coordinators PATCH error:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to update coordinator",
       },
       { status: 500 }
     );

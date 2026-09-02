@@ -26,6 +26,18 @@ type EventOption = {
 type Person = {
   email: string;
   assignments: Assignment[];
+  /* From the directory; absent until coordinator-details.sql runs. */
+  name?: string | null;
+  phone?: string | null;
+  kind?: "faculty" | "student" | null;
+};
+
+type DirectoryEntry = {
+  email: string;
+  name: string | null;
+  phone: string | null;
+  kind: "faculty" | "student" | null;
+  eventCount: number;
 };
 
 export default function CoordinatorsPage() {
@@ -44,6 +56,15 @@ export default function CoordinatorsPage() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"PEOPLE" | "GAPS">("PEOPLE");
 
+  const [directory, setDirectory] = useState<DirectoryEntry[]>([]);
+  const [detailsAvailable, setDetailsAvailable] = useState(false);
+  const [kindFilter, setKindFilter] =
+    useState<"ALL" | "faculty" | "student">("ALL");
+
+  /* Which row is being edited, and the draft in it. */
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ name: "", phone: "" });
+
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/admin/coordinators", {
@@ -59,6 +80,8 @@ export default function CoordinatorsPage() {
       }
 
       setAssignments(data.coordinators ?? []);
+      setDirectory(data.directory ?? []);
+      setDetailsAvailable(Boolean(data.detailsAvailable));
       setEvents(data.events ?? []);
       setEventId(
         (current) => current || (data.events?.[0]?.event_id ?? "")
@@ -84,6 +107,35 @@ export default function CoordinatorsPage() {
    * four or five events each, and a flat list of every assignment ran
    * to 177 rows with no way to find anyone in it.
    */
+  async function saveDetails(person: Person) {
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/coordinators", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: person.email,
+          name: draft.name,
+          phone: draft.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not save");
+      }
+
+      setEditing(null);
+      setMessage(`Updated ${person.name || person.email}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    }
+  }
+
   const people = useMemo(() => {
     const byEmail = new Map<string, Person>();
 
@@ -97,10 +149,32 @@ export default function CoordinatorsPage() {
       byEmail.set(a.email, person);
     }
 
-    return [...byEmail.values()].sort((a, b) =>
-      a.email.localeCompare(b.email)
+    const details = new Map(
+      directory.map((entry) => [entry.email, entry])
     );
-  }, [assignments]);
+
+    const merged = [...byEmail.values()].map((person) => ({
+      ...person,
+      name: details.get(person.email)?.name ?? null,
+      phone: details.get(person.email)?.phone ?? null,
+      kind: details.get(person.email)?.kind ?? null,
+    }));
+
+    /*
+     * Faculty first, then students, then anyone the spreadsheet never
+     * classified -- so the unclassified tail is visibly a tail rather
+     * than scattered through the list.
+     */
+    const rank = (k: string | null) =>
+      k === "faculty" ? 0 : k === "student" ? 1 : 2;
+
+    return merged.sort(
+      (a, b) =>
+        rank(a.kind) - rank(b.kind) ||
+        (a.name ?? "~").localeCompare(b.name ?? "~") ||
+        a.email.localeCompare(b.email)
+    );
+  }, [assignments, directory]);
 
   /*
    * Events nobody is responsible for. This is the thing worth
@@ -120,16 +194,21 @@ export default function CoordinatorsPage() {
   const filteredPeople = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    if (!q) return people;
+    return people.filter((p) => {
+      if (kindFilter !== "ALL" && p.kind !== kindFilter) return false;
 
-    return people.filter(
-      (p) =>
+      if (!q) return true;
+
+      return (
         p.email.toLowerCase().includes(q) ||
+        (p.name ?? "").toLowerCase().includes(q) ||
+        (p.phone ?? "").includes(q) ||
         p.assignments.some((a) =>
           a.event_name.toLowerCase().includes(q)
         )
-    );
-  }, [people, search]);
+      );
+    });
+  }, [people, search, kindFilter]);
 
   const filteredUncovered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -367,6 +446,37 @@ export default function CoordinatorsPage() {
         {/* People / gaps */}
         <section className="panel">
           <div className="panel-header">
+            {view === "PEOPLE" && detailsAvailable && (
+              <div
+                className="segmented"
+                role="group"
+                aria-label="Filter by coordinator type"
+              >
+                {(
+                  [
+                    ["ALL", "All"],
+                    ["faculty", "Faculty"],
+                    ["student", "Student"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className="segmented-item"
+                    aria-pressed={kindFilter === value}
+                    onClick={() => setKindFilter(value)}
+                  >
+                    {label}
+                    <span className="segmented-count">
+                      {value === "ALL"
+                        ? people.length
+                        : people.filter((p) => p.kind === value).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="search" style={{ flex: "1 1 280px" }}>
               <span className="search-icon">
                 <SearchIcon size={16} />
@@ -501,13 +611,131 @@ export default function CoordinatorsPage() {
                 <div className="person-row" key={person.email}>
                   <div className="truncate">
                     <div className="row-title truncate">
-                      {person.email}
+                      {person.name || person.email}
+
+                      {person.kind && (
+                        <span
+                          className={`badge ${
+                            person.kind === "faculty"
+                              ? "badge-accent"
+                              : "badge-plain"
+                          }`}
+                          style={{ marginLeft: "var(--space-2)" }}
+                        >
+                          {person.kind === "faculty"
+                            ? "Faculty"
+                            : "Student"}
+                        </span>
+                      )}
                     </div>
 
+                    {/* The address is the key everywhere else, so it
+                        stays visible even once a name is known. */}
+                    {person.name && (
+                      <div className="row-meta truncate">
+                        {person.email}
+                      </div>
+                    )}
+
                     <div className="row-meta">
-                      {person.assignments.length} event
-                      {person.assignments.length === 1 ? "" : "s"}
+                      {person.phone ? (
+                        <a
+                          href={`tel:${person.phone.replace(/\s+/g, "")}`}
+                          className="mono"
+                        >
+                          {person.phone}
+                        </a>
+                      ) : (
+                        <span className="dim">No phone</span>
+                      )}
+
+                      <span className="dim">
+                        {" · "}
+                        {person.assignments.length} event
+                        {person.assignments.length === 1 ? "" : "s"}
+                      </span>
+
+                      {detailsAvailable && (
+                        <>
+                          {" · "}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => {
+                              setEditing(person.email);
+                              setDraft({
+                                name: person.name ?? "",
+                                phone: person.phone ?? "",
+                              });
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
                     </div>
+
+                    {editing === person.email && (
+                      <div className="grant-form mt-4">
+                        <label
+                          className="sr-only"
+                          htmlFor={`name-${person.email}`}
+                        >
+                          Name
+                        </label>
+
+                        <input
+                          id={`name-${person.email}`}
+                          className="input"
+                          placeholder="Full name"
+                          value={draft.name}
+                          onChange={(event) =>
+                            setDraft((d) => ({
+                              ...d,
+                              name: event.target.value,
+                            }))
+                          }
+                        />
+
+                        <label
+                          className="sr-only"
+                          htmlFor={`phone-${person.email}`}
+                        >
+                          Phone
+                        </label>
+
+                        <input
+                          id={`phone-${person.email}`}
+                          className="input"
+                          type="tel"
+                          inputMode="tel"
+                          placeholder="Phone number"
+                          value={draft.phone}
+                          onChange={(event) =>
+                            setDraft((d) => ({
+                              ...d,
+                              phone: event.target.value,
+                            }))
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => saveDetails(person)}
+                        >
+                          Save
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setEditing(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="chips">

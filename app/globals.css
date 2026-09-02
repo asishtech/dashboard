@@ -531,6 +531,22 @@ table,
   font-size: var(--text-base);
 }
 
+/* A button that reads as inline text, for an action that sits inside a
+   sentence rather than beside one. */
+.link-button {
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-button:hover {
+  color: var(--accent-hover);
+}
+
 .header-actions {
   display: flex;
   flex-wrap: wrap;
