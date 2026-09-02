@@ -98,7 +98,14 @@ export default function RegistrationsPage() {
   const [eventFilter, setEventFilter] = useState("ALL");
   const [itemFilter, setItemFilter] = useState("ALL");
   const [sizeFilter, setSizeFilter] = useState("ALL");
-  const [expanded, setExpanded] = useState<string | null>(null);
+
+  /*
+   * The three dropdowns sat permanently beside the search box, which
+   * read as filters already applied even at "All". They are behind a
+   * toggle now, and the toggle says how many are actually narrowing
+   * anything -- so "no filters" and "some filters" look different.
+   */
+  const [showFilters, setShowFilters] = useState(false);
 
   const loadRegistrations = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -361,6 +368,14 @@ export default function RegistrationsPage() {
     setSizeFilter("ALL");
   }
 
+  const activeFilterCount = [
+    kind !== "ALL",
+    status !== "ALL",
+    eventFilter !== "ALL",
+    itemFilter !== "ALL",
+    sizeFilter !== "ALL",
+  ].filter(Boolean).length;
+
   const anyFilter =
     search !== "" ||
     kind !== "ALL" ||
@@ -545,6 +560,32 @@ export default function RegistrationsPage() {
               />
             </div>
 
+            <button
+              type="button"
+              className={`btn btn-sm ${
+                activeFilterCount > 0 ? "btn-primary" : "btn-ghost"
+              }`}
+              aria-expanded={showFilters}
+              aria-controls="reg-filters"
+              onClick={() => setShowFilters((open) => !open)}
+            >
+              Filters
+              {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </button>
+
+            {anyFilter && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={reset}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {showFilters && (
+            <div className="panel-header" id="reg-filters">
             <label className="sr-only" htmlFor="reg-event">
               Event
             </label>
@@ -602,16 +643,8 @@ export default function RegistrationsPage() {
               ))}
             </select>
 
-            {anyFilter && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={reset}
-              >
-                Clear
-              </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="panel-body stack">
@@ -667,20 +700,13 @@ export default function RegistrationsPage() {
                     const event = registration.event ?? UNMAPPED;
                     const state = statusOf(registration);
                     const key = registration.registration_id;
-                    const open = expanded === key;
 
                     const lines = (registration.items ?? []).filter(
                       (item) => (merchActive ? itemMatches(item) : true)
                     );
 
                     return (
-                      <tr
-                        key={key}
-                        onClick={() =>
-                          setExpanded(open ? null : key)
-                        }
-                        style={{ cursor: "pointer" }}
-                      >
+                      <tr key={key}>
                         <td>
                           <div className="row-title">
                             {registration.name || "—"}
@@ -714,34 +740,40 @@ export default function RegistrationsPage() {
                           </div>
                         </td>
 
+                        {/* Listed outright. Hiding these behind a
+                            click meant the one thing this screen is
+                            for -- what someone bought -- was the one
+                            thing not on it. */}
                         <td>
                           {lines.length === 0 ? (
                             <span className="dim">
                               {event.merch ? "No items" : "—"}
                             </span>
-                          ) : open ? (
-                            <div className="stack stack-tight">
-                              {lines.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="row-meta"
-                                >
-                                  {item.item} · {sizeLabel(item)} ×
-                                  {item.quantity}
-                                  {item.status === "GIVEN"
-                                    ? " · given"
-                                    : " · pending"}
-                                </div>
-                              ))}
-                            </div>
                           ) : (
-                            <div className="row-meta">
-                              {lines.length} item
-                              {lines.length === 1 ? "" : "s"}
-                              <span className="dim">
-                                {" "}
-                                — tap to expand
-                              </span>
+                            <div className="chip-row">
+                              {lines.map((item) => (
+                                <span
+                                  key={item.id}
+                                  className={`badge ${
+                                    item.status === "GIVEN"
+                                      ? "badge-success"
+                                      : "badge-warning"
+                                  }`}
+                                  title={
+                                    item.status === "GIVEN"
+                                      ? "Collected"
+                                      : "Not collected yet"
+                                  }
+                                >
+                                  {item.item}
+                                  {sizeLabel(item) !== "—"
+                                    ? ` · ${sizeLabel(item)}`
+                                    : ""}
+                                  {item.quantity > 1
+                                    ? ` ×${item.quantity}`
+                                    : ""}
+                                </span>
+                              ))}
                             </div>
                           )}
                         </td>
