@@ -17,8 +17,19 @@ type InventoryItem = {
   remaining_percentage: number;
 };
 
+type SizeRow = {
+  item: string;
+  size: string;
+  quantity: number;
+  lineItems: number;
+  collected: number;
+  pending: number;
+};
+
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [sizes, setSizes] = useState<SizeRow[]>([]);
+  const [sizesAvailable, setSizesAvailable] = useState(false);
   const [draft, setDraft] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +60,8 @@ export default function InventoryPage() {
         data.inventory ?? [];
 
       setInventory(items);
+      setSizes(data.sizes ?? []);
+      setSizesAvailable(Boolean(data.sizesAvailable));
 
       const values: Record<number, number> = {};
 
@@ -108,6 +121,33 @@ export default function InventoryPage() {
     totals.stock > 0
       ? (totals.sold / totals.stock) * 100
       : 0;
+
+  /*
+   * The API returns one flat row per item+size, already ordered
+   * S -> M -> L -> XL by the database. Grouping here preserves that
+   * order because Map keeps insertion order.
+   */
+  const sizesByItem = useMemo(() => {
+    const grouped = new Map<string, SizeRow[]>();
+
+    for (const row of sizes) {
+      const rows = grouped.get(row.item) ?? [];
+      rows.push(row);
+      grouped.set(row.item, rows);
+    }
+
+    return [...grouped.entries()];
+  }, [sizes]);
+
+  /* Widest single size row, so the bars share one scale. */
+  const sizePeak = useMemo(
+    () =>
+      sizes.reduce(
+        (max, row) => Math.max(max, Number(row.quantity ?? 0)),
+        0
+      ),
+    [sizes]
+  );
 
   function updateDraft(
     id: number,
@@ -452,6 +492,161 @@ export default function InventoryPage() {
             </div>
           )}
         </section>
+
+
+        {/* Sold by size --------------------------------------------- */}
+        {sizesAvailable && (
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Sold by size</h2>
+
+                <p className="panel-subtitle">
+                  Units sold per size, and how many are still to be
+                  collected.
+                </p>
+              </div>
+            </div>
+
+            {sizesByItem.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">
+                  <BoxIcon size={22} />
+                </div>
+
+                <p className="empty-title">Nothing sold yet</p>
+
+                <p className="empty-body">
+                  Sizes appear here once merchandise orders sync in.
+                </p>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <caption className="sr-only">
+                    Merchandise sold per size, with collection progress
+                  </caption>
+
+                  <thead>
+                    <tr>
+                      <th scope="col">Size</th>
+                      <th scope="col" className="table-num">
+                        Sold
+                      </th>
+                      <th scope="col" style={{ width: "34%" }}>
+                        Share
+                      </th>
+                      <th scope="col" className="table-num">
+                        Collected
+                      </th>
+                      <th scope="col" className="table-num">
+                        Pending
+                      </th>
+                    </tr>
+                  </thead>
+
+                  {sizesByItem.map(([item, rows]) => {
+                    const itemTotal = rows.reduce(
+                      (sum, row) => sum + Number(row.quantity ?? 0),
+                      0
+                    );
+
+                    return (
+                      <tbody key={item}>
+                        <tr>
+                          <th
+                            scope="rowgroup"
+                            colSpan={5}
+                            className="table-group"
+                          >
+                            <div className="row-title">{item}</div>
+
+                            <div className="row-meta">
+                              {itemTotal} total
+                            </div>
+                          </th>
+                        </tr>
+
+                        {rows.map((row) => {
+                          const quantity = Number(row.quantity ?? 0);
+
+                          const percent =
+                            sizePeak > 0
+                              ? (quantity / sizePeak) * 100
+                              : 0;
+
+                          /* A size nobody recorded is a data gap, not
+                             a size; flag it rather than let it read
+                             as a stock line. */
+                          const unsized = row.size === "No size";
+
+                          return (
+                            <tr key={`${item}-${row.size}`}>
+                              <td>
+                                <span
+                                  className={`badge ${
+                                    unsized
+                                      ? "badge-warning"
+                                      : "badge-plain"
+                                  }`}
+                                >
+                                  {row.size}
+                                </span>
+                              </td>
+
+                              <td className="table-num">{quantity}</td>
+
+                              <td>
+                                <div
+                                  className="meter-track"
+                                  role="progressbar"
+                                  aria-valuenow={quantity}
+                                  aria-valuemin={0}
+                                  aria-valuemax={sizePeak}
+                                  aria-label={`${item} ${row.size} sold`}
+                                >
+                                  <div
+                                    className="meter-fill meter-fill-success"
+                                    style={{ width: `${percent}%` }}
+                                  />
+                                </div>
+
+                                <div className="meter-foot">
+                                  <span>
+                                    {itemTotal > 0
+                                      ? Math.round(
+                                          (quantity / itemTotal) * 100
+                                        )
+                                      : 0}
+                                    % of {item}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="table-num">
+                                {row.collected}
+                              </td>
+
+                              <td className="table-num">
+                                {row.pending > 0 ? (
+                                  <span className="stat-warning">
+                                    {row.pending}
+                                  </span>
+                                ) : (
+                                  <span className="dim">0</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    );
+                  })}
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
       </div>
     </main>

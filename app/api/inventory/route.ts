@@ -4,6 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+export type SizeRow = {
+  item: string;
+  size: string;
+  quantity: number;
+  lineItems: number;
+  collected: number;
+  pending: number;
+};
+
 export async function GET() {
   const auth = await requireRole("admin", "volunteer");
 
@@ -11,21 +20,47 @@ export async function GET() {
     return auth;
   }
 
-  const { data, error } = await supabaseAdmin()
-    .from("inventory_status")
-    .select(
-      "id,item,initial_stock,sold,remaining,remaining_percentage"
-    )
-    .order("item");
+  const db = supabaseAdmin();
 
-  if (error) {
+  const [stock, sizes] = await Promise.all([
+    db
+      .from("inventory_status")
+      .select(
+        "id,item,initial_stock,sold,remaining,remaining_percentage"
+      )
+      .order("item"),
+
+    db.rpc("merchandise_by_size"),
+  ]);
+
+  if (stock.error) {
     return NextResponse.json(
-      { error: error.message },
+      { error: stock.error.message },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ inventory: data ?? [] });
+  /*
+   * 42883 / PGRST202: supabase/merchandise-sizes.sql has not been run.
+   * The stock table is still worth showing, so the size breakdown is
+   * reported as unavailable rather than failing the whole request.
+   */
+  const sizesMissing =
+    sizes.error?.code === "42883" ||
+    sizes.error?.code === "PGRST202";
+
+  if (sizes.error && !sizesMissing) {
+    return NextResponse.json(
+      { error: sizes.error.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    inventory: stock.data ?? [],
+    sizesAvailable: !sizesMissing,
+    sizes: sizesMissing ? [] : ((sizes.data ?? []) as SizeRow[]),
+  });
 }
 
 export async function PUT(request: Request) {

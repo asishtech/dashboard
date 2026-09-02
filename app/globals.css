@@ -1152,6 +1152,26 @@ table,
   white-space: nowrap;
 }
 
+/* Names the garment whose sizes follow, as a row inside tbody. It has
+   to opt out of the column-header treatment above: that is sticky and
+   uppercase because it is written for thead, and a sticky row per
+   group would pile them all at the top of the table. */
+/* `.table th` is (0,1,1); a bare class would lose to it and the row
+   would stay sticky and uppercased. */
+.table th.table-group {
+  position: static;
+
+  padding-top: var(--space-5);
+  background: var(--surface-inset);
+
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
+}
+
 .table td {
   padding: var(--space-4);
   border-bottom: 1px solid var(--border);
