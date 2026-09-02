@@ -27,6 +27,17 @@ type EventDetail = {
   participants: number;
   scanned: number;
   revenue?: number;
+  /* From the organisers' sheet; absent until event-details.sql runs. */
+  day?: string | null;
+  event_type?: string | null;
+  time_slot?: string | null;
+  team_size?: string | null;
+  registration_fee?: number | null;
+  prize_pool?: string | null;
+  logistics?: string | null;
+  external_guest?: boolean | null;
+  certificates?: string | null;
+  description?: string | null;
 };
 
 const LIVE_TABLES = ["registrations", "qr_scans"];
@@ -215,6 +226,70 @@ export default function EventDetailPage({
 
           </div>
         </header>
+
+        {(event.description ||
+          event.event_type ||
+          event.time_slot ||
+          event.logistics) && (
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">About this event</h2>
+
+                <p className="panel-subtitle">
+                  From the organisers&apos; sheet
+                </p>
+              </div>
+
+              {event.event_type && (
+                <span className="badge badge-plain">
+                  {event.event_type}
+                </span>
+              )}
+            </div>
+
+            <div className="panel-body stack">
+              {event.description && (
+                <p>{event.description}</p>
+              )}
+
+              <div className="stat-grid">
+                {[
+                  ["When", [event.day, event.time_slot].filter(Boolean).join(" · ")],
+                  ["Entry", event.registration_fee === null || event.registration_fee === undefined
+                    ? null
+                    : event.registration_fee === 0
+                      ? "Free"
+                      : `₹${event.registration_fee}`],
+                  ["Registration", event.team_size],
+                  ["Prize pool", event.prize_pool],
+                  ["Certificates", event.certificates],
+                  ["External guest", event.external_guest === null || event.external_guest === undefined
+                    ? null
+                    : event.external_guest ? "Yes" : "No"],
+                ]
+                  .filter(([, value]) => value)
+                  .map(([label, value]) => (
+                    <div className="stat" key={String(label)}>
+                      <span className="stat-label">{label}</span>
+
+                      <strong className="stat-value stat-value-sm">
+                        {value}
+                      </strong>
+                    </div>
+                  ))}
+              </div>
+
+              {event.logistics && (
+                <div>
+                  <div className="row-title">Logistics required</div>
+
+                  <p className="row-meta">{event.logistics}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="stat-grid">
           <div className="stat stat-feature">

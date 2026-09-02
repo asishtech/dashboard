@@ -73,11 +73,21 @@ export async function GET(
 
     const db = supabaseAdmin();
 
-    const [eventResult, summariesResult, attendeesResult] =
+    /*
+     * One literal, not a concatenation: supabase-js reads the select
+     * string at the type level, and `"a," + "b"` is not a literal, so
+     * the row type collapses to unknown.
+     */
+    const DETAIL_COLUMNS =
+      "event_id,name,event_date,day,venue,pricing,event_type,time_slot,team_size,registration_fee,prize_pool,logistics,external_guest,certificates,description";
+
+    const BASIC_COLUMNS = "event_id,name,event_date,day,venue,pricing";
+
+    const [detailed, summariesResult, attendeesResult] =
       await Promise.all([
         db
           .from("events")
-          .select("event_id,name,event_date")
+          .select(DETAIL_COLUMNS)
           .eq("event_id", event_id)
           .maybeSingle(),
 
@@ -85,6 +95,20 @@ export async function GET(
 
         db.rpc("event_attendees", { p_event_id: event_id }),
       ]);
+
+    /*
+     * 42703: supabase/event-details.sql has not been run, so the sheet
+     * columns do not exist yet. Fall back rather than 500 -- the totals
+     * and the attendee list are the part people actually need.
+     */
+    const eventResult =
+      detailed.error?.code === "42703"
+        ? await db
+            .from("events")
+            .select(BASIC_COLUMNS)
+            .eq("event_id", event_id)
+            .maybeSingle()
+        : detailed;
 
     if (eventResult.error) throw eventResult.error;
     if (summariesResult.error) throw summariesResult.error;
@@ -122,7 +146,7 @@ export async function GET(
       success: true,
 
       event: {
-        ...eventResult.data,
+        ...(eventResult.data as Record<string, unknown>),
         registrations: summary?.registrations ?? 0,
         participants: summary?.participants ?? 0,
         scanned: summary?.scanned ?? 0,
