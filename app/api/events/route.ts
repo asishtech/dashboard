@@ -23,6 +23,14 @@ export type EventSummary = {
   pricing?: string | null;
   paidRegistrations?: number;
   freeRegistrations?: number;
+  /*
+   * Absent until supabase/external-registrations.sql runs. See
+   * registration_origin() there for how each is decided.
+   */
+  externalRegistrations?: number;
+  internalRegistrations?: number;
+  unknownRegistrations?: number;
+  externalParticipants?: number;
 };
 
 const PRICING_FILTERS = ["paid", "free", "unclassified"] as const;
@@ -127,6 +135,38 @@ export async function GET(request: Request) {
     );
 
     /*
+     * Origin totals across everything the caller may see. `unknown` is
+     * reported alongside `external` on purpose: it is the number that
+     * tells you whether the external figure can be trusted, and a
+     * large unknown usually means the form's university field is
+     * named something registration_university() does not match.
+     */
+    const origin = classified.reduce(
+      (acc, event) => {
+        acc.external += Number(event.externalRegistrations ?? 0);
+        acc.internal += Number(event.internalRegistrations ?? 0);
+        acc.unknown += Number(event.unknownRegistrations ?? 0);
+        return acc;
+      },
+      { external: 0, internal: 0, unknown: 0 }
+    );
+
+    /*
+     * `externalParticipants` is deliberately not summed. It counts
+     * distinct emails *within* one event, so adding it across events
+     * counts anyone who entered two of them twice -- which is exactly
+     * the mistake a "unique outside visitors" headline invites.
+     */
+
+    /*
+     * The migration has not run if nothing carries an origin at all;
+     * saying so beats showing a confident zero.
+     */
+    const originAvailable = classified.some(
+      (event) => event.externalRegistrations !== undefined
+    );
+
+    /*
      * Coordinators were scoped to participant name, email and
      * registration number, so revenue is dropped from the payload
      * rather than hidden by the UI.
@@ -149,6 +189,8 @@ export async function GET(request: Request) {
       canSeeRevenue: isAdmin,
       canSetPricing: isAdmin,
       pricingCounts: counts,
+      originAvailable,
+      originCounts: origin,
       count: payload.length,
       events: payload,
     });

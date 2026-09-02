@@ -107,6 +107,10 @@ export async function GET(
         pricing?: string | null;
         paidRegistrations?: number;
         freeRegistrations?: number;
+        externalRegistrations?: number;
+        internalRegistrations?: number;
+        unknownRegistrations?: number;
+        externalParticipants?: number;
       }[]
     ).find((row) => String(row.event_id) === event_id);
 
@@ -126,6 +130,15 @@ export async function GET(
         pricing: summary?.pricing ?? null,
         pricingResolved: classifyPricing(summary ?? {}),
         pricingMixed: isMixed(summary ?? {}),
+
+        /*
+         * Absent until supabase/external-registrations.sql runs, which
+         * the UI reads as "not available" rather than as zero.
+         */
+        externalRegistrations: summary?.externalRegistrations,
+        internalRegistrations: summary?.internalRegistrations,
+        unknownRegistrations: summary?.unknownRegistrations,
+        externalParticipants: summary?.externalParticipants,
 
         /*
          * Money is omitted from the payload entirely for

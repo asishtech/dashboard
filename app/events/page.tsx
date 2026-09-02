@@ -26,6 +26,10 @@ type EventSummary = {
   /* Resolved server-side so every screen agrees on the bucket. */
   pricingResolved: Pricing;
   pricingMixed?: boolean;
+  /* Absent until supabase/external-registrations.sql runs. */
+  externalRegistrations?: number;
+  internalRegistrations?: number;
+  unknownRegistrations?: number;
 };
 
 type PricingCounts = Record<Pricing, number>;
@@ -57,6 +61,8 @@ export default function EventsPage() {
     unclassified: 0,
   });
 
+  const [originAvailable, setOriginAvailable] = useState(false);
+
   const loadEvents = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
 
@@ -79,6 +85,8 @@ export default function EventsPage() {
       if (data.pricingCounts) {
         setCounts(data.pricingCounts);
       }
+
+      setOriginAvailable(Boolean(data.originAvailable));
 
       setError("");
     } catch (err) {
@@ -138,9 +146,17 @@ export default function EventsPage() {
           acc.registrations += Number(event.registrations ?? 0);
           acc.scanned += Number(event.scanned ?? 0);
           acc.revenue += Number(event.revenue ?? 0);
+          acc.external += Number(event.externalRegistrations ?? 0);
+          acc.unknown += Number(event.unknownRegistrations ?? 0);
           return acc;
         },
-        { registrations: 0, scanned: 0, revenue: 0 }
+        {
+          registrations: 0,
+          scanned: 0,
+          revenue: 0,
+          external: 0,
+          unknown: 0,
+        }
       ),
     [filtered]
   );
@@ -281,6 +297,30 @@ export default function EventsPage() {
               <span className="stat-meta">QR codes scanned</span>
             </div>
 
+            {originAvailable && (
+              <div className="stat">
+                <span className="stat-label">External</span>
+
+                <strong className="stat-value">
+                  {totals.external}
+                </strong>
+
+                {/* The unknown count is shown next to the figure, not
+                    hidden, because it is what says how far the figure
+                    can be trusted before it is shared. */}
+                <span className="stat-meta">
+                  {totals.registrations > 0
+                    ? `${Math.round(
+                        (totals.external / totals.registrations) * 100
+                      )}% of registrations`
+                    : "No registrations"}
+                  {totals.unknown > 0
+                    ? ` · ${totals.unknown} unconfirmed`
+                    : ""}
+                </span>
+              </div>
+            )}
+
             {canSeeRevenue && (
               <div className="stat">
                 <span className="stat-label">Revenue</span>
@@ -409,6 +449,11 @@ export default function EventsPage() {
                     <th scope="col" className="table-num">
                       Checked in
                     </th>
+                    {originAvailable && (
+                      <th scope="col" className="table-num">
+                        External
+                      </th>
+                    )}
                     {canSeeRevenue && (
                       <th scope="col" className="table-num">
                         Revenue
@@ -507,6 +552,23 @@ export default function EventsPage() {
                           {scanned}
                           <span className="dim"> ({percent}%)</span>
                         </td>
+
+                        {originAvailable && (
+                          <td className="table-num">
+                            {Number(event.externalRegistrations ?? 0)}
+
+                            {Number(event.unknownRegistrations ?? 0) >
+                              0 && (
+                              <span
+                                className="dim"
+                                title={`${event.unknownRegistrations} registrations name no university and have no VIT-AP address, so they could be either`}
+                              >
+                                {" "}
+                                (+{event.unknownRegistrations}?)
+                              </span>
+                            )}
+                          </td>
+                        )}
 
                         {canSeeRevenue && (
                           <td className="table-num">
