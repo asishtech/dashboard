@@ -195,7 +195,13 @@ export async function GET(request: Request) {
       count: registrationsResult.count ?? registrations.length,
       limit,
       offset,
-      data: registrations,
+      /*
+       * Named for what it is. It was `data`, so a caller reading
+       * `data.registrations` got undefined and rendered an empty
+       * table with no error to explain it -- which is exactly what
+       * happened. One consumer, so renaming is safe.
+       */
+      registrations,
       inventory: inventoryResult.data ?? [],
       syncState: syncStateResult.data ?? null,
     });
