@@ -67,6 +67,11 @@ type DashboardData = {
     total: number;
   };
 
+  participants?: {
+    people: number;
+    signedIn: number;
+  };
+
   coordinators?: {
     people: number;
     eventsCovered: number;
@@ -204,6 +209,11 @@ export default function AdminPage() {
     }[]
   >([]);
 
+  const [participants, setParticipants] = useState({
+    people: 0,
+    signedIn: 0,
+  });
+
   const [coordinators, setCoordinators] = useState({
     people: 0,
     eventsCovered: 0,
@@ -296,6 +306,10 @@ export default function AdminPage() {
          * deployed; the zero defaults read as "none yet" rather than
          * blanking the section.
          */
+        setParticipants(
+          data.participants ?? { people: 0, signedIn: 0 }
+        );
+
         setCoordinators(
           data.coordinators ?? {
             people: 0,
@@ -659,6 +673,22 @@ export default function AdminPage() {
               {loading
                 ? " "
                 : `${eventRegistrationCount} event · ${merchandiseRegistrationCount} merch`}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">People</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : participants.people}
+            </strong>
+
+            {/* Distinct addresses across every registration. One
+                person booking six events is one person. */}
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : `${participants.signedIn} have signed in`}
             </span>
           </div>
 
@@ -1042,7 +1072,7 @@ export default function AdminPage() {
 
         <section className="stat-grid">
           <div className="stat stat-feature">
-            <span className="stat-label">Accounts</span>
+            <span className="stat-label">Granted access</span>
 
             <strong className="stat-value">
               {loading ? "—" : staff.total}
@@ -1057,7 +1087,7 @@ export default function AdminPage() {
             </span>
           </div>
 
-          {(["admin", "faculty", "volunteer", "buyer"] as const).map(
+          {(["admin", "faculty", "volunteer"] as const).map(
             (role) => (
               <div className="stat" key={role}>
                 <span className="stat-label">
@@ -1075,9 +1105,7 @@ export default function AdminPage() {
                     ? "Full access"
                     : role === "faculty"
                       ? "Own events only"
-                      : role === "volunteer"
-                        ? "Scanner only"
-                        : "Own passes only"}
+                      : "Scanner only"}
                 </span>
               </div>
             )

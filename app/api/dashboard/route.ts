@@ -268,6 +268,10 @@ async function viaScan(db: SupabaseClient): Promise<Summary> {
 }
 
 export type PeopleSummary = {
+  participants: {
+    people: number;
+    signedIn: number;
+  };
   coordinators: {
     people: number;
     eventsCovered: number;
@@ -299,15 +303,36 @@ async function readPeople(
       eventsTotal: 0,
       eventsUncovered: 0,
     },
+    participants: { people: 0, signedIn: 0 },
     staff: { total: 0, active: 0, inactive: 0, byRole: {} },
   };
 
   try {
-    const [assignments, events, staff] = await Promise.all([
-      db.from("event_coordinators").select("email,event_id"),
-      db.from("events").select("event_id,source_event_id"),
-      db.from("staff_invites").select("role,roles,active"),
-    ]);
+    const [assignments, events, staff, buyers, signedIn] =
+      await Promise.all([
+        db.from("event_coordinators").select("email,event_id"),
+        db.from("events").select("event_id,source_event_id"),
+        db.from("staff_invites").select("role,roles,active"),
+
+        /*
+         * The real buyer population. staff_invites only holds granted
+         * access, and buyer is the default rather than a grant, so
+         * anyone who simply bought something never appears there --
+         * counting it from that table gave a number that meant nothing.
+         */
+        db.from("registrations").select("email"),
+
+        db
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("role", "buyer"),
+      ]);
+
+    const buyerEmails = new Set(
+      (buyers.error ? [] : (buyers.data ?? []))
+        .map((row) => String(row.email ?? "").trim().toLowerCase())
+        .filter(Boolean)
+    );
 
     const rows = assignments.error ? [] : (assignments.data ?? []);
 
@@ -351,11 +376,23 @@ async function readPeople(
           : [row.role as string].filter(Boolean);
 
       for (const role of held) {
+        /*
+         * Buyer is the default for every signed-in account, so a
+         * "buyer" invite says nothing about access. Counting it beside
+         * admin and volunteer implied there were four buyers at the
+         * fest rather than four invite rows that happen to carry it.
+         */
+        if (role === "buyer") continue;
+
         byRole[role] = (byRole[role] ?? 0) + 1;
       }
     }
 
     return {
+      participants: {
+        people: buyerEmails.size,
+        signedIn: signedIn.error ? 0 : (signedIn.count ?? 0),
+      },
       coordinators: {
         people: people.size,
         eventsCovered,
