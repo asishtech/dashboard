@@ -267,6 +267,114 @@ async function viaScan(db: SupabaseClient): Promise<Summary> {
   };
 }
 
+export type PeopleSummary = {
+  coordinators: {
+    people: number;
+    eventsCovered: number;
+    eventsTotal: number;
+    eventsUncovered: number;
+  };
+  staff: {
+    total: number;
+    active: number;
+    inactive: number;
+    byRole: Record<string, number>;
+  };
+};
+
+/*
+ * Who runs the fest, as opposed to who attends it.
+ *
+ * Kept out of viaRpc/viaScan because it answers a different question
+ * and must not be able to break the numbers that matter most: every
+ * read here degrades to zeroes rather than failing the request.
+ */
+async function readPeople(
+  db: ReturnType<typeof supabaseAdmin>
+): Promise<PeopleSummary> {
+  const empty: PeopleSummary = {
+    coordinators: {
+      people: 0,
+      eventsCovered: 0,
+      eventsTotal: 0,
+      eventsUncovered: 0,
+    },
+    staff: { total: 0, active: 0, inactive: 0, byRole: {} },
+  };
+
+  try {
+    const [assignments, events, staff] = await Promise.all([
+      db.from("event_coordinators").select("email,event_id"),
+      db.from("events").select("event_id,source_event_id"),
+      db.from("staff_invites").select("role,roles,active"),
+    ]);
+
+    const rows = assignments.error ? [] : (assignments.data ?? []);
+
+    const people = new Set(
+      rows.map((row) => String(row.email).trim().toLowerCase())
+    );
+
+    const covered = new Set(rows.map((row) => String(row.event_id)));
+
+    /*
+     * Merchandise is a row in `events` for the resolver's benefit, not
+     * an event anyone coordinates, so it must not count as uncovered.
+     */
+    const realEvents = (events.error ? [] : (events.data ?? [])).filter(
+      (row) =>
+        String(row.source_event_id ?? "") !== "513" &&
+        String(row.event_id) !== "merchandise"
+    );
+
+    const eventsCovered = realEvents.filter((row) =>
+      covered.has(String(row.event_id))
+    ).length;
+
+    const byRole: Record<string, number> = {};
+
+    let active = 0;
+    let inactive = 0;
+
+    for (const row of staff.error ? [] : (staff.data ?? [])) {
+      if (row.active) active += 1;
+      else inactive += 1;
+
+      /*
+       * A multi-role account is counted under each role it holds, so
+       * the role totals can exceed the head count. That is the honest
+       * reading of "how many admins are there".
+       */
+      const held =
+        Array.isArray(row.roles) && row.roles.length > 0
+          ? (row.roles as string[])
+          : [row.role as string].filter(Boolean);
+
+      for (const role of held) {
+        byRole[role] = (byRole[role] ?? 0) + 1;
+      }
+    }
+
+    return {
+      coordinators: {
+        people: people.size,
+        eventsCovered,
+        eventsTotal: realEvents.length,
+        eventsUncovered: realEvents.length - eventsCovered,
+      },
+      staff: {
+        total: staff.error ? 0 : (staff.data ?? []).length,
+        active,
+        inactive,
+        byRole,
+      },
+    };
+  } catch (error) {
+    console.error("People summary failed:", error);
+    return empty;
+  }
+}
+
 export async function GET() {
   const auth = await requireRole("admin");
 
@@ -279,12 +387,16 @@ export async function GET() {
   try {
     const db = supabaseAdmin();
 
-    const summary = (await viaRpc(db)) ?? (await viaScan(db));
+    const [summary, people] = await Promise.all([
+      (async () => (await viaRpc(db)) ?? (await viaScan(db)))(),
+      readPeople(db),
+    ]);
 
     return NextResponse.json(
       {
         success: true,
         ...summary,
+        ...people,
         responseTimeMs: Date.now() - started,
       },
       {

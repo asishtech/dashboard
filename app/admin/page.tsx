@@ -9,7 +9,6 @@ import {
   ArrowRightIcon,
   BoxIcon,
   ListIcon,
-  UsersIcon,
 } from "@/components/icons";
 
 type Inventory = {
@@ -66,6 +65,20 @@ type DashboardData = {
     given: number;
     pending: number;
     total: number;
+  };
+
+  coordinators?: {
+    people: number;
+    eventsCovered: number;
+    eventsTotal: number;
+    eventsUncovered: number;
+  };
+
+  staff?: {
+    total: number;
+    active: number;
+    inactive: number;
+    byRole: Record<string, number>;
   };
 
   responseTimeMs?: number;
@@ -180,15 +193,30 @@ export default function AdminPage() {
   ] = useState(0);
 
   const [
-    ticketBreakdown,
-    setTicketBreakdown,
+    eventBreakdown,
+    setEventBreakdown,
   ] = useState<
     {
-      ticket: string;
+      event_id: string;
+      name: string;
       registrations: number;
       revenue: number;
     }[]
   >([]);
+
+  const [coordinators, setCoordinators] = useState({
+    people: 0,
+    eventsCovered: 0,
+    eventsTotal: 0,
+    eventsUncovered: 0,
+  });
+
+  const [staff, setStaff] = useState<{
+    total: number;
+    active: number;
+    inactive: number;
+    byRole: Record<string, number>;
+  }>({ total: 0, active: 0, inactive: 0, byRole: {} });
 
   const [
     distribution,
@@ -259,6 +287,33 @@ export default function AdminPage() {
           data.inventory ?? []
         );
 
+        setEventBreakdown(
+          data.eventBreakdown ?? []
+        );
+
+        /*
+         * Absent until supabase migrations and the newer API are both
+         * deployed; the zero defaults read as "none yet" rather than
+         * blanking the section.
+         */
+        setCoordinators(
+          data.coordinators ?? {
+            people: 0,
+            eventsCovered: 0,
+            eventsTotal: 0,
+            eventsUncovered: 0,
+          }
+        );
+
+        setStaff(
+          data.staff ?? {
+            total: 0,
+            active: 0,
+            inactive: 0,
+            byRole: {},
+          }
+        );
+
         setDashboardTotalAmount(
           Number(
             data.totalAmount ?? 0
@@ -301,9 +356,6 @@ export default function AdminPage() {
           )
         );
 
-        setTicketBreakdown(
-          data.ticketBreakdown ?? []
-        );
 
         setDistribution({
           given: Number(
@@ -484,66 +536,6 @@ export default function AdminPage() {
   }
 
 
-  /*
-   * Dashboard calculations.
-   */
-  const totalAmount =
-    dashboardTotalAmount;
-
-  const totalRemaining =
-    inventory.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.remaining ?? 0
-        ),
-      0
-    );
-
-  const totalStock =
-    inventory.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.initial_stock ?? 0
-        ),
-      0
-    );
-
-  const totalSold =
-    inventory.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.sold ?? 0
-        ),
-      0
-    );
-
-
-  /*
-   * Distribution statistics.
-   *
-   * Values come directly from
-   * the lightweight dashboard API.
-   */
-  const givenCount =
-    distribution.given;
-
-  const pendingCount =
-    distribution.pending;
-
-
-
-  const distributionTotal =
-    Math.max(
-      givenCount + pendingCount,
-      1
-    );
-
-  const givenPercent =
-    (givenCount / distributionTotal) * 100;
-
   const formatAmount = (
     amount: number
   ) =>
@@ -577,33 +569,10 @@ export default function AdminPage() {
 
   const busy = syncing || refreshing;
 
-  const scanned = eventQrScanned + merchandiseQrScanned;
-
-  /*
-   * Events and merchandise are two different businesses sharing one
-   * feed, so the dashboard compares them side by side rather than
-   * burying both in a single running total.
-   */
-  const streams = [
-    {
-      key: "events",
-      label: "Events",
-      registrations: eventRegistrationCount,
-      revenue: eventRevenue,
-      scanned: eventQrScanned,
-      href: "/events",
-    },
-    {
-      key: "merchandise",
-      label: "Merchandise",
-      registrations: merchandiseRegistrationCount,
-      revenue: merchandiseRevenue,
-      scanned: merchandiseQrScanned,
-      href: "/admin/inventory",
-    },
-  ];
-
-  const topTickets = ticketBreakdown.slice(0, 8);
+  const stockRemaining = inventory.reduce(
+    (sum, item) => sum + Number(item.remaining ?? 0),
+    0
+  );
 
   return (
     <main className="app">
@@ -667,13 +636,13 @@ export default function AdminPage() {
         )}
 
 
-        {/* Headline figures */}
+        {/* Fest-wide, before the four domains are split out. */}
         <section className="stat-grid">
           <div className="stat stat-feature">
             <span className="stat-label">Total revenue</span>
 
             <strong className="stat-value">
-              {loading ? "—" : formatAmount(totalAmount)}
+              {loading ? "—" : formatAmount(dashboardTotalAmount)}
             </strong>
 
             <span className="stat-meta">Events and merchandise</span>
@@ -686,417 +655,443 @@ export default function AdminPage() {
               {loading ? "—" : registrations}
             </strong>
 
-            <span className="stat-meta">Across both streams</span>
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : `${eventRegistrationCount} event · ${merchandiseRegistrationCount} merch`}
+            </span>
           </div>
 
           <div className="stat">
             <span className="stat-label">Checked in</span>
 
             <strong className="stat-value stat-success">
-              {loading ? "—" : scanned}
+              {loading ? "—" : eventQrScanned + merchandiseQrScanned}
             </strong>
 
             <span className="stat-meta">QR codes scanned</span>
           </div>
+        </section>
 
-          <div className="stat">
-            <span className="stat-label">Merch remaining</span>
+
+        {/* 1. Events ------------------------------------------- */}
+        <section className="section-header mt-8">
+          <h2 className="page-title" style={{ fontSize: "var(--text-xl)" }}>
+            Events
+          </h2>
+
+          <Link href="/events" className="btn btn-ghost btn-sm">
+            All events
+            <ArrowRightIcon size={13} />
+          </Link>
+        </section>
+
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Event registrations</span>
 
             <strong className="stat-value">
-              {loading ? "—" : totalRemaining}
+              {loading ? "—" : eventRegistrationCount}
             </strong>
 
             <span className="stat-meta">
               {loading
                 ? " "
-                : `${totalSold} sold of ${totalStock}`}
+                : `${eventBreakdown.length} event${
+                    eventBreakdown.length === 1 ? "" : "s"
+                  } with bookings`}
             </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Checked in</span>
+
+            <strong className="stat-value stat-success">
+              {loading ? "—" : eventQrScanned}
+            </strong>
+
+            <span className="stat-meta">
+              {loading || eventRegistrationCount === 0
+                ? "No bookings yet"
+                : `${Math.round(
+                    (eventQrScanned / eventRegistrationCount) * 100
+                  )}% of bookings`}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Event revenue</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : formatAmount(eventRevenue)}
+            </strong>
+
+            <span className="stat-meta">Tickets only</span>
           </div>
         </section>
 
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h3 className="panel-title">Busiest events</h3>
 
-        <div className="grid grid-main mb-8">
-
-          {/* Events vs merchandise */}
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Where it comes from</h2>
-
-                <p className="panel-subtitle">
-                  Events and merchandise compared
-                </p>
-              </div>
+              <p className="panel-subtitle">By registrations</p>
             </div>
+          </div>
 
+          {loading ? (
             <div className="panel-body stack">
-              {streams.map((stream) => {
-                const share =
-                  totalAmount > 0
-                    ? Math.round(
-                        (stream.revenue / totalAmount) * 100
+              {[1, 2, 3, 4].map((row) => (
+                <div className="skeleton skeleton-line" key={row} />
+              ))}
+            </div>
+          ) : eventBreakdown.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon">
+                <ListIcon size={22} />
+              </div>
+
+              <p className="empty-title">No event bookings yet</p>
+
+              <p className="empty-body">
+                Run a V-TAPP sync to pull registrations in.
+              </p>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <caption className="sr-only">
+                  Events by registration count
+                </caption>
+
+                <thead>
+                  <tr>
+                    <th scope="col">Event</th>
+                    <th scope="col" className="table-num">
+                      Registrations
+                    </th>
+                    <th scope="col" className="table-num">
+                      Revenue
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {[...eventBreakdown]
+                    .sort((a, b) => b.registrations - a.registrations)
+                    .slice(0, 8)
+                    .map((event) => (
+                      <tr key={event.event_id}>
+                        <td>
+                          <div className="row-title truncate">
+                            {event.name}
+                          </div>
+                        </td>
+
+                        <td className="table-num">
+                          {event.registrations}
+                        </td>
+
+                        <td className="table-num">
+                          {formatAmount(Number(event.revenue ?? 0))}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+
+        {/* 2. Merchandise --------------------------------------- */}
+        <section className="section-header mt-8">
+          <h2 className="page-title" style={{ fontSize: "var(--text-xl)" }}>
+            Merchandise
+          </h2>
+
+          <div className="header-actions">
+            <Link
+              href="/admin/inventory"
+              className="btn btn-ghost btn-sm"
+            >
+              Stock
+              <ArrowRightIcon size={13} />
+            </Link>
+
+            <Link
+              href="/admin/registrations"
+              className="btn btn-ghost btn-sm"
+            >
+              Orders
+              <ArrowRightIcon size={13} />
+            </Link>
+          </div>
+        </section>
+
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Merchandise orders</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : merchandiseRegistrationCount}
+            </strong>
+
+            <span className="stat-meta">
+              {loading ? " " : `${distribution.total} items in total`}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Handed over</span>
+
+            <strong className="stat-value stat-success">
+              {loading ? "—" : distribution.given}
+            </strong>
+
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : `${distribution.pending} still to collect`}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Merch revenue</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : formatAmount(merchandiseRevenue)}
+            </strong>
+
+            <span className="stat-meta">Garments and combos</span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Stock left</span>
+
+            <strong
+              className={`stat-value ${
+                stockRemaining === 0 ? "stat-warning" : ""
+              }`}
+            >
+              {loading ? "—" : stockRemaining}
+            </strong>
+
+            <span className="stat-meta">Across all items</span>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h3 className="panel-title">Stock levels</h3>
+
+              <p className="panel-subtitle">
+                Remaining against configured capacity
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="panel-body stack">
+              {[1, 2, 3].map((row) => (
+                <div key={row}>
+                  <div className="skeleton skeleton-line" />
+                  <div className="skeleton meter-track" />
+                </div>
+              ))}
+            </div>
+          ) : inventory.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon">
+                <BoxIcon size={22} />
+              </div>
+
+              <p className="empty-title">No inventory configured</p>
+            </div>
+          ) : (
+            <div className="panel-body stack">
+              {inventory.map((item) => {
+                const stock = Number(item.initial_stock ?? 0);
+                const remaining = Number(item.remaining ?? 0);
+
+                const percent =
+                  stock > 0
+                    ? Math.max(
+                        0,
+                        Math.min(100, (remaining / stock) * 100)
                       )
                     : 0;
 
-                return (
-                  <div className="meter" key={stream.key}>
-                    <div className="meter-head">
-                      <Link
-                        href={stream.href}
-                        className="meter-label link"
-                      >
-                        {stream.label}
-                      </Link>
+                const level =
+                  percent <= 15
+                    ? "meter-fill-danger"
+                    : percent <= 40
+                      ? "meter-fill-warning"
+                      : "meter-fill-success";
 
-                      <span className="meter-value">
-                        {loading
-                          ? "—"
-                          : formatAmount(stream.revenue)}
+                return (
+                  <div key={item.id}>
+                    <div className="meter-head">
+                      <span className="row-title">{item.item}</span>
+
+                      <span className="muted text-sm">
+                        {remaining} of {stock}
                       </span>
                     </div>
 
                     <div
                       className="meter-track"
                       role="progressbar"
-                      aria-valuenow={share}
+                      aria-valuenow={Math.round(percent)}
                       aria-valuemin={0}
                       aria-valuemax={100}
-                      aria-label={`${stream.label} share of revenue`}
+                      aria-label={`${item.item} stock remaining`}
                     >
                       <div
-                        className="meter-fill"
-                        style={{ width: `${share}%` }}
+                        className={`meter-fill ${level}`}
+                        style={{ width: `${percent}%` }}
                       />
-                    </div>
-
-                    <div className="meter-foot">
-                      <span>
-                        {stream.registrations} registrations
-                      </span>
-
-                      <span>{stream.scanned} checked in</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </section>
+          )}
+        </section>
 
 
-          {/* Merchandise distribution */}
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Handover</h2>
+        {/* 3. Coordinators -------------------------------------- */}
+        <section className="section-header mt-8">
+          <h2 className="page-title" style={{ fontSize: "var(--text-xl)" }}>
+            Coordinators
+          </h2>
 
-                <p className="panel-subtitle">
-                  Merchandise given to buyers
-                </p>
-              </div>
-            </div>
-
-            <div className="panel-body">
-              <div className="meter">
-                <div className="meter-head">
-                  <span className="meter-label">Handed over</span>
-
-                  <span className="meter-value">
-                    {loading ? "—" : `${Math.round(givenPercent)}%`}
-                  </span>
-                </div>
-
-                <div
-                  className="meter-track"
-                  role="progressbar"
-                  aria-valuenow={Math.round(givenPercent)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Merchandise handed over"
-                >
-                  <div
-                    className="meter-fill meter-fill-success"
-                    style={{ width: `${givenPercent}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="split">
-                <div className="split-item">
-                  <span className="stat-label">Given</span>
-
-                  <strong className="split-value stat-success">
-                    {loading ? "—" : givenCount}
-                  </strong>
-                </div>
-
-                <div className="split-item">
-                  <span className="stat-label">Pending</span>
-
-                  <strong className="split-value stat-warning">
-                    {loading ? "—" : pendingCount}
-                  </strong>
-                </div>
-              </div>
-
-              <p className="help mt-4">
-                {loading
-                  ? " "
-                  : `${distributionTotal} items across all merchandise orders.`}
-              </p>
-            </div>
-          </section>
-        </div>
-
-
-        <div className="grid grid-main mb-8">
-
-          {/* Stock */}
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Stock levels</h2>
-
-                <p className="panel-subtitle">
-                  Remaining against configured capacity
-                </p>
-              </div>
-
-              <Link
-                href="/admin/inventory"
-                className="btn btn-ghost btn-sm"
-              >
-                Manage
-              </Link>
-            </div>
-
-            <div className="panel-body stack">
-              {loading ? (
-                [1, 2, 3, 4, 5].map((row) => (
-                  <div key={row}>
-                    <div className="skeleton skeleton-line" />
-                    <div className="skeleton meter-track" />
-                  </div>
-                ))
-              ) : inventory.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-icon">
-                    <BoxIcon size={22} />
-                  </div>
-
-                  <p className="empty-title">No inventory yet</p>
-
-                  <p className="empty-body">
-                    Add stock in Inventory to see levels here.
-                  </p>
-                </div>
-              ) : (
-                inventory.map((item) => {
-                  const stock = Number(item.initial_stock ?? 0);
-                  const remaining = Number(item.remaining ?? 0);
-
-                  const percent =
-                    stock > 0
-                      ? Math.max(
-                          0,
-                          Math.min(100, (remaining / stock) * 100)
-                        )
-                      : 0;
-
-                  const level =
-                    percent <= 15
-                      ? "meter-fill-danger"
-                      : percent <= 40
-                        ? "meter-fill-warning"
-                        : "meter-fill-success";
-
-                  return (
-                    <div className="meter" key={item.id}>
-                      <div className="meter-head">
-                        <span className="meter-label">
-                          {item.item}
-                        </span>
-
-                        <span className="meter-value">
-                          {remaining} / {stock}
-                        </span>
-                      </div>
-
-                      <div
-                        className="meter-track"
-                        role="progressbar"
-                        aria-valuenow={Math.round(percent)}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`${item.item} stock remaining`}
-                      >
-                        <div
-                          className={`meter-fill ${level}`}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-
-                      <div className="meter-foot">
-                        <span>{item.sold} sold</span>
-                        <span>{Math.round(percent)}% left</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
-
-
-          {/* Best selling tickets */}
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Top tickets</h2>
-
-                <p className="panel-subtitle">
-                  By revenue, across both streams
-                </p>
-              </div>
-
-              <Link href="/events" className="btn btn-ghost btn-sm">
-                All events
-              </Link>
-            </div>
-
-            {loading ? (
-              <div className="panel-body stack">
-                {[1, 2, 3, 4].map((row) => (
-                  <div className="skeleton skeleton-line" key={row} />
-                ))}
-              </div>
-            ) : topTickets.length === 0 ? (
-              <div className="empty">
-                <div className="empty-icon">
-                  <ListIcon size={22} />
-                </div>
-
-                <p className="empty-title">Nothing sold yet</p>
-
-                <p className="empty-body">
-                  Run a V-TAPP sync to pull registrations in.
-                </p>
-              </div>
-            ) : (
-              <div className="table-wrap">
-                <table className="table">
-                  <caption className="sr-only">
-                    Tickets by revenue
-                  </caption>
-
-                  <thead>
-                    <tr>
-                      <th scope="col">Ticket</th>
-                      <th scope="col" className="table-num">
-                        Sold
-                      </th>
-                      <th scope="col" className="table-num">
-                        Revenue
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {topTickets.map((ticket) => (
-                      <tr key={ticket.ticket}>
-                        <td>
-                          <div className="row-title truncate">
-                            {ticket.ticket}
-                          </div>
-                        </td>
-
-                        <td className="table-num">
-                          {ticket.registrations}
-                        </td>
-
-                        <td className="table-num">
-                          {formatAmount(Number(ticket.revenue ?? 0))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {!loading && ticketBreakdown.length > topTickets.length && (
-              <div className="panel-footer">
-                Showing top {topTickets.length} of{" "}
-                {ticketBreakdown.length} tickets
-              </div>
-            )}
-          </section>
-        </div>
-
-
-        {/* Navigation */}
-        <section className="grid grid-4">
-          <Link href="/events" className="card-link card-link-feature">
-            <ListIcon size={20} />
-
-            <div className="card-link-title mt-4">Events</div>
-
-            <p className="card-link-body">
-              Every event, searchable, with its participant list.
-            </p>
-
-            <span className="card-link-cta">
-              Open
-              <ArrowRightIcon size={13} />
-            </span>
-          </Link>
-
-          <Link href="/admin/registrations" className="card-link">
-            <UsersIcon size={20} />
-
-            <div className="card-link-title mt-4">
-              Registrations
-            </div>
-
-            <p className="card-link-body">
-              Every buyer and their distribution state.
-            </p>
-
-            <span className="card-link-cta">
-              Open
-              <ArrowRightIcon size={13} />
-            </span>
-          </Link>
-
-          <Link href="/admin/inventory" className="card-link">
-            <BoxIcon size={20} />
-
-            <div className="card-link-title mt-4">Inventory</div>
-
-            <p className="card-link-body">
-              Adjust configured stock for each item.
-            </p>
-
-            <span className="card-link-cta">
-              Open
-              <ArrowRightIcon size={13} />
-            </span>
-          </Link>
-
-          <Link href="/admin/coordinators" className="card-link">
-            <UsersIcon size={20} />
-
-            <div className="card-link-title mt-4">Coordinators</div>
-
-            <p className="card-link-body">
-              Give a club coordinator access to their event.
-            </p>
-
-            <span className="card-link-cta">
-              Open
-              <ArrowRightIcon size={13} />
-            </span>
+          <Link
+            href="/admin/coordinators"
+            className="btn btn-ghost btn-sm"
+          >
+            Manage
+            <ArrowRightIcon size={13} />
           </Link>
         </section>
+
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">People</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : coordinators.people}
+            </strong>
+
+            <span className="stat-meta">
+              With at least one event
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Events covered</span>
+
+            <strong className="stat-value stat-success">
+              {loading ? "—" : coordinators.eventsCovered}
+            </strong>
+
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : `of ${coordinators.eventsTotal} events`}
+            </span>
+          </div>
+
+          {/* The number worth acting on: an event nobody can see. */}
+          <div className="stat">
+            <span className="stat-label">Uncovered</span>
+
+            <strong
+              className={`stat-value ${
+                coordinators.eventsUncovered > 0
+                  ? "stat-warning"
+                  : "stat-success"
+              }`}
+            >
+              {loading ? "—" : coordinators.eventsUncovered}
+            </strong>
+
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : coordinators.eventsUncovered === 0
+                  ? "Every event has someone"
+                  : "No coordinator assigned"}
+            </span>
+          </div>
+        </section>
+
+
+        {/* 4. Staff --------------------------------------------- */}
+        <section className="section-header mt-8">
+          <h2 className="page-title" style={{ fontSize: "var(--text-xl)" }}>
+            Staff
+          </h2>
+
+          <Link href="/admin/users" className="btn btn-ghost btn-sm">
+            Manage access
+            <ArrowRightIcon size={13} />
+          </Link>
+        </section>
+
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Accounts</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : staff.total}
+            </strong>
+
+            <span className="stat-meta">
+              {loading
+                ? " "
+                : staff.inactive > 0
+                  ? `${staff.active} active · ${staff.inactive} disabled`
+                  : "All active"}
+            </span>
+          </div>
+
+          {(["admin", "faculty", "volunteer", "buyer"] as const).map(
+            (role) => (
+              <div className="stat" key={role}>
+                <span className="stat-label">
+                  {role === "faculty"
+                    ? "Faculty"
+                    : role.charAt(0).toUpperCase() + role.slice(1)}
+                </span>
+
+                <strong className="stat-value">
+                  {loading ? "—" : (staff.byRole[role] ?? 0)}
+                </strong>
+
+                <span className="stat-meta">
+                  {role === "admin"
+                    ? "Full access"
+                    : role === "faculty"
+                      ? "Own events only"
+                      : role === "volunteer"
+                        ? "Scanner only"
+                        : "Own passes only"}
+                </span>
+              </div>
+            )
+          )}
+        </section>
+
+        {/* An account may hold several roles, so the role tiles can
+            sum to more than the head count. Said once, here. */}
+        {!loading && staff.total > 0 && (
+          <p className="help mt-4">
+            An account can hold more than one role, so the role counts
+            may add up to more than {staff.total}.
+          </p>
+        )}
 
       </div>
     </main>
