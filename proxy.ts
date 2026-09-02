@@ -173,10 +173,16 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  /*
+   * The scanner is shared. A club coordinator admits their own event's
+   * attendees; /api/checkin scopes them to it, this only decides who
+   * may open the screen.
+   */
   if (
     path.startsWith("/volunteer") &&
     role !== "volunteer" &&
-    role !== "admin"
+    role !== "admin" &&
+    role !== "faculty"
   ) {
     return redirectPreservingCookies(
       new URL(destinationFor(role), request.url),

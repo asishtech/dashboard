@@ -27,7 +27,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
-  const auth = await requireRole("volunteer", "admin");
+  const auth = await requireRole("volunteer", "admin", "faculty");
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -72,27 +72,14 @@ export async function GET(
   }
 
   /*
-   * Record the scan.
+   * Looking at a pass no longer admits its holder.
    *
-   * Nothing wrote `qr_scans` before this, so every check-in metric on
-   * the admin dashboard and the events pages sat at zero permanently.
-   * Looking up a QR *is* the check-in, so that is where it belongs.
-   *
-   * Deliberately not awaited into the response path: a volunteer at
-   * the door must never be blocked, or shown an error, because the
-   * attendance log failed to write.
+   * This used to insert a qr_scans row, so pointing a camera at a code
+   * to see what it was already counted as entry, and scanning the same
+   * pass twice counted twice. Entry is now an explicit POST to
+   * /api/checkin, guarded by a unique index. See
+   * supabase/event-checkin.sql.
    */
-  void supabaseAdmin()
-    .from("qr_scans")
-    .insert({
-      registration_id: registration.id,
-      event_id: registration.event_id,
-    })
-    .then(({ error: scanError }) => {
-      if (scanError) {
-        console.error("Could not record QR scan:", scanError);
-      }
-    });
 
   const items = ((registration.items ?? []) as ItemRow[]).map(
     (item) => ({

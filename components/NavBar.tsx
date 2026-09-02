@@ -54,6 +54,7 @@ const NAV: Record<Role, NavItem[]> = {
 
   faculty: [
     { href: "/events", label: "Events", icon: TicketIcon },
+    { href: "/volunteer", label: "Scan", icon: ScanIcon },
   ],
 
   /*

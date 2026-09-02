@@ -21,6 +21,19 @@ type Registration = {
   isEventOnly?: boolean;
 };
 
+type Pass = {
+  id: number;
+  registration_id: string;
+  name: string | null;
+  email: string | null;
+  event_id: string | null;
+  event_name: string;
+  event_day: string | null;
+  event_venue: string | null;
+  is_merch: boolean;
+  entered_at: string | null;
+};
+
 /* Minimal surface of Html5Qrcode, so the import stays lazy. */
 type Scanner = {
   start: (
@@ -48,9 +61,12 @@ export default function VolunteerPage() {
   const [registration, setRegistration] =
     useState<Registration | null>(null);
 
+  const [pass, setPass] = useState<Pass | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [scanToken, setScanToken] = useState("");
 
   const scannerRef = useRef<Scanner | null>(null);
   const handlingRef = useRef(false);
@@ -111,6 +127,39 @@ export default function VolunteerPage() {
           throw new Error("That is not a V-TAPP QR code");
         }
 
+        setScanToken(token);
+
+        /*
+         * Ask what the pass is before deciding what to show. An event
+         * booking carries no merchandise, and the old flow read that as
+         * "nothing to distribute" -- a dead end where the answer should
+         * have been a way to admit them.
+         */
+        const passResponse = await fetch(
+          `/api/checkin?token=${encodeURIComponent(token)}`,
+          { cache: "no-store" }
+        );
+
+        const passData = await passResponse.json();
+
+        if (!passResponse.ok) {
+          throw new Error(passData.error || "Invalid QR code");
+        }
+
+        if (!mountedRef.current) return;
+
+        const scanned = passData.pass as Pass;
+
+        setError("");
+        setNotice("");
+        setPass(scanned);
+
+        /* Merchandise still needs its item list. */
+        if (!scanned.is_merch) {
+          setRegistration(null);
+          return;
+        }
+
         const response = await fetch(
           `/api/distribution/${encodeURIComponent(token)}`,
           { cache: "no-store" }
@@ -124,7 +173,6 @@ export default function VolunteerPage() {
 
         if (!mountedRef.current) return;
 
-        setError("");
         setRegistration({
           ...data.registration,
           isEventOnly: Boolean(data.isEventOnly),
@@ -269,10 +317,62 @@ export default function VolunteerPage() {
 
   function scanAnother() {
     setRegistration(null);
+    setPass(null);
     setError("");
+    setNotice("");
+    setScanToken("");
     handlingRef.current = false;
     void startScanner();
   }
+
+  /*
+   * Admitting someone is a press, not a side effect of pointing a
+   * camera. A 409 means they are already inside, which is an answer to
+   * show plainly rather than an error to apologise for.
+   */
+  async function markEntry() {
+    if (busy || !scanToken) return;
+
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: scanToken }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPass(data.pass ?? null);
+        setNotice("Entry recorded.");
+        return;
+      }
+
+      if (response.status === 409 && data.alreadyEntered) {
+        setPass(data.pass ?? null);
+        setNotice("Already checked in — this pass has been used.");
+        return;
+      }
+
+      throw new Error(data.error || "Could not record entry");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not record entry"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const formatTime = (value: string) =>
+    new Date(value).toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
   async function markGiven(itemId: number) {
     if (busy) return;
@@ -351,13 +451,20 @@ export default function VolunteerPage() {
           </div>
         )}
 
+        {notice && (
+          <div className="banner banner-success" role="status">
+            <CheckIcon size={18} />
+            <span>{notice}</span>
+          </div>
+        )}
+
 
         {/* The reader element must stay mounted: html5-qrcode attaches
             the video stream to it by id, and unmounting it mid-scan is
             what produced the NotFoundError teardown races. */}
         <section
           className="panel"
-          hidden={registration !== null}
+          hidden={pass !== null || registration !== null}
         >
           <div className="panel-body">
             <div id={READER_ID} className="scanner" />
@@ -389,6 +496,86 @@ export default function VolunteerPage() {
           </div>
         </section>
 
+
+        {pass && !pass.is_merch && (
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">{pass.event_name}</h2>
+
+                <p className="panel-subtitle">
+                  {[pass.event_day, pass.event_venue]
+                    .filter(Boolean)
+                    .join(" · ") || "V-TAPP event"}
+                </p>
+              </div>
+
+              <span
+                className={`badge ${
+                  pass.entered_at ? "badge-success" : "badge-warning"
+                }`}
+              >
+                {pass.entered_at ? "Inside" : "Not yet in"}
+              </span>
+            </div>
+
+            <div className="panel-body stack">
+              <div className="scan-item">
+                <div>
+                  <div className="scan-item-name">
+                    {pass.name ?? "Attendee"}
+                  </div>
+
+                  <div className="scan-item-meta">
+                    {pass.email ?? "No email on record"}
+                  </div>
+
+                  <div className="mono dim text-sm mt-2">
+                    #{pass.registration_id}
+                  </div>
+                </div>
+              </div>
+
+              {pass.entered_at ? (
+                /* Deliberately not an error state. A second scan is a
+                   normal thing to do; the answer is when they came in. */
+                <div className="empty">
+                  <div className="empty-icon">
+                    <CheckIcon size={22} />
+                  </div>
+
+                  <p className="empty-title">Already checked in</p>
+
+                  <p className="empty-body">
+                    Admitted {formatTime(pass.entered_at)}. Each pass
+                    admits one person, once.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-block"
+                  disabled={busy}
+                  onClick={markEntry}
+                >
+                  {busy && <span className="btn-spinner" />}
+                  {busy ? "Recording" : "Mark entry"}
+                </button>
+              )}
+            </div>
+
+            <div className="panel-footer">
+              <button
+                type="button"
+                className="btn btn-block"
+                onClick={scanAnother}
+              >
+                <ScanIcon size={16} />
+                Scan next code
+              </button>
+            </div>
+          </section>
+        )}
 
         {registration && (
           <section className="panel">

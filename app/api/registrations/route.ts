@@ -58,13 +58,18 @@ export async function GET(request: Request) {
      * also pulled `raw_data`, the full upstream V-TAPP payload,
      * for every registration on every poll.
      */
-    const [registrationsResult, inventoryResult, syncStateResult] =
-      await Promise.all([
+    const [
+      registrationsResult,
+      inventoryResult,
+      syncStateResult,
+      eventMapResult,
+    ] = await Promise.all([
         (() => {
           const query = db
             .from("registrations")
             .select(
               `
+              id,
               registration_id,
               name,
               email,
@@ -101,6 +106,13 @@ export async function GET(request: Request) {
           .select("last_sync_at,last_success,last_error")
           .eq("id", 1)
           .maybeSingle(),
+
+        /*
+         * Resolved event names, keyed by registration id. Fetched
+         * alongside the page rather than after it, because it does not
+         * depend on which rows came back.
+         */
+        db.rpc("registration_event_map"),
       ]);
 
     if (registrationsResult.error) {
@@ -117,9 +129,43 @@ export async function GET(request: Request) {
      * The client renders `item.status`; without this the nested
      * relation never matched and every item read as PENDING.
      */
+    /*
+     * 42883 / PGRST202: supabase/event-checkin.sql has not been run, so
+     * rows keep the generic label rather than the request failing.
+     */
+    const eventMap = (eventMapResult.error
+      ? {}
+      : ((eventMapResult.data ?? {}) as Record<
+          string,
+          {
+            slug: string | null;
+            name: string;
+            day: string | null;
+            venue: string | null;
+            merch: boolean;
+          }
+        >)) as Record<
+      string,
+      {
+        slug: string | null;
+        name: string;
+        day: string | null;
+        venue: string | null;
+        merch: boolean;
+      }
+    >;
+
     const registrations = (registrationsResult.data ?? []).map(
       (registration) => ({
         ...registration,
+
+        event: eventMap[String(registration.id)] ?? {
+          slug: null,
+          name: "Unmapped ticket",
+          day: null,
+          venue: null,
+          merch: false,
+        },
 
         items: ((registration.items ?? []) as ItemRow[]).map(
           (item) => {

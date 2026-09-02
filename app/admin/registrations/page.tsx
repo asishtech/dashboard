@@ -19,15 +19,27 @@ type RegistrationItem = {
   status?: string;
 };
 
+type RegistrationEvent = {
+  slug: string | null;
+  name: string;
+  day: string | null;
+  venue: string | null;
+  merch: boolean;
+};
+
 type Registration = {
+  id?: number;
   registration_id: string;
   name: string;
   email: string;
-  event_id?: number | string | null;
-  product_meta?: string | null;
-  ticket?: string | null;
   total?: number | null;
   items?: RegistrationItem[];
+  /*
+   * Resolved server-side. The page used to label rows from the
+   * upstream bucket id -- 513 "Merchandise", 514 "V-TAPP Event",
+   * anything else "Unknown" -- which made all 89 events one string.
+   */
+  event?: RegistrationEvent;
 };
 
 const LIVE_TABLES = [
@@ -36,440 +48,228 @@ const LIVE_TABLES = [
   "distributions",
 ];
 
-/*
- * Distinct sentinel for the "items with no size recorded" filter
- * option. A real size string could never collide with it.
- */
+/* Sentinel for "no size recorded"; no real size can collide with it. */
 const NO_SIZE = " no-size";
-
-const hasSize = (item: RegistrationItem) =>
-  Boolean((item.size ?? "").trim());
 
 const sizeLabel = (item: RegistrationItem) =>
   (item.size ?? "").trim() || "—";
 
+const UNMAPPED: RegistrationEvent = {
+  slug: null,
+  name: "Unmapped ticket",
+  day: null,
+  venue: null,
+  merch: false,
+};
+
+type Status = "GIVEN" | "PENDING";
+
+function statusOf(registration: Registration): Status {
+  const items = registration.items ?? [];
+
+  if (items.length === 0) return "PENDING";
+
+  const total = items.reduce(
+    (sum, item) => sum + Number(item.quantity ?? 1),
+    0
+  );
+
+  const given = items.reduce(
+    (sum, item) =>
+      sum + (item.status === "GIVEN" ? Number(item.quantity ?? 1) : 0),
+    0
+  );
+
+  return given >= total ? "GIVEN" : "PENDING";
+}
+
 export default function RegistrationsPage() {
-  const [registrations, setRegistrations] =
-    useState<Registration[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>(
+    []
+  );
 
-  const [expandedBuyer, setExpandedBuyer] =
-    useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
 
-  const [loading, setLoading] =
-    useState(true);
+  const [search, setSearch] = useState("");
+  const [kind, setKind] = useState<"ALL" | "EVENT" | "MERCH">("ALL");
+  const [status, setStatus] = useState<"ALL" | Status>("ALL");
+  const [eventFilter, setEventFilter] = useState("ALL");
+  const [itemFilter, setItemFilter] = useState("ALL");
+  const [sizeFilter, setSizeFilter] = useState("ALL");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const loadRegistrations = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true);
 
-  const [search, setSearch] =
-    useState("");
+    try {
+      const response = await fetch("/api/registrations", {
+        cache: "no-store",
+      });
 
-  const [filter, setFilter] =
-    useState<
-      "ALL" | "GIVEN" | "PENDING"
-    >("ALL");
+      const data = await response.json();
 
-  const [merchFilter, setMerchFilter] =
-    useState("ALL");
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load registrations");
+      }
 
-  const [sizeFilter, setSizeFilter] =
-    useState("ALL");
-
-  const [error, setError] =
-    useState("");
-
-  const loadRegistrations =
-    useCallback(
-      async (
-        showLoading = false
-      ) => {
-        if (showLoading) {
-          setRefreshing(true);
-        }
-
-        try {
-          setError("");
-
-          const response =
-            await fetch(
-              "/api/registrations",
-              {
-                cache: "no-store",
-              }
-            );
-
-          const data =
-            await response.json();
-
-          if (!response.ok) {
-            throw new Error(
-              data.error ||
-                "Failed to load registrations"
-            );
-          }
-
-          setRegistrations(
-            data.data ?? []
-          );
-        } catch (err) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load registrations"
-          );
-        } finally {
-          setLoading(false);
-          setRefreshing(false);
-        }
-      },
-      []
-    );
+      setRegistrations(data.registrations ?? []);
+      setError("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load registrations"
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-
-    const timer = window.setTimeout(() => {
-      loadRegistrations();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-
+    const timer = window.setTimeout(() => loadRegistrations(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadRegistrations]);
 
   const live = useLiveRefresh(
     LIVE_TABLES,
-    useCallback(
-      () => loadRegistrations(),
-      [loadRegistrations]
-    )
+    useCallback(() => loadRegistrations(true), [loadRegistrations])
   );
 
-  const getRegistrationStatus =
-    (registration: Registration) => {
-      const items =
-        registration.items ?? [];
+  /* Filter options, built from what is actually present. */
+  const { eventOptions, itemOptions, sizeOptions } = useMemo(() => {
+    const events = new Map<string, string>();
+    const items = new Set<string>();
+    const sizes = new Set<string>();
+    let anyUnsized = false;
 
-      if (!items.length) {
-        return "PENDING";
+    for (const registration of registrations) {
+      const event = registration.event ?? UNMAPPED;
+
+      if (!event.merch) {
+        events.set(event.slug ?? event.name, event.name);
       }
 
-      const total = items.reduce(
-        (sum, item) =>
-          sum +
-          Number(
-            item.quantity ?? 1
-          ),
-        0
-      );
+      for (const item of registration.items ?? []) {
+        items.add(item.item);
 
-      const given = items.reduce(
-        (sum, item) =>
-          sum +
-          (item.status === "GIVEN"
-            ? Number(
-                item.quantity ?? 1
-              )
-            : 0),
-        0
-      );
+        const size = (item.size ?? "").trim();
 
-      return given >= total
-        ? "GIVEN"
-        : "PENDING";
+        if (size) sizes.add(size);
+        else anyUnsized = true;
+      }
+    }
+
+    return {
+      eventOptions: [...events.entries()].sort((a, b) =>
+        a[1].localeCompare(b[1])
+      ),
+      itemOptions: [...items].sort(),
+      sizeOptions: [
+        ...[...sizes].sort(),
+        ...(anyUnsized ? [NO_SIZE] : []),
+      ],
     };
+  }, [registrations]);
 
-  /*
-   * Does a single line match the merchandise + size filters?
-   */
   const itemMatches = useCallback(
     (item: RegistrationItem) => {
+      if (itemFilter !== "ALL" && item.item !== itemFilter) {
+        return false;
+      }
+
+      if (sizeFilter === "ALL") return true;
+
+      const size = (item.size ?? "").trim();
+
+      return sizeFilter === NO_SIZE ? !size : size === sizeFilter;
+    },
+    [itemFilter, sizeFilter]
+  );
+
+  const merchActive = itemFilter !== "ALL" || sizeFilter !== "ALL";
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return registrations.filter((registration) => {
+      const event = registration.event ?? UNMAPPED;
+
+      if (kind === "EVENT" && event.merch) return false;
+      if (kind === "MERCH" && !event.merch) return false;
+
+      if (status !== "ALL" && statusOf(registration) !== status) {
+        return false;
+      }
+
       if (
-        merchFilter !== "ALL" &&
-        item.item !== merchFilter
+        eventFilter !== "ALL" &&
+        (event.slug ?? event.name) !== eventFilter
       ) {
         return false;
       }
 
-      if (sizeFilter === "ALL") {
-        return true;
+      /* A merchandise filter excludes anyone with no matching line. */
+      if (
+        merchActive &&
+        !(registration.items ?? []).some(itemMatches)
+      ) {
+        return false;
       }
 
-      if (sizeFilter === NO_SIZE) {
-        return !hasSize(item);
-      }
+      if (!query) return true;
 
-      return (item.size ?? "").trim() === sizeFilter;
-    },
-    [merchFilter, sizeFilter]
-  );
-
-  /* Distinct merchandise types across registrations. */
-  const merchTypes = useMemo(() => {
-    const set = new Set<string>();
-
-    for (const registration of registrations) {
-      for (const item of registration.items ?? []) {
-        if (item.item) {
-          set.add(item.item);
-        }
-      }
-    }
-
-    return Array.from(set).sort((a, b) =>
-      a.localeCompare(b)
-    );
-  }, [registrations]);
-
-  /*
-   * Sizes are scoped to the selected merchandise type.
-   */
-  const { sizeOptions, hasNoSize } = useMemo(() => {
-    const set = new Set<string>();
-    let noSize = false;
-
-    for (const registration of registrations) {
-      for (const item of registration.items ?? []) {
-        if (
-          merchFilter !== "ALL" &&
-          item.item !== merchFilter
-        ) {
-          continue;
-        }
-
-        const size = (item.size ?? "").trim();
-
-        if (size) {
-          set.add(size);
-        } else {
-          noSize = true;
-        }
-      }
-    }
-
-    return {
-      sizeOptions: Array.from(set).sort((a, b) =>
-        a.localeCompare(b, undefined, {
-          numeric: true,
-        })
-      ),
-      hasNoSize: noSize,
-    };
-  }, [registrations, merchFilter]);
-
-  const merchActive =
-    merchFilter !== "ALL" ||
-    sizeFilter !== "ALL";
-
-  const getTicket = useCallback(
-    (registration: Registration) => {
-      if (registration.ticket) {
-        return registration.ticket;
-      }
-
-      const meta =
-        registration.product_meta ?? "";
-
-      const match =
-        meta.match(/Ticket:\s*(.+)/i);
-
-      return match
-        ? match[1].trim()
-        : "Unknown";
-    },
-    []
-  );
-
-  type BuyerGroup = {
-    email: string;
-    name: string;
-    registrations: Registration[];
-    total: number;
-    events: number;
-    merchandise: number;
-  };
-
-  const filtered =
-    useMemo(() => {
-      const query =
-        search
-          .trim()
-          .toLowerCase();
-
-      return registrations.filter(
-        (registration) => {
-          const status =
-            getRegistrationStatus(
-              registration
-            );
-
-          const matchesFilter =
-            filter === "ALL" ||
-            status === filter;
-
-          if (!matchesFilter) {
-            return false;
-          }
-
-          if (
-            merchActive &&
-            !(registration.items ?? []).some(
-              itemMatches
-            )
-          ) {
-            return false;
-          }
-
-          if (!query) {
-            return true;
-          }
-
-          return [
-            registration.name,
-            registration.email,
-            registration.registration_id,
-          ]
-            .filter(Boolean)
-            .some((value) =>
-              value
-                .toLowerCase()
-                .includes(query)
-            );
-        }
+      return (
+        registration.name?.toLowerCase().includes(query) ||
+        registration.email?.toLowerCase().includes(query) ||
+        registration.registration_id?.toLowerCase().includes(query) ||
+        event.name.toLowerCase().includes(query)
       );
-    }, [
-      registrations,
-      search,
-      filter,
-      merchActive,
-      itemMatches,
-    ]);
-
-  const groupedBuyers = useMemo(() => {
-    /*
-     * Build complete buyer histories from ALL registrations.
-     *
-     * This is deliberately independent from `filtered`.
-     * A buyer who has Event 514 + Merchandise 513 must still
-     * see BOTH registrations after clicking their email.
-     */
-    const allGroups = new Map<string, BuyerGroup>();
-
-    for (const registration of registrations) {
-      const email = String(
-        registration.email ?? ""
-      ).trim().toLowerCase();
-
-      const key =
-        email ||
-        `registration:${registration.registration_id}`;
-
-      const existing = allGroups.get(key);
-
-      const eventId = String(
-        registration.event_id ?? ""
-      );
-
-      const isMerchandise = eventId === "513";
-
-      if (existing) {
-        existing.registrations.push(registration);
-
-        existing.total += Number(
-          registration.total ?? 0
-        );
-
-        if (isMerchandise) {
-          existing.merchandise++;
-        } else {
-          existing.events++;
-        }
-      } else {
-        allGroups.set(key, {
-          email: String(
-            registration.email ?? ""
-          ),
-          name: String(
-            registration.name ?? "Unknown"
-          ),
-          registrations: [registration],
-          total: Number(
-            registration.total ?? 0
-          ),
-          events: isMerchandise ? 0 : 1,
-          merchandise: isMerchandise ? 1 : 0,
-        });
-      }
-    }
-
-    /*
-     * `filtered` determines which buyers are visible.
-     *
-     * It does NOT replace the buyer's complete registration
-     * history.
-     */
-    const visibleKeys = new Set<string>();
-
-    for (const registration of filtered) {
-      const email = String(
-        registration.email ?? ""
-      ).trim().toLowerCase();
-
-      const key =
-        email ||
-        `registration:${registration.registration_id}`;
-
-      visibleKeys.add(key);
-    }
-
-    return Array.from(allGroups.entries())
-      .filter(([key]) => visibleKeys.has(key))
-      .map(([, buyer]) => buyer)
-      .sort((a, b) => b.total - a.total);
-  }, [registrations, filtered]);
+    });
+  }, [
+    registrations,
+    search,
+    kind,
+    status,
+    eventFilter,
+    merchActive,
+    itemMatches,
+  ]);
 
   const stats = useMemo(() => {
     let revenue = 0;
     let given = 0;
-    let pending = 0;
+    let events = 0;
+    let merch = 0;
 
-    for (const registration of registrations) {
-      revenue += Number(
-        registration.total ?? 0
-      );
+    for (const registration of filtered) {
+      revenue += Number(registration.total ?? 0);
 
-      const status =
-        getRegistrationStatus(
-          registration
-        );
+      if (statusOf(registration) === "GIVEN") given += 1;
 
-      if (status === "GIVEN") {
-        given++;
-      } else {
-        pending++;
-      }
+      if ((registration.event ?? UNMAPPED).merch) merch += 1;
+      else events += 1;
     }
 
-    return {
-      buyers:
-        registrations.length,
-      revenue,
-      given,
-      pending,
-    };
-  }, [registrations]);
+    return { revenue, given, events, merch };
+  }, [filtered]);
+
+  const formatAmount = (amount: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
 
   /*
-   * Export the current view to a spreadsheet.
+   * Export exactly what is on screen.
    *
-   * One row per merchandise line rather than per buyer, so sizes are
-   * directly filterable and summable in Excel. Whatever the filters
-   * are showing is what gets exported: narrow to "T-Shirt / L" and
-   * the download is exactly the L t-shirts to pack.
-   *
-   * The file is an HTML table that Excel opens natively as .xls,
-   * which keeps this dependency-free -- a real .xlsx would mean
-   * bundling a spreadsheet writer into the client for no real gain.
+   * One row per merchandise line rather than per buyer, so sizes stay
+   * summable in Excel: narrow to "T-Shirt / L" and the download is the
+   * L t-shirts to pack. The file is an HTML table Excel opens as .xls,
+   * which keeps a spreadsheet writer out of the client bundle.
    */
   function downloadXls() {
     const escape = (value: unknown) =>
@@ -480,8 +280,11 @@ export default function RegistrationsPage() {
 
     const headers = [
       "Registration ID",
-      "Buyer",
+      "Name",
       "Email",
+      "Event",
+      "Day",
+      "Venue",
       "Merchandise",
       "Size",
       "Quantity",
@@ -492,37 +295,34 @@ export default function RegistrationsPage() {
 
     const rows: string[] = [];
 
-    for (const registration of registrations) {
-      const status =
-        getRegistrationStatus(registration);
-
+    for (const registration of filtered) {
+      const event = registration.event ?? UNMAPPED;
+      const state = statusOf(registration);
       const total = Number(registration.total ?? 0);
 
-      const lines = (registration.items ?? []).filter(
-        (item) => (merchActive ? itemMatches(item) : true)
+      const lines = (registration.items ?? []).filter((item) =>
+        merchActive ? itemMatches(item) : true
       );
 
-      /*
-       * A buyer with no line still belongs in an unfiltered export,
-       * so emit one row with blank merchandise rather than dropping
-       * them. (When a filter is active such buyers were already
-       * excluded above.)
-       */
       const cells = (item: RegistrationItem | null) =>
         [
           registration.registration_id,
           registration.name,
           registration.email,
+          event.name,
+          event.day ?? "",
+          event.venue ?? "",
           item?.item ?? "",
           item ? sizeLabel(item) : "",
           item?.quantity ?? "",
           item?.status ?? "",
-          status,
+          state,
           total,
         ]
           .map((cell) => `<td>${escape(cell)}</td>`)
           .join("");
 
+      /* An event booking has no lines; it still belongs in the file. */
       if (lines.length === 0) {
         rows.push(`<tr>${cells(null)}</tr>`);
       } else {
@@ -532,151 +332,41 @@ export default function RegistrationsPage() {
       }
     }
 
-    const head = headers
+    const html = `<html><head><meta charset="utf-8"></head><body><table><thead><tr>${headers
       .map((header) => `<th>${escape(header)}</th>`)
-      .join("");
+      .join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></body></html>`;
 
-    const html =
-      `<html><head><meta charset="utf-8"></head><body>` +
-      `<table border="1"><thead>
-  <tr>
-    <th scope="col">Buyer</th>
-    <th scope="col">Type</th>
-    <th scope="col">Purchases</th>
-    <th scope="col">Activity</th>
-    <th scope="col" className="table-num">
-      Total
-    </th>
-    <th scope="col">
-      <span className="sr-only">
-        Actions
-      </span>
-    </th>
-  </tr>
-</thead>` +
-      `<tbody>
-  {groupedBuyers.map((buyer) => (
-    <tr key={buyer.email}>
-      <td>
-        <div className="row-title">
-          {buyer.name}
-        </div>
-        <div className="row-meta truncate">
-          {buyer.email}
-        </div>
-      </td>
+    const url = URL.createObjectURL(
+      new Blob([html], { type: "application/vnd.ms-excel" })
+    );
 
-      <td>
-        <div className="stack-tight">
-          <span className="badge">
-            {buyer.events} event
-            {buyer.events === 1 ? "" : "s"}
-          </span>
+    const link = document.createElement("a");
 
-          {buyer.merchandise > 0 && (
-            <span className="badge">
-              {buyer.merchandise} merchandise
-              {buyer.merchandise === 1 ? "" : " items"}
-            </span>
-          )}
-        </div>
-      </td>
+    link.href = url;
+    link.download = `vtapp-registrations-${new Date()
+      .toISOString()
+      .slice(0, 10)}.xls`;
 
-      <td>
-        <strong>
-          {buyer.registrations.length}
-        </strong>
-        <span className="dim">
-          {" "}purchase
-          {buyer.registrations.length === 1 ? "" : "s"}
-        </span>
-      </td>
-
-      <td>
-        <div className="stack-tight">
-          {buyer.registrations.slice(0, 3).map(
-            (registration) => {
-              const eventId = String(
-                registration.event_id ?? ""
-              );
-
-              return (
-                <div
-                  key={
-                    registration.registration_id
-                  }
-                  className="row-meta"
-                >
-                  {eventId === "513"
-                    ? "Merchandise"
-                    : eventId === "514"
-                      ? "V-TAPP Event"
-                      : "Event " + (eventId || "Unknown")}
-                </div>
-              );
-            }
-          )}
-
-          {buyer.registrations.length > 3 && (
-            <div className="row-meta">
-              +{buyer.registrations.length - 3} more
-            </div>
-          )}
-        </div>
-      </td>
-
-      <td className="table-num">
-        {formatAmount(buyer.total)}
-      </td>
-
-      <td className="table-num">
-        <Link
-          href={
-            "/admin/registrations/" +
-            encodeURIComponent(
-              buyer.registrations[0].registration_id
-            )
-          }
-          className="btn btn-ghost btn-sm"
-        >
-          View
-        </Link>
-      </td>
-    </tr>
-  ))}
-</tbody></table>` +
-      `</body></html>`;
-
-    /* Lead with a UTF-8 BOM so Excel reads non-ASCII names correctly. */
-    const blob = new Blob([String.fromCharCode(0xfeff) + html], {
-      type: "application/vnd.ms-excel;charset=utf-8",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const date = new Date().toISOString().slice(0, 10);
-
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `vtapp-registrations-${date}.xls`;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    link.click();
 
     URL.revokeObjectURL(url);
   }
 
-  const formatAmount = (
-    amount: number
-  ) =>
-    new Intl.NumberFormat(
-      "en-IN",
-      {
-        style: "currency",
-        currency: "INR",
-        maximumFractionDigits: 0,
-      }
-    ).format(amount);
+  function reset() {
+    setSearch("");
+    setKind("ALL");
+    setStatus("ALL");
+    setEventFilter("ALL");
+    setItemFilter("ALL");
+    setSizeFilter("ALL");
+  }
+
+  const anyFilter =
+    search !== "" ||
+    kind !== "ALL" ||
+    status !== "ALL" ||
+    eventFilter !== "ALL" ||
+    merchActive;
 
   return (
     <main className="app">
@@ -690,18 +380,16 @@ export default function RegistrationsPage() {
               V-TAPP / Registrations
             </span>
 
-            <h1 className="page-title">Buyer Registrations</h1>
+            <h1 className="page-title">Registrations</h1>
 
             <p className="page-subtitle">
-              Purchases, merchandise and distribution records
+              Every event booking and merchandise order
             </p>
           </div>
 
           <div className="header-actions">
             <span
-              className={`pulse${
-                live === "live" ? "" : " pulse-idle"
-              }`}
+              className={`pulse${live === "live" ? "" : " pulse-idle"}`}
             >
               {live === "live" ? "Live" : "Polling"}
             </span>
@@ -716,7 +404,16 @@ export default function RegistrationsPage() {
               {refreshing ? "Refreshing" : "Refresh"}
             </button>
 
-
+            <button
+              type="button"
+              onClick={downloadXls}
+              disabled={loading || filtered.length === 0}
+              className="btn btn-primary btn-sm"
+              title="Download the current view as an Excel file"
+            >
+              <DownloadIcon size={14} />
+              Export
+            </button>
           </div>
         </header>
 
@@ -729,171 +426,206 @@ export default function RegistrationsPage() {
         )}
 
 
-        <section className="stat-grid">
-          <div className="stat stat-feature">
-            <span className="stat-label">Revenue</span>
+        {!loading && (
+          <section className="stat-grid">
+            <div className="stat stat-feature">
+              <span className="stat-label">Showing</span>
 
-            <strong className="stat-value">
-              {loading ? "—" : formatAmount(stats.revenue)}
-            </strong>
+              <strong className="stat-value">{filtered.length}</strong>
 
-            <span className="stat-meta">Across all buyers</span>
-          </div>
+              <span className="stat-meta">
+                {anyFilter
+                  ? `of ${registrations.length} registrations`
+                  : "registrations"}
+              </span>
+            </div>
 
-          <div className="stat">
-            <span className="stat-label">Buyers</span>
+            <div className="stat">
+              <span className="stat-label">Event bookings</span>
 
-            <strong className="stat-value">
-              {loading ? "—" : stats.buyers}
-            </strong>
+              <strong className="stat-value">{stats.events}</strong>
 
-            <span className="stat-meta">Registrations synced</span>
-          </div>
+              <span className="stat-meta">
+                {stats.merch} merchandise order
+                {stats.merch === 1 ? "" : "s"}
+              </span>
+            </div>
 
-          <div className="stat">
-            <span className="stat-label">Fully given</span>
+            <div className="stat">
+              <span className="stat-label">Collected</span>
 
-            <strong className="stat-value stat-success">
-              {loading ? "—" : stats.given}
-            </strong>
+              <strong className="stat-value stat-success">
+                {stats.given}
+              </strong>
 
-            <span className="stat-meta">All items handed over</span>
-          </div>
+              <span className="stat-meta">Fully handed over</span>
+            </div>
 
-          <div className="stat">
-            <span className="stat-label">Outstanding</span>
+            <div className="stat">
+              <span className="stat-label">Value</span>
 
-            <strong className="stat-value stat-warning">
-              {loading ? "—" : stats.pending}
-            </strong>
+              <strong className="stat-value">
+                {formatAmount(stats.revenue)}
+              </strong>
 
-            <span className="stat-meta">Items still to collect</span>
-          </div>
-        </section>
+              <span className="stat-meta">Of the rows shown</span>
+            </div>
+          </section>
+        )}
 
 
         <section className="panel">
           <div className="panel-header">
-            <div className="search" style={{ flex: "1 1 260px" }}>
-              <span className="search-icon">
-                <SearchIcon size={16} />
-              </span>
-
-              <label className="sr-only" htmlFor="registration-search">
-                Search registrations
-              </label>
-
-              <input
-                id="registration-search"
-                type="search"
-                className="input"
-                placeholder="Search name, email or ID"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-
-            <div style={{ flex: "0 1 190px" }}>
-              <label className="sr-only" htmlFor="merch-filter">
-                Filter by merchandise
-              </label>
-
-              <select
-                id="merch-filter"
-                className="select"
-                value={merchFilter}
-                onChange={(event) => {
-                  setMerchFilter(event.target.value);
-                  setSizeFilter("ALL");
-                }}
-              >
-                <option value="ALL">All merchandise</option>
-
-                {merchTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ flex: "0 1 150px" }}>
-              <label className="sr-only" htmlFor="size-filter">
-                Filter by size
-              </label>
-
-              <select
-                id="size-filter"
-                className="select"
-                value={sizeFilter}
-                onChange={(event) =>
-                  setSizeFilter(event.target.value)
-                }
-                disabled={sizeOptions.length === 0 && !hasNoSize}
-              >
-                <option value="ALL">All sizes</option>
-
-                {sizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-
-                {hasNoSize && (
-                  <option value={NO_SIZE}>No size</option>
-                )}
-              </select>
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Filter by kind"
+            >
+              {(
+                [
+                  ["ALL", "All"],
+                  ["EVENT", "Events"],
+                  ["MERCH", "Merchandise"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="segmented-item"
+                  aria-pressed={kind === value}
+                  onClick={() => setKind(value)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
             <div
               className="segmented"
               role="group"
-              aria-label="Filter by distribution status"
+              aria-label="Filter by collection status"
             >
-              {(["ALL", "GIVEN", "PENDING"] as const).map(
-                (option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className="segmented-item"
-                    aria-pressed={filter === option}
-                    onClick={() => setFilter(option)}
-                  >
-                    {option === "ALL"
-                      ? "All"
-                      : option === "GIVEN"
-                        ? "Given"
-                        : "Pending"}
-                  </button>
-                )
-              )}
+              {(
+                [
+                  ["ALL", "Any"],
+                  ["GIVEN", "Collected"],
+                  ["PENDING", "Pending"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="segmented-item"
+                  aria-pressed={status === value}
+                  onClick={() => setStatus(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel-header">
+            <div className="search" style={{ flex: "1 1 240px" }}>
+              <span className="search-icon">
+                <SearchIcon size={16} />
+              </span>
+
+              <label className="sr-only" htmlFor="reg-search">
+                Search registrations
+              </label>
+
+              <input
+                id="reg-search"
+                type="search"
+                className="input"
+                placeholder="Name, email, registration ID or event"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </div>
 
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={downloadXls}
-              disabled={loading || filtered.length === 0}
-              title="Download the current view as an Excel file"
+            <label className="sr-only" htmlFor="reg-event">
+              Event
+            </label>
+
+            <select
+              id="reg-event"
+              className="select select-sm"
+              value={eventFilter}
+              onChange={(event) => setEventFilter(event.target.value)}
             >
-              <DownloadIcon size={15} />
-              Excel
-            </button>
+              <option value="ALL">All events</option>
+
+              {eventOptions.map(([slug, name]) => (
+                <option key={slug} value={slug}>
+                  {name}
+                </option>
+              ))}
+            </select>
+
+            <label className="sr-only" htmlFor="reg-item">
+              Merchandise
+            </label>
+
+            <select
+              id="reg-item"
+              className="select select-sm"
+              value={itemFilter}
+              onChange={(event) => setItemFilter(event.target.value)}
+            >
+              <option value="ALL">Any item</option>
+
+              {itemOptions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+
+            <label className="sr-only" htmlFor="reg-size">
+              Size
+            </label>
+
+            <select
+              id="reg-size"
+              className="select select-sm"
+              value={sizeFilter}
+              onChange={(event) => setSizeFilter(event.target.value)}
+            >
+              <option value="ALL">Any size</option>
+
+              {sizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size === NO_SIZE ? "No size" : size}
+                </option>
+              ))}
+            </select>
+
+            {anyFilter && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={reset}
+              >
+                Clear
+              </button>
+            )}
           </div>
 
           {loading ? (
             <div className="panel-body stack">
-              {[1, 2, 3, 4, 5].map((row) => (
+              {[1, 2, 3, 4].map((row) => (
                 <div key={row}>
                   <div className="skeleton skeleton-line" />
                   <div
                     className="skeleton skeleton-line"
-                    style={{ width: "40%" }}
+                    style={{ width: "45%" }}
                   />
                 </div>
               ))}
             </div>
-          ) : groupedBuyers.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="empty">
               <div className="empty-icon">
                 <InboxIcon size={22} />
@@ -902,354 +634,144 @@ export default function RegistrationsPage() {
               <p className="empty-title">
                 {registrations.length === 0
                   ? "No registrations yet"
-                  : "Nothing matches this view"}
+                  : "Nothing matches those filters"}
               </p>
 
               <p className="empty-body">
                 {registrations.length === 0
-                  ? "Run a V-TAPP sync from the dashboard to pull in buyers."
-                  : "Try a different search term or clear the status filter."}
+                  ? "Rows appear here after a V-TAPP sync."
+                  : "Try clearing a filter or widening the search."}
               </p>
             </div>
           ) : (
             <div className="table-wrap">
               <table className="table">
                 <caption className="sr-only">
-                  Buyer registrations with merchandise and
-                  distribution status
+                  Registrations with their event and collection status
                 </caption>
 
                 <thead>
                   <tr>
-                    <th scope="col">Buyer</th>
+                    <th scope="col">Person</th>
                     <th scope="col">Event</th>
-                    <th scope="col">Registration</th>
                     <th scope="col">Merchandise</th>
-                    <th scope="col">Ticket</th>
-                    <th scope="col">Items</th>
                     <th scope="col" className="table-num">
                       Total
                     </th>
                     <th scope="col">Status</th>
-                    <th scope="col">
-                      <span className="sr-only">Actions</span>
-                    </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {groupedBuyers.map((buyer) => {
-                    const eventCount = buyer.events;
-                    const merchandiseCount = buyer.merchandise;
-                    const purchaseCount = buyer.registrations.length;
+                  {filtered.map((registration) => {
+                    const event = registration.event ?? UNMAPPED;
+                    const state = statusOf(registration);
+                    const key = registration.registration_id;
+                    const open = expanded === key;
 
-                    const eventNames = buyer.registrations
-                      .filter(
-                        (registration) =>
-                          String(registration.event_id ?? "") !== "513"
-                      )
-                      .map((registration) => {
-                        const eventId = String(
-                          registration.event_id ?? ""
-                        );
-
-                        if (eventId === "514") {
-                          return "V-TAPP Event";
-                        }
-
-                        return `Event ${eventId || "Unknown"}`;
-                      });
-
-                    const merchandiseNames = buyer.registrations
-                      .filter(
-                        (registration) =>
-                          String(registration.event_id ?? "") === "513"
-                      )
-                      .map(() => "Merchandise");
+                    const lines = (registration.items ?? []).filter(
+                      (item) => (merchActive ? itemMatches(item) : true)
+                    );
 
                     return (
-                      <>
-                        <tr key={buyer.email}>
+                      <tr
+                        key={key}
+                        onClick={() =>
+                          setExpanded(open ? null : key)
+                        }
+                        style={{ cursor: "pointer" }}
+                      >
                         <td>
                           <div className="row-title">
-                            {buyer.name}
+                            {registration.name || "—"}
                           </div>
 
-                          <div className="row-meta truncate">
-                            {buyer.email}
+                          <div className="row-meta">
+                            {registration.email}
                           </div>
-                        </td>
 
-                        <td>
-                          <div className="stack-tight">
-                            {eventCount > 0 && (
-                              <span className="badge">
-                                {eventCount} event
-                                {eventCount === 1 ? "" : "s"}
-                              </span>
-                            )}
-
-                            {eventNames.slice(0, 3).map(
-                              (name, index) => (
-                                <span
-                                  className="row-meta"
-                                  key={`event-${index}`}
-                                >
-                                  {name}
-                                </span>
-                              )
-                            )}
-
-                            {eventNames.length > 3 && (
-                              <span className="row-meta">
-                                +{eventNames.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td>
-                          <div className="stack-tight">
-                            <strong>
-                              {purchaseCount}
-                            </strong>
-
-                            <span className="dim">
-                              purchase
-                              {purchaseCount === 1 ? "" : "s"}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td>
-                          <div className="stack-tight">
-                            {merchandiseCount > 0 && (
-                              <span className="badge">
-                                {merchandiseCount} merchandise
-                                {merchandiseCount === 1 ? "" : " items"}
-                              </span>
-                            )}
-
-                            {merchandiseNames.slice(0, 3).map(
-                              (name, index) => (
-                                <span
-                                  className="row-meta"
-                                  key={`merch-${index}`}
-                                >
-                                  {name}
-                                </span>
-                              )
-                            )}
-                          </div>
-                        </td>
-
-                        <td>
-                          <div className="stack-tight">
-                            {buyer.registrations
-                              .slice(0, 3)
-                              .map((registration) => (
-                                <span
-                                  className="row-meta"
-                                  key={registration.registration_id}
-                                >
-                                  {getTicket(registration)}
-                                </span>
-                              ))}
-
-                            {purchaseCount > 3 && (
-                              <span className="row-meta">
-                                +{purchaseCount - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td>
-                          <strong>
-                            {buyer.registrations.reduce(
-                              (sum, registration) =>
-                                sum +
-                                (registration.items ?? []).reduce(
-                                  (itemSum, item) =>
-                                    itemSum +
-                                    Number(item.quantity ?? 1),
-                                  0
-                                ),
-                              0
-                            )}
-                          </strong>
-
-                          <span className="dim">
-                            {" "}pcs
-                          </span>
-                        </td>
-
-                        <td className="table-num">
-                          {formatAmount(buyer.total)}
-                        </td>
-
-                        <td>
-                          <span className="badge">
-                            {buyer.registrations.every(
-                              (registration) =>
-                                getRegistrationStatus(registration) ===
-                                "GIVEN"
-                            )
-                              ? "Given"
-                              : "Pending"}
-                          </span>
-                        </td>
-
-                        <td className="table-num">
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() =>
-                              setExpandedBuyer(
-                                expandedBuyer === buyer.email
-                                  ? null
-                                  : buyer.email
-                              )
-                            }
+                          <Link
+                            href={`/admin/registrations/${encodeURIComponent(
+                              key
+                            )}`}
+                            className="row-meta mono"
+                            onClick={(click) => click.stopPropagation()}
                           >
-                            {expandedBuyer === buyer.email
-                              ? "Hide"
-                              : `View ${purchaseCount}`}
-                          </button>
+                            #{key}
+                          </Link>
                         </td>
-                        </tr>
 
-                        {expandedBuyer === buyer.email && (
-                          <tr>
-                            <td colSpan={9}>
-                              <div className="panel">
-                                <div className="panel-header">
-                                  <div>
-                                    <h3 className="panel-title">
-                                      Complete Buyer History
-                                    </h3>
+                        <td>
+                          <div className="row-title">{event.name}</div>
 
-                                    <p className="panel-subtitle">
-                                      {buyer.name} · {buyer.email}
-                                    </p>
-                                  </div>
+                          <div className="row-meta">
+                            {[event.day, event.venue]
+                              .filter(Boolean)
+                              .join(" · ") ||
+                              (event.merch
+                                ? "Collection counter"
+                                : "No schedule recorded")}
+                          </div>
+                        </td>
 
-                                  <span className="badge">
-                                    {purchaseCount} registration
-                                    {purchaseCount === 1 ? "" : "s"}
-                                  </span>
+                        <td>
+                          {lines.length === 0 ? (
+                            <span className="dim">
+                              {event.merch ? "No items" : "—"}
+                            </span>
+                          ) : open ? (
+                            <div className="stack stack-tight">
+                              {lines.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="row-meta"
+                                >
+                                  {item.item} · {sizeLabel(item)} ×
+                                  {item.quantity}
+                                  {item.status === "GIVEN"
+                                    ? " · given"
+                                    : " · pending"}
                                 </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="row-meta">
+                              {lines.length} item
+                              {lines.length === 1 ? "" : "s"}
+                              <span className="dim">
+                                {" "}
+                                — tap to expand
+                              </span>
+                            </div>
+                          )}
+                        </td>
 
-                                <div className="panel-body">
-                                  <div className="table-wrap">
-                                    <table className="table">
-                                      <thead>
-                                        <tr>
-                                          <th>Registration</th>
-                                          <th>Type</th>
-                                          <th>Ticket</th>
-                                          <th>Merchandise</th>
-                                          <th>Status</th>
-                                          <th className="table-num">
-                                            Total
-                                          </th>
-                                          <th>
-                                            <span className="sr-only">
-                                              Action
-                                            </span>
-                                          </th>
-                                        </tr>
-                                      </thead>
+                        <td className="table-num">
+                          {formatAmount(
+                            Number(registration.total ?? 0)
+                          )}
+                        </td>
 
-                                      <tbody>
-                                        {buyer.registrations.map(
-                                          (registration) => {
-                                            const eventId = String(
-                                              registration.event_id ?? ""
-                                            );
-
-                                            const isMerchandise =
-                                              eventId === "513";
-
-                                            return (
-                                              <tr
-                                                key={
-                                                  registration.registration_id
-                                                }
-                                              >
-                                                <td>
-                                                  <span className="row-meta">
-                                                    {
-                                                      registration.registration_id
-                                                    }
-                                                  </span>
-                                                </td>
-
-                                                <td>
-                                                  <span className="badge">
-                                                    {isMerchandise
-                                                      ? "Merchandise"
-                                                      : eventId === "514"
-                                                        ? "V-TAPP Event"
-                                                        : `Event ${eventId || "Unknown"}`}
-                                                  </span>
-                                                </td>
-
-                                                <td>
-                                                  {getTicket(registration)}
-                                                </td>
-
-                                                <td>
-                                                  {(registration.items ?? [])
-                                                    .map(
-                                                      (item) =>
-                                                        `${item.item}${item.size ? ` / ${item.size}` : ""} × ${item.quantity}`
-                                                    )
-                                                    .join(", ") || "—"}
-                                                </td>
-
-                                                <td>
-                                                  <span className="badge">
-                                                    {getRegistrationStatus(
-                                                      registration
-                                                    )}
-                                                  </span>
-                                                </td>
-
-                                                <td className="table-num">
-                                                  {formatAmount(
-                                                    Number(
-                                                      registration.total ?? 0
-                                                    )
-                                                  )}
-                                                </td>
-
-                                                <td className="table-num">
-                                                  <Link
-                                                    href={
-                                                      "/admin/registrations/" +
-                                                      encodeURIComponent(
-                                                        registration.registration_id
-                                                      )
-                                                    }
-                                                    className="btn btn-ghost btn-sm"
-                                                  >
-                                                    Open
-                                                  </Link>
-                                                </td>
-                                              </tr>
-                                            );
-                                          }
-                                        )}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
+                        <td>
+                          {event.merch ? (
+                            <span
+                              className={`badge ${
+                                state === "GIVEN"
+                                  ? "badge-success"
+                                  : "badge-warning"
+                              }`}
+                            >
+                              {state === "GIVEN"
+                                ? "Collected"
+                                : "Pending"}
+                            </span>
+                          ) : (
+                            <span className="badge badge-plain">
+                              Booking
+                            </span>
+                          )}
+                        </td>
+                      </tr>
                     );
                   })}
                 </tbody>
@@ -1259,8 +781,7 @@ export default function RegistrationsPage() {
 
           {!loading && filtered.length > 0 && (
             <div className="panel-footer">
-              Showing {groupedBuyers.length} buyers from {registrations.length}{" "}
-              registrations
+              Showing {filtered.length} of {registrations.length}
             </div>
           )}
         </section>
