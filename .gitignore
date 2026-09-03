@@ -63,3 +63,12 @@ supabase/.temp/
 # Local HTTPS certificates. The key is private and the repo is public.
 certificates/
 *.pem
+
+# Editor and script backups. Several got committed before this existed.
+*.backup
+*.bak
+*.orig
+*.rej
+*.tsx.*
+*.ts.*
+!*.ts.map
