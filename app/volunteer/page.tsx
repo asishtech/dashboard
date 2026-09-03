@@ -140,10 +140,21 @@ export default function VolunteerPage() {
           { cache: "no-store" }
         );
 
-        const passData = await passResponse.json();
+        const passData = await passResponse
+          .json()
+          .catch(() => ({}));
 
         if (!passResponse.ok) {
-          throw new Error(passData.error || "Invalid QR code");
+          /*
+           * The status matters at a gate: 403 is "not your event",
+           * 404 is "not a V-TAPP code", 500 is "tell Rahul". A bare
+           * "Invalid QR code" sends a volunteer looking at the wrong
+           * thing.
+           */
+          throw new Error(
+            passData.error ||
+              `Check-in lookup failed (HTTP ${passResponse.status})`
+          );
         }
 
         if (!mountedRef.current) return;
@@ -168,7 +179,10 @@ export default function VolunteerPage() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || "Invalid QR code");
+          throw new Error(
+            data.error ||
+              `Merchandise lookup failed (HTTP ${response.status})`
+          );
         }
 
         if (!mountedRef.current) return;
@@ -192,9 +206,17 @@ export default function VolunteerPage() {
     [stopScanner]
   );
 
+  /*
+   * Does not clear the error banner.
+   *
+   * It used to, and handleToken's catch restarted the camera straight
+   * after setting one -- so a failed scan set the message and wiped it
+   * a millisecond later. The scan looked like it did nothing. Errors
+   * are cleared where they are actually resolved: a successful lookup,
+   * Scan next, or Try again.
+   */
   const startScanner = useCallback(async () => {
     setStarting(true);
-    setError("");
 
     /*
      * getUserMedia only exists in a secure context. Served over plain
@@ -487,6 +509,7 @@ export default function VolunteerPage() {
                 className="btn btn-primary btn-block mt-4"
                 onClick={() => {
                   handlingRef.current = false;
+                  setError("");
                   void startScanner();
                 }}
               >
