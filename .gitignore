@@ -59,3 +59,7 @@ supabase/local/
 
 # Supabase CLI scratch state
 supabase/.temp/
+
+# Local HTTPS certificates. The key is private and the repo is public.
+certificates/
+*.pem
