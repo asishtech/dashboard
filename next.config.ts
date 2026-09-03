@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
    * same physical network; the setting has no effect on a build.
    */
   allowedDevOrigins: [
+    "rahul-2.local",
+    "vtapp.local",
     "169.254.167.34",
     "10.1.161.55",
     "192.168.252.1",
