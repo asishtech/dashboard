@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import NavBar from "@/components/NavBar";
+import OfflineBar from "@/components/OfflineBar";
+import { findPass, isQueued, queueEntry } from "@/lib/offline";
 import { AlertIcon, CheckIcon, ScanIcon } from "@/components/icons";
 
 type Item = {
@@ -78,6 +80,9 @@ export default function VolunteerPage() {
   /* Set by the API, not guessed here: admins only. */
   const [canUndo, setCanUndo] = useState(false);
 
+  /* True when this pass was resolved from the on-device list. */
+  const [offline, setOffline] = useState(false);
+
   const scannerRef = useRef<Scanner | null>(null);
   const handlingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -147,14 +152,49 @@ export default function VolunteerPage() {
          * "nothing to distribute" -- a dead end where the answer should
          * have been a way to admit them.
          */
-        const passResponse = await fetch(
-          `/api/checkin?token=${encodeURIComponent(token)}`,
-          { cache: "no-store" }
-        );
+        let passData: {
+          pass?: Pass;
+          canUndo?: boolean;
+          error?: string;
+        } = {};
 
-        const passData = await passResponse
-          .json()
-          .catch(() => ({}));
+        let passResponse: Response | null = null;
+
+        try {
+          passResponse = await fetch(
+            `/api/checkin?token=${encodeURIComponent(token)}`,
+            { cache: "no-store" }
+          );
+
+          passData = await passResponse.json().catch(() => ({}));
+        } catch {
+          /*
+           * No network. Fall back to the list downloaded earlier --
+           * this is the case the whole offline path exists for, and a
+           * gate cannot wait for a signal.
+           */
+          const cached = findPass(token);
+
+          if (!cached) {
+            throw new Error(
+              "Offline, and this pass is not in the list on this device. Reconnect once to download it."
+            );
+          }
+
+          if (!mountedRef.current) return;
+
+          setError("");
+          setNotice(
+            cached.entered_at
+              ? "Offline — this pass is already marked as used."
+              : "Offline — the entry will be sent when the connection returns."
+          );
+          setPass(cached as unknown as Pass);
+          setCanUndo(false);
+          setOffline(true);
+          setResolving(false);
+          return;
+        }
 
         if (!passResponse.ok) {
           /*
@@ -362,6 +402,7 @@ export default function VolunteerPage() {
     setNotice("");
     setScanToken("");
     setCanUndo(false);
+    setOffline(false);
     setResolving(false);
     handlingRef.current = false;
     void startScanner();
@@ -380,6 +421,26 @@ export default function VolunteerPage() {
     setNotice("");
 
     try {
+      /*
+       * Offline, or the request fails: write it down and move on. The
+       * person is standing there; the network is not their problem.
+       */
+      if (offline || !navigator.onLine) {
+        queueEntry(scanToken);
+
+        setPass((current) =>
+          current
+            ? { ...current, entered_at: new Date().toISOString() }
+            : current
+        );
+
+        setNotice(
+          "Entry saved on this device. It will be sent when the connection returns."
+        );
+
+        return;
+      }
+
       const response = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -404,6 +465,26 @@ export default function VolunteerPage() {
 
       throw new Error(data.error || "Could not record entry");
     } catch (err) {
+      /*
+       * A network failure mid-request is the same situation as being
+       * offline, and must not lose the admission.
+       */
+      if (!navigator.onLine || err instanceof TypeError) {
+        queueEntry(scanToken);
+
+        setPass((current) =>
+          current
+            ? { ...current, entered_at: new Date().toISOString() }
+            : current
+        );
+
+        setNotice(
+          "Connection lost. The entry is saved and will be sent later."
+        );
+
+        return;
+      }
+
       setError(
         err instanceof Error ? err.message : "Could not record entry"
       );
@@ -515,6 +596,8 @@ export default function VolunteerPage() {
   return (
     <main className="app">
       <NavBar />
+
+      <OfflineBar />
 
       <div className="container container-narrow">
 
@@ -655,7 +738,7 @@ export default function VolunteerPage() {
                     admits one person, once.
                   </p>
 
-                  {canUndo && (
+                  {canUndo && !isQueued(scanToken) && (
                     <div className="actions-centred mt-8">
                       <button
                         type="button"

@@ -478,6 +478,61 @@ table,
   border-radius: var(--radius-full);
 }
 
+/* Offline notice ---------------------------------------------------------- */
+
+/* Sits under the nav rather than floating: at a gate this has to be
+   readable at a glance without covering the thing being read. */
+.offline-bar {
+  position: sticky;
+  top: 61px;
+  z-index: var(--z-sticky);
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+
+  padding: var(--space-3) var(--space-4);
+
+  color: #1a1a1a;
+  background: var(--warning);
+
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Online again, working through the backlog. */
+.offline-bar-syncing {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.offline-bar .link-button {
+  color: inherit;
+}
+
+.offline-bar .dim {
+  color: inherit;
+  opacity: 0.75;
+  font-weight: 500;
+}
+
+/* On a 320px screen the full message wraps to three lines and takes a
+   quarter of the viewport once the nav is counted. The timestamp is
+   the least useful part of it, so that is what goes. */
+@media (max-width: 400px) {
+  .offline-bar {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .offline-bar .dim {
+    display: none;
+  }
+}
+
 /* Page header ------------------------------------------------------------- */
 
 .page-header {

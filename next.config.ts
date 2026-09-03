@@ -62,6 +62,23 @@ const nextConfig: NextConfig = {
       },
       {
         /*
+         * The service worker must never be cached, or a device keeps
+         * an old one and never learns about a fix.
+         */
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/javascript; charset=utf-8",
+          },
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
+      {
+        /*
          * Registration and distribution data must never be held
          * by a shared cache.
          */

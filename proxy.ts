@@ -80,7 +80,17 @@ export async function proxy(request: NextRequest) {
    * Public authentication routes. Reached after the call above
    * so that an expiring session still gets refreshed here.
    */
-  if (path === "/login" || path.startsWith("/auth/")) {
+  /*
+   * `/offline` is what the service worker shows when a page is asked
+   * for with no network. It has to be fetchable without a session, or
+   * the worker cannot cache it and the one screen meant for a dead
+   * connection is the one that needs a live one.
+   */
+  if (
+    path === "/login" ||
+    path === "/offline" ||
+    path.startsWith("/auth/")
+  ) {
     return response;
   }
 
@@ -252,7 +262,12 @@ export const config = {
      * The previous matcher let every request for a file in
      * /public through, so serving an icon cost a session
      * lookup plus a `profiles` query.
+     *
+     * `js` is excluded for /sw.js: a service worker fetched through
+     * the proxy would be answered with the login page for a
+     * signed-out user, and a browser that caches that has no way
+     * back.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|json|webmanifest)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|json|webmanifest|js)$).*)",
   ],
 };
