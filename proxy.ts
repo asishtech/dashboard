@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { publicUrl } from "@/lib/origin";
 
 /*
  * Paths whose handling depends on the caller's role.
@@ -95,7 +96,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!claims) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = publicUrl(request, "/login");
     loginUrl.searchParams.set("next", path);
 
     return redirectPreservingCookies(loginUrl, response);
@@ -139,7 +140,7 @@ export async function proxy(request: NextRequest) {
    */
   if (!profile) {
     return redirectPreservingCookies(
-      new URL("/auth/redirect", request.url),
+      publicUrl(request, "/auth/redirect"),
       response
     );
   }
@@ -148,7 +149,7 @@ export async function proxy(request: NextRequest) {
     await supabase.auth.signOut();
 
     return redirectPreservingCookies(
-      new URL("/login?error=unauthorized", request.url),
+      publicUrl(request, "/login?error=unauthorized"),
       response
     );
   }
@@ -178,7 +179,7 @@ export async function proxy(request: NextRequest) {
 
   if (path.startsWith("/admin") && role !== "admin") {
     return redirectPreservingCookies(
-      new URL(destinationFor(role), request.url),
+      publicUrl(request, destinationFor(role)),
       response
     );
   }
@@ -195,7 +196,7 @@ export async function proxy(request: NextRequest) {
     role !== "faculty"
   ) {
     return redirectPreservingCookies(
-      new URL(destinationFor(role), request.url),
+      publicUrl(request, destinationFor(role)),
       response
     );
   }
@@ -206,7 +207,7 @@ export async function proxy(request: NextRequest) {
     role !== "admin"
   ) {
     return redirectPreservingCookies(
-      new URL(destinationFor(role), request.url),
+      publicUrl(request, destinationFor(role)),
       response
     );
   }
@@ -222,14 +223,14 @@ export async function proxy(request: NextRequest) {
     role !== "faculty"
   ) {
     return redirectPreservingCookies(
-      new URL(destinationFor(role), request.url),
+      publicUrl(request, destinationFor(role)),
       response
     );
   }
 
   if (path === "/") {
     return redirectPreservingCookies(
-      new URL(destinationFor(role), request.url),
+      publicUrl(request, destinationFor(role)),
       response
     );
   }

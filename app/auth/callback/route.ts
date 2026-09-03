@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/auth";
+import { publicUrl } from "@/lib/origin";
 
 export const dynamic = "force-dynamic";
 
 /*
  * Only same-origin, absolute-path destinations are accepted.
  *
- * `new URL(next, request.url)` on its own would happily resolve
- * "https://evil.example" or "//evil.example", turning the OAuth
- * callback into an open redirect.
+ * Resolving `next` against a base would happily accept
+ * "https://evil.example" or "//evil.example" and keep them, turning
+ * the OAuth callback into an open redirect.
  */
 function safeNext(next: string | null) {
   if (
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/login?error=oauth", request.url)
+      publicUrl(request, "/login?error=oauth")
     );
   }
 
@@ -43,9 +44,9 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.redirect(
-      new URL("/login?error=session", request.url)
+      publicUrl(request, "/login?error=session")
     );
   }
 
-  return NextResponse.redirect(new URL(next, request.url));
+  return NextResponse.redirect(publicUrl(request, next));
 }

@@ -33,14 +33,15 @@ SMTP_PASSWORD=<the 16 characters, no spaces>
 MAIL_FROM=tickets@vtapp.co.in
 MAIL_FROM_NAME=V-TAPP 2026
 ALERT_EMAIL=<your own address, for sync failures>
-NEXT_PUBLIC_APP_URL=https://vtapp-dashboard.netlify.app
+NEXT_PUBLIC_APP_URL=https://vtapp.co.in
 ```
 
 `SMTP_HOST` and `SMTP_PORT` default to `smtp.gmail.com` and `587`.
 
-`NEXT_PUBLIC_APP_URL` must match the deployed origin. It is what the
-QR codes inside emails point at; get it wrong and every pass links to
-the wrong host.
+`NEXT_PUBLIC_APP_URL` must match the deployed origin, with no trailing
+slash. It is what the QR codes inside emails point at, and it is also
+the fallback origin for redirects when the CDN does not rewrite the
+Host header — get it wrong and sign-in breaks too.
 
 Until `SMTP_USER` and `SMTP_PASSWORD` are both set, nothing sends:
 every send returns `skipped` and the app behaves as it does today.
