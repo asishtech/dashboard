@@ -26,30 +26,39 @@
 /* 1. Tokens ================================================================ */
 
 :root {
-  /* -- Raw palette. Do not reference these directly in components. --
-     Surfaces are translucent so the background glow reads through
-     them. Alpha is kept high (0.82) so the composite stays dark and
-     text contrast does not swing depending on where a card lands. */
-  --c-bg:             #0a0910;
-  --c-surface-1:      rgb(22 20 31 / 0.82);
-  --c-surface-2:      rgb(31 28 43 / 0.82);
-  --c-surface-3:      rgb(42 38 56 / 0.80);
+  /* -- Raw palette.
+        Ported from the V-TAPP public site so the dashboard and the
+        fest look like one thing. Its ink scale and brand ramp,
+        verbatim; only the mapping onto semantic roles is ours.
+
+        Surfaces stay translucent so the background glow reads through
+        them, at a high alpha (0.82) so text contrast does not swing
+        depending on where a card lands. -- */
+  --c-bg:             #08080a;          /* ink-950 */
+  --c-surface-1:      rgb(17 17 20 / 0.82);  /* ink-800 */
+  --c-surface-2:      rgb(23 23 27 / 0.82);  /* ink-700 */
+  --c-surface-3:      rgb(31 31 36 / 0.80); /* ink-600 */
 
   --c-border:         rgb(255 255 255 / 0.10);
   --c-border-strong:  rgb(255 255 255 / 0.20);
 
-  --c-text:           #f4f2f8;
-  --c-text-muted:     #b8b2c8;
-  --c-text-dim:       #9a94ad;
+  /* `bone` is the site's off-white; pure white on near-black reads
+     harsh over a long shift at a counter. */
+  --c-text:           #f2f0e9;
+  --c-text-muted:     #c9c6bd;
+  --c-text-dim:       #a8a49a;
 
-  --c-accent:         #f97316;
-  --c-accent-2:       #e0399a;
-  --c-accent-3:       #8b5cf6;
-  --c-accent-hover:   #fb8c3c;
+  /* brand-500, brand-bright, brand-300, brand-800. */
+  --c-accent:         #d87427;
+  --c-accent-2:       #ff8a24;
+  --c-accent-3:       #f8ad7c;
+  --c-accent-hover:   #ff8a24;
+  --c-accent-dark:    #893a1b;
 
-  --c-green:          #4ade80;
-  --c-amber:          #e8b45b;
-  --c-red:            #ff7a8a;
+  /* The site's own status ramp: em-400, am-400, ro-400. */
+  --c-green:          #34d399;
+  --c-amber:          #fbbf24;
+  --c-red:            #fb7185;
 
   /* -- Semantic surfaces -- */
   --bg:               var(--c-bg);
@@ -60,38 +69,45 @@
   --border-strong:    var(--c-border-strong);
 
   /* -- Semantic text.
-        All three tiers clear 4.5:1 on every surface in the system,
-        not just --surface. `.stat-meta` sits on --surface-raised
-        inside .split-item, where the previous value measured 4.48. -- */
+        Measured against all four surfaces, not just --surface:
+        15.2, 10.1 and 6.9 at worst. -- */
   --text:             var(--c-text);
   --text-muted:       var(--c-text-muted);
   --text-dim:         var(--c-text-dim);
 
   /* -- Accent.
-        `--on-accent` is near-black on purpose: white on #f97316 is only
-        2.8:1, which fails AA. Dark text on the same fill is 8:1. -- */
+        Brand orange as text clears 5.3:1 at worst, so it is safe on
+        any surface. As a *fill* it is the other way round: white on
+        #d87427 is 3.26 and on #ff8a24 only 2.36, both failing. Near
+        black on the same fills is 6.07 and 8.4, so that is what sits
+        on top of anything brand-coloured. -- */
   --accent:           var(--c-accent);
   --accent-hover:     var(--c-accent-hover);
-  --accent-soft:      rgb(249 115 22 / 0.14);
-  --accent-line:      rgb(249 115 22 / 0.38);
+  --accent-soft:      rgb(216 116 39 / 0.14);
+  --accent-line:      rgb(216 116 39 / 0.38);
 
-  /* White clears 4.5:1 on the darker half of this gradient, so the
-     primary button keeps white text rather than the near-black the
-     flat orange needed. */
-  --on-accent:        #ffffff;
+  --on-accent:        #0a0a0c;
 
-  --gradient:         linear-gradient(100deg, var(--c-accent), var(--c-accent-2));
-  --gradient-wide:    linear-gradient(140deg, var(--c-accent), var(--c-accent-2) 55%, var(--c-accent-3));
-  --gradient-text:    linear-gradient(100deg, #ffffff, #ffd9bd 55%, #e9c8ff);
-  --glow-accent:      0 10px 28px rgb(224 57 154 / 0.40);
+  /* The ramp is kept inside the light half of the brand scale so one
+     text colour is legible across the whole sweep. Running it down to
+     brand-dark would need white at that end and near-black at the
+     other. */
+  --gradient:         linear-gradient(100deg, var(--c-accent-2), var(--c-accent));
+  /* The wide ramp carries a white icon (the logo mark, the brand
+     mark), so every stop has to clear 3:1 against white. Starting it
+     at brand-bright measured 2.36 and failed; brand-600 -> 700 -> 900
+     runs 3.93, 5.68, 9.93. */
+  --gradient-wide:    linear-gradient(140deg, #d05f1f, #ac481a 55%, #6e3118);
+  --gradient-text:    linear-gradient(100deg, #ffffff, #f8ad7c 55%, #f2f0e9);
+  --glow-accent:      0 10px 28px rgb(216 116 39 / 0.40);
 
   /* -- Status. Always paired with an icon or text label, never colour alone. */
   --success:          var(--c-green);
-  --success-soft:     rgb(74 222 128 / 0.12);
+  --success-soft:     rgb(52 211 153 / 0.12);
   --warning:          var(--c-amber);
-  --warning-soft:     rgb(232 180 91 / 0.12);
+  --warning-soft:     rgb(251 191 36 / 0.12);
   --danger:           var(--c-red);
-  --danger-soft:      rgb(248 113 113 / 0.12);
+  --danger-soft:      rgb(251 113 133 / 0.12);
 
   /* -- Spacing. 4px rhythm. -- */
   --space-1:  4px;
@@ -265,12 +281,12 @@ table,
   background-image:
     radial-gradient(
       900px 520px at 12% -8%,
-      rgb(249 115 22 / 0.26),
+      rgb(216 116 39 / 0.28),
       transparent 62%
     ),
     radial-gradient(
       820px 480px at 92% 104%,
-      rgb(139 92 246 / 0.24),
+      rgb(137 58 27 / 0.30),
       transparent 62%
     );
   background-attachment: fixed;
@@ -342,7 +358,7 @@ table,
   color: #fff;
   background: var(--gradient-wide);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 14px rgb(224 57 154 / 0.4);
+  box-shadow: 0 4px 14px rgb(216 116 39 / 0.4);
 }
 
 .nav-wordmark {
@@ -495,7 +511,7 @@ table,
 
   padding: var(--space-3) var(--space-4);
 
-  color: #1a1a1a;
+  color: var(--on-accent);
   background: var(--warning);
 
   font-size: var(--text-base);
@@ -551,7 +567,7 @@ table,
   display: block;
   margin-bottom: var(--space-2);
 
-  color: #f7b98a;
+  color: var(--c-accent-3);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   font-weight: 700;
@@ -807,7 +823,7 @@ table,
 }
 
 .eyebrow-accent {
-  color: #f7b98a;
+  color: var(--c-accent-3);
 }
 
 /* On a centred card the eyebrow reads better as a pill. */
@@ -984,12 +1000,12 @@ table,
 
 /* A hairline of accent marks the primary metric on a screen. */
 .stat-feature {
-  border-color: rgb(224 57 154 / 0.32);
+  border-color: rgb(216 116 39 / 0.32);
   background:
     linear-gradient(
       150deg,
-      rgb(249 115 22 / 0.16),
-      rgb(224 57 154 / 0.10) 55%,
+      rgb(255 138 36 / 0.16),
+      rgb(216 116 39 / 0.10) 55%,
       transparent 80%
     ),
     var(--surface);
@@ -1938,7 +1954,7 @@ fieldset.role-picker:disabled .role-chip {
   background: var(--gradient-wide);
   border: 0;
   border-radius: var(--radius-lg);
-  box-shadow: 0 12px 32px rgb(224 57 154 / 0.45);
+  box-shadow: 0 12px 32px rgb(216 116 39 / 0.45);
 }
 
 
