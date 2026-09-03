@@ -10,6 +10,16 @@
 
 begin;
 
+/*
+ * An email_log already exists in this project from an earlier version,
+ * with its own column names: email_type rather than kind,
+ * error_message rather than error. `create table if not exists` would
+ * silently skip and then the index below fails on a column that is not
+ * there -- which is exactly what happened.
+ *
+ * So: create it only if genuinely absent, using the existing naming,
+ * and add whatever a pre-existing copy is missing.
+ */
 create table if not exists public.email_log (
   id              bigserial primary key,
 
@@ -18,17 +28,23 @@ create table if not exists public.email_log (
   registration_id bigint,
 
   /* 'confirmation' | 'collection' | 'alert' */
-  kind            text not null,
+  email_type      text not null,
 
   recipient       text not null,
-  subject         text,
 
   /* 'sent' | 'failed' */
   status          text not null default 'sent',
-  error           text,
+  error_message   text,
 
   sent_at         timestamptz not null default now()
 );
+
+/* Present in ours, absent from the older table. sendAlert throttles on
+   it, so it cannot be optional. */
+alter table public.email_log
+  add column if not exists subject         text,
+  add column if not exists registration_id bigint,
+  add column if not exists error_message   text;
 
 /*
  * One confirmation and one collection receipt per registration, ever.
@@ -36,11 +52,11 @@ create table if not exists public.email_log (
  * must be retryable, a send that succeeded must not be repeatable.
  */
 create unique index if not exists email_log_once
-  on public.email_log (registration_id, kind)
+  on public.email_log (registration_id, email_type)
   where registration_id is not null and status = 'sent';
 
 create index if not exists email_log_kind_time
-  on public.email_log (kind, sent_at desc);
+  on public.email_log (email_type, sent_at desc);
 
 commit;
 
@@ -81,7 +97,7 @@ from (
     and not exists (
       select 1 from public.email_log l
       where l.registration_id = r.id
-        and l.kind = 'confirmation'
+        and l.email_type = 'confirmation'
         and l.status = 'sent'
     )
   order by r.created_at
@@ -104,17 +120,17 @@ select json_build_object(
       and not exists (
         select 1 from public.email_log l
         where l.registration_id = r.id
-          and l.kind = 'confirmation'
+          and l.email_type = 'confirmation'
           and l.status = 'sent'
       )
   ),
   'sentConfirmations', (
     select count(*) from public.email_log
-    where kind = 'confirmation' and status = 'sent'
+    where email_type = 'confirmation' and status = 'sent'
   ),
   'sentCollections', (
     select count(*) from public.email_log
-    where kind = 'collection' and status = 'sent'
+    where email_type = 'collection' and status = 'sent'
   ),
   'failedLast24h', (
     select count(*) from public.email_log

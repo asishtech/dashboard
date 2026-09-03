@@ -242,7 +242,7 @@ export async function sendAlert(
   const { count } = await supabaseAdmin()
     .from("email_log")
     .select("id", { count: "exact", head: true })
-    .eq("kind", "alert")
+    .eq("email_type", "alert")
     .eq("subject", subject)
     .gte("sent_at", since);
 
@@ -311,7 +311,9 @@ async function deliver(input: DeliverInput): Promise<SendResult> {
 
     const { error } = await db.from("email_log").insert({
       registration_id: input.registrationDbId,
-      kind: input.kind,
+      /* The column is email_type, not kind: this table predates the
+         current mail code and its names win. */
+      email_type: input.kind,
       recipient: input.to,
       subject: input.subject,
       status: "sent",
@@ -333,11 +335,11 @@ async function deliver(input: DeliverInput): Promise<SendResult> {
 
     await db.from("email_log").insert({
       registration_id: input.registrationDbId,
-      kind: input.kind,
+      email_type: input.kind,
       recipient: input.to,
       subject: input.subject,
       status: "failed",
-      error: message.slice(0, 500),
+      error_message: message.slice(0, 500),
     });
 
     return { status: "failed", error: message };
