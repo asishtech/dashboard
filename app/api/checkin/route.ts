@@ -35,6 +35,26 @@ async function mayAdmit(
   return canReadEvent(session, pass.event_id);
 }
 
+/*
+ * The desk has no QR to scan, so undo also accepts a registration id.
+ * Resolving it here keeps qr_token off the wire: shipping a thousand
+ * bearer tokens to a browser so a button can use one of them would
+ * hand every pass to anyone who opened devtools.
+ */
+async function tokenForRegistration(
+  registrationId: number
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("registrations")
+    .select("qr_token")
+    .eq("id", registrationId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data?.qr_token ?? null;
+}
+
 async function lookup(token: string): Promise<CheckinPass | null> {
   const { data, error } = await supabaseAdmin().rpc(
     "checkin_lookup",
@@ -266,12 +286,18 @@ export async function DELETE(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
 
+    const registrationId = Number(body.registrationId);
+
     const token =
-      typeof body.token === "string" ? body.token.trim() : "";
+      typeof body.token === "string" && body.token.trim()
+        ? body.token.trim()
+        : Number.isFinite(registrationId)
+          ? await tokenForRegistration(registrationId)
+          : "";
 
     if (!token) {
       return NextResponse.json(
-        { error: "Token is required" },
+        { error: "A token or registrationId is required" },
         { status: 400 }
       );
     }
@@ -280,7 +306,7 @@ export async function DELETE(request: Request) {
 
     if (!pass) {
       return NextResponse.json(
-        { error: "That QR code is not recognised" },
+        { error: "That registration was not found" },
         { status: 404 }
       );
     }

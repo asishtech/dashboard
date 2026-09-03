@@ -6,6 +6,7 @@ import NavBar from "@/components/NavBar";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
+  CheckIcon,
   DownloadIcon,
   InboxIcon,
   SearchIcon,
@@ -34,6 +35,8 @@ type Registration = {
   email: string;
   total?: number | null;
   items?: RegistrationItem[];
+  /* When they were admitted at the gate; null if they have not been. */
+  entered_at?: string | null;
   /*
    * Resolved server-side. The page used to label rows from the
    * upstream bucket id -- 513 "Merchandise", 514 "V-TAPP Event",
@@ -106,6 +109,10 @@ export default function RegistrationsPage() {
    * anything -- so "no filters" and "some filters" look different.
    */
   const [showFilters, setShowFilters] = useState(false);
+
+  /* Which registration's entry is being undone. */
+  const [undoing, setUndoing] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
 
   const loadRegistrations = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -263,6 +270,59 @@ export default function RegistrationsPage() {
     return { revenue, given, events, merch };
   }, [filtered]);
 
+  const formatTime = (value: string) =>
+    new Date(value).toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+  /*
+   * Undo an admission from the desk, without needing the pass in hand.
+   * Sends the registration id rather than the token, so the page never
+   * receives a bearer credential it has no use for.
+   */
+  async function undoEntry(registration: Registration) {
+    if (undoing !== null || !registration.id) return;
+
+    if (
+      !window.confirm(
+        `Undo the entry for ${registration.name || registration.email}? Their pass becomes usable again.`
+      )
+    ) {
+      return;
+    }
+
+    setUndoing(registration.id);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/checkin", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registrationId: registration.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not undo entry");
+      }
+
+      setNotice(
+        `Entry undone for ${registration.name || registration.email}.`
+      );
+
+      await loadRegistrations(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not undo entry"
+      );
+    } finally {
+      setUndoing(null);
+    }
+  }
+
   const formatAmount = (amount: number) =>
     new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -297,6 +357,7 @@ export default function RegistrationsPage() {
       "Quantity",
       "Item status",
       "Registration status",
+      "Checked in at",
       "Total (INR)",
     ];
 
@@ -324,6 +385,9 @@ export default function RegistrationsPage() {
           item?.quantity ?? "",
           item?.status ?? "",
           state,
+          registration.entered_at
+            ? formatTime(registration.entered_at)
+            : "",
           total,
         ]
           .map((cell) => `<td>${escape(cell)}</td>`)
@@ -437,6 +501,13 @@ export default function RegistrationsPage() {
           <div className="banner banner-danger" role="alert">
             <AlertIcon size={18} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {notice && (
+          <div className="banner banner-success" role="status">
+            <CheckIcon size={18} />
+            <span>{notice}</span>
           </div>
         )}
 
@@ -797,9 +868,37 @@ export default function RegistrationsPage() {
                                 ? "Collected"
                                 : "Pending"}
                             </span>
+                          ) : registration.entered_at ? (
+                            /* An event booking that has been admitted.
+                               Undo is here because this is the screen
+                               you reach by searching an email, which is
+                               all a desk has to go on. */
+                            <div className="stack stack-tight">
+                              <span className="badge badge-success">
+                                Checked in
+                              </span>
+
+                              <span className="row-meta">
+                                {formatTime(registration.entered_at)}
+                              </span>
+
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-sm"
+                                disabled={undoing !== null}
+                                onClick={() => undoEntry(registration)}
+                              >
+                                {undoing === registration.id && (
+                                  <span className="btn-spinner" />
+                                )}
+                                {undoing === registration.id
+                                  ? "Undoing"
+                                  : "Undo entry"}
+                              </button>
+                            </div>
                           ) : (
                             <span className="badge badge-plain">
-                              Booking
+                              Not checked in
                             </span>
                           )}
                         </td>

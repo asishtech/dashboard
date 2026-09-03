@@ -64,6 +64,7 @@ export async function GET(request: Request) {
       inventoryResult,
       syncStateResult,
       eventMapResult,
+      scansResult,
     ] = await Promise.all([
         (() => {
           const select = () => {
@@ -145,6 +146,19 @@ export async function GET(request: Request) {
          * depend on which rows came back.
          */
         db.rpc("registration_event_map"),
+
+        /*
+         * Who is already inside. Paged like everything else -- one
+         * scan per registration means this grows with the fest.
+         */
+        readAll<{ registration_id: number; scanned_at: string | null }>(
+          (from, to) =>
+            db
+              .from("qr_scans")
+              .select("registration_id,scanned_at")
+              .order("id", { ascending: true })
+              .range(from, to)
+        ),
       ]);
 
     if (registrationsResult.error) {
@@ -187,9 +201,19 @@ export async function GET(request: Request) {
       }
     >;
 
+    const enteredAt = new Map(
+      scansResult.rows.map((row) => [
+        Number(row.registration_id),
+        row.scanned_at,
+      ])
+    );
+
     const registrations = (registrationsResult.data ?? []).map(
       (registration) => ({
         ...registration,
+
+        /* Null when they have not been admitted. */
+        entered_at: enteredAt.get(Number(registration.id)) ?? null,
 
         event: eventMap[String(registration.id)] ?? {
           slug: null,
