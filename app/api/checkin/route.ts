@@ -100,7 +100,12 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, pass });
+    return NextResponse.json({
+      success: true,
+      pass,
+      /* Undoing an admission is an admin correction, not a gate action. */
+      canUndo: auth.activeRole === "admin",
+    });
   } catch (error) {
     console.error("Check-in GET error:", error);
 
@@ -171,6 +176,7 @@ export async function POST(request: Request) {
           error: "Already checked in",
           alreadyEntered: true,
           enteredAt: pass.entered_at,
+          canUndo: auth.activeRole === "admin",
           pass,
         },
         { status: 409 }
@@ -201,6 +207,7 @@ export async function POST(request: Request) {
             error: "Already checked in",
             alreadyEntered: true,
             enteredAt: current?.entered_at ?? null,
+            canUndo: auth.activeRole === "admin",
             pass: current ?? pass,
           },
           { status: 409 }
@@ -221,6 +228,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       enteredAt: new Date().toISOString(),
+      canUndo: auth.activeRole === "admin",
       pass: { ...pass, entered_at: new Date().toISOString() },
     });
   } catch (error) {
@@ -232,6 +240,83 @@ export async function POST(request: Request) {
           error instanceof Error
             ? error.message
             : "Unable to record entry",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/*
+ * DELETE /api/checkin  { token }
+ *
+ * Undo an admission, so the pass can be used again.
+ *
+ * Admin only, and deliberately not offered to volunteers or
+ * coordinators: the whole value of one-entry-per-QR is that the person
+ * holding the scanner cannot quietly wave the same pass through twice.
+ * Letting them undo their own scan would hand that back.
+ */
+export async function DELETE(request: Request) {
+  const auth = await requireRole("admin");
+
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+
+    const token =
+      typeof body.token === "string" ? body.token.trim() : "";
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Token is required" },
+        { status: 400 }
+      );
+    }
+
+    const pass = await lookup(token);
+
+    if (!pass) {
+      return NextResponse.json(
+        { error: "That QR code is not recognised" },
+        { status: 404 }
+      );
+    }
+
+    if (!pass.entered_at) {
+      return NextResponse.json(
+        { error: "That pass has not been checked in." },
+        { status: 409 }
+      );
+    }
+
+    const { error } = await supabaseAdmin()
+      .from("qr_scans")
+      .delete()
+      .eq("registration_id", pass.id);
+
+    if (error) {
+      return NextResponse.json(
+        { error: `Could not undo entry: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      pass: { ...pass, entered_at: null },
+    });
+  } catch (error) {
+    console.error("Check-in DELETE error:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to undo entry",
       },
       { status: 500 }
     );

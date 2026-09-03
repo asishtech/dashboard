@@ -75,6 +75,9 @@ export default function VolunteerPage() {
   const [busy, setBusy] = useState(false);
   const [scanToken, setScanToken] = useState("");
 
+  /* Set by the API, not guessed here: admins only. */
+  const [canUndo, setCanUndo] = useState(false);
+
   const scannerRef = useRef<Scanner | null>(null);
   const handlingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -173,6 +176,7 @@ export default function VolunteerPage() {
         setError("");
         setNotice("");
         setPass(scanned);
+        setCanUndo(Boolean(passData.canUndo));
 
         /* Merchandise still needs its item list. */
         if (!scanned.is_merch) {
@@ -357,6 +361,7 @@ export default function VolunteerPage() {
     setError("");
     setNotice("");
     setScanToken("");
+    setCanUndo(false);
     setResolving(false);
     handlingRef.current = false;
     void startScanner();
@@ -385,12 +390,14 @@ export default function VolunteerPage() {
 
       if (response.ok) {
         setPass(data.pass ?? null);
+        setCanUndo(Boolean(data.canUndo));
         setNotice("Entry recorded.");
         return;
       }
 
       if (response.status === 409 && data.alreadyEntered) {
         setPass(data.pass ?? null);
+        setCanUndo(Boolean(data.canUndo));
         setNotice("Already checked in — this pass has been used.");
         return;
       }
@@ -399,6 +406,49 @@ export default function VolunteerPage() {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not record entry"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /*
+   * Undo an admission. Admin only, enforced by the API -- this button
+   * appearing is a convenience, not the check.
+   */
+  async function undoEntry() {
+    if (busy || !scanToken || !pass) return;
+
+    if (
+      !window.confirm(
+        `Undo the entry for ${pass.name ?? "this attendee"}? Their pass becomes usable again.`
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/checkin", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: scanToken }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not undo entry");
+      }
+
+      setPass(data.pass ?? null);
+      setNotice("Entry undone. The pass can be used again.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not undo entry"
       );
     } finally {
       setBusy(false);
@@ -604,6 +654,20 @@ export default function VolunteerPage() {
                     Admitted {formatTime(pass.entered_at)}. Each pass
                     admits one person, once.
                   </p>
+
+                  {canUndo && (
+                    <div className="actions-centred mt-8">
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={busy}
+                        onClick={undoEntry}
+                      >
+                        {busy && <span className="btn-spinner" />}
+                        {busy ? "Undoing..." : "Undo entry"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button
