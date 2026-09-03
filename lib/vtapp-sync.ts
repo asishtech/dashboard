@@ -669,6 +669,31 @@ export async function syncVtapp() {
       );
     });
 
+    /*
+     * Tell the organisers. A sync that quietly stops means
+     * registrations stop arriving and nobody notices until somebody is
+     * turned away at a gate. Throttled to one an hour by sendAlert:
+     * a broken upstream fails on every poll, and the daily quota
+     * belongs to the students' passes.
+     */
+    try {
+      const { sendAlert } = await import("./mailer");
+
+      await sendAlert(
+        "V-TAPP sync failed",
+        [
+          `The registration sync failed at ${new Date().toISOString()}.`,
+          "",
+          message,
+          "",
+          "Registrations are not being updated until this succeeds.",
+        ].join("\n")
+      );
+    } catch (alertError) {
+      /* Never let the alert mask the failure it is reporting. */
+      console.error("Unable to send sync alert:", alertError);
+    }
+
     throw error;
   }
 }
