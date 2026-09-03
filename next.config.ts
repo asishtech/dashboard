@@ -15,6 +15,22 @@ const nextConfig: NextConfig = {
    */
   poweredByHeader: false,
 
+  /*
+   * Dev only. Next blocks cross-origin requests for its own dev
+   * resources, so opening the dev server from another machine on the
+   * LAN loads the page but gets no hot reload -- it just silently
+   * stops updating.
+   *
+   * These are link-local and private ranges reachable only from the
+   * same physical network; the setting has no effect on a build.
+   */
+  allowedDevOrigins: [
+    "169.254.167.34",
+    "10.1.161.55",
+    "192.168.252.1",
+    "*.local",
+  ],
+
   async headers() {
     return [
       {
