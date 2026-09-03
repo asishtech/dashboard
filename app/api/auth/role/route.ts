@@ -13,20 +13,42 @@ export const dynamic = "force-dynamic";
  * member; it cannot ask to be an admin it was not granted.
  */
 export async function GET() {
-  const session = await getSession();
+  try {
+    const session = await getSession();
 
-  if (!session) {
+    if (!session) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      roles: session.profile.roles,
+      activeRole: session.activeRole,
+    });
+  } catch (error) {
+    /*
+     * Unwrapped, this threw before writing a body, and the browser
+     * reported "Unexpected end of JSON input" -- which says nothing
+     * about the cause. The usual cause is a missing environment
+     * variable on a new deployment: getSession only reaches
+     * supabaseAdmin() once somebody is signed in, so the route answers
+     * 401 perfectly well right up until it matters.
+     */
+    console.error("Role lookup failed:", error);
+
     return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401 }
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to read your roles",
+      },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    success: true,
-    roles: session.profile.roles,
-    activeRole: session.activeRole,
-  });
 }
 
 export async function POST(request: Request) {

@@ -224,6 +224,32 @@ export async function getSession(): Promise<Session | null> {
 export async function requireRole(
   ...allowed: Role[]
 ): Promise<Session | NextResponse> {
+  /*
+   * A missing environment variable throws inside getSession, before
+   * any handler has written a response. That surfaces as a 500 with an
+   * empty body and "Unexpected end of JSON input" in the browser --
+   * true, useless, and indistinguishable from a crash. Name it.
+   */
+  try {
+    return await resolveRole(allowed);
+  } catch (error) {
+    console.error("Authorization failed:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? `Configuration error: ${error.message}`
+            : "Authorization failed",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function resolveRole(
+  allowed: Role[]
+): Promise<Session | NextResponse> {
   const session = await getSession();
 
   if (!session) {
