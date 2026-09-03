@@ -7,7 +7,6 @@ import LogoutButton from "@/components/LogoutButton";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import {
   BoxIcon,
-  InboxIcon,
   ListIcon,
   ScanIcon,
   TicketIcon,
@@ -43,7 +42,6 @@ const NAV: Record<Role, NavItem[]> = {
       icon: ListIcon,
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
-    { href: "/admin/notifications", label: "Mail", icon: InboxIcon },
     { href: "/admin/users", label: "Staff", icon: UsersIcon },
     {
       href: "/admin/coordinators",

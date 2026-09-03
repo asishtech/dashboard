@@ -272,16 +272,6 @@ export async function POST(request: Request) {
       registration as { items?: ItemRow[] | null }
     );
 
-    /*
-     * Receipt on the last item, not on every one. A buyer collecting a
-     * three-piece combo should get one email, not three.
-     *
-     * Fire-and-forget: SMTP takes about a second, and a volunteer with
-     * a queue in front of them must not wait for it. A failure is
-     * recorded in email_log and never reaches this response.
-     */
-    void maybeSendCollectionReceipt(shaped);
-
     return NextResponse.json({
       success: true,
       distributionId,
@@ -299,58 +289,5 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
-  }
-}
-
-/*
- * Emails the buyer once their registration is fully collected.
- *
- * The unique index on email_log is what actually guarantees one
- * receipt; this only avoids the pointless attempt.
- */
-async function maybeSendCollectionReceipt(registration: {
-  id?: number;
-  registration_id?: string;
-  name?: string | null;
-  email?: string | null;
-  items?: {
-    item: string;
-    size: string | null;
-    /* The upstream feed types this loosely; coerced below. */
-    quantity: number | string | null;
-    status?: string;
-  }[];
-}) {
-  try {
-    const items = registration.items ?? [];
-
-    if (
-      items.length === 0 ||
-      !registration.email ||
-      !registration.id ||
-      items.some((item) => item.status !== "GIVEN")
-    ) {
-      return;
-    }
-
-    const { sendCollectionReceipt } = await import("@/lib/mailer");
-
-    const result = await sendCollectionReceipt({
-      registrationDbId: registration.id,
-      registrationId: String(registration.registration_id ?? ""),
-      name: registration.name ?? null,
-      email: registration.email,
-      items: items.map((item) => ({
-        item: item.item,
-        size: item.size,
-        quantity: Number(item.quantity ?? 1),
-      })),
-    });
-
-    if (result.status === "failed") {
-      console.error("Collection receipt failed:", result.error);
-    }
-  } catch (error) {
-    console.error("Collection receipt error:", error);
   }
 }
