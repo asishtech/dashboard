@@ -65,6 +65,13 @@ export default function VolunteerPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(true);
+
+  /*
+   * Between decoding a code and having the pass back there are two
+   * network round trips. Without a state for it the camera simply
+   * froze, which reads as a crash rather than as work in progress.
+   */
+  const [resolving, setResolving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanToken, setScanToken] = useState("");
 
@@ -105,6 +112,8 @@ export default function VolunteerPage() {
       if (handlingRef.current) return;
 
       handlingRef.current = true;
+
+      setResolving(true);
 
       await stopScanner();
 
@@ -168,6 +177,7 @@ export default function VolunteerPage() {
         /* Merchandise still needs its item list. */
         if (!scanned.is_merch) {
           setRegistration(null);
+          setResolving(false);
           return;
         }
 
@@ -191,8 +201,12 @@ export default function VolunteerPage() {
           ...data.registration,
           isEventOnly: Boolean(data.isEventOnly),
         });
+
+        setResolving(false);
       } catch (err) {
         if (!mountedRef.current) return;
+
+        setResolving(false);
 
         setError(
           err instanceof Error ? err.message : "Invalid QR code"
@@ -343,6 +357,7 @@ export default function VolunteerPage() {
     setError("");
     setNotice("");
     setScanToken("");
+    setResolving(false);
     handlingRef.current = false;
     void startScanner();
   }
@@ -484,9 +499,25 @@ export default function VolunteerPage() {
         {/* The reader element must stay mounted: html5-qrcode attaches
             the video stream to it by id, and unmounting it mid-scan is
             what produced the NotFoundError teardown races. */}
+        {resolving && (
+          <section className="panel">
+            <div className="empty">
+              <div className="loading-spinner" />
+
+              <p className="empty-title mt-4">Reading pass</p>
+
+              <p className="empty-body">
+                Checking the code against the register.
+              </p>
+            </div>
+          </section>
+        )}
+
         <section
           className="panel"
-          hidden={pass !== null || registration !== null}
+          hidden={
+            resolving || pass !== null || registration !== null
+          }
         >
           <div className="panel-body">
             <div id={READER_ID} className="scanner" />
@@ -582,7 +613,7 @@ export default function VolunteerPage() {
                   onClick={markEntry}
                 >
                   {busy && <span className="btn-spinner" />}
-                  {busy ? "Recording" : "Mark entry"}
+                  {busy ? "Recording entry..." : "Mark entry"}
                 </button>
               )}
             </div>

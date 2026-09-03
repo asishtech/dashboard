@@ -181,6 +181,13 @@ export async function POST(request: Request) {
       registration_id: pass.id,
       /* Bigint upstream; the resolved slug lives on the registration. */
       event_id: pass.is_merch ? 513 : 514,
+      /*
+       * NOT NULL, and omitting it was rejecting every check-in with a
+       * 500. It is also the useful column: it records which pass was
+       * presented, not merely which registration it resolved to.
+       */
+      qr_token: token,
+      scanned_at: new Date().toISOString(),
       scanned_by: auth.user.id,
     });
 
@@ -200,7 +207,15 @@ export async function POST(request: Request) {
         );
       }
 
-      throw error;
+      /*
+       * A rejected insert here is a schema mismatch, not a user error.
+       * Returning the database's own message beats a bare 500 that
+       * tells a volunteer at a gate nothing at all.
+       */
+      return NextResponse.json(
+        { error: `Could not record entry: ${error.message}` },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
