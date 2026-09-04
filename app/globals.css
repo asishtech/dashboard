@@ -1159,6 +1159,30 @@ table,
   position: relative;
 }
 
+/* Step number beside a panel title.
+   The mail page is a sequence — test, one person, the queue, then
+   automatic — and the numbers say so, because the order matters more
+   than any single panel does. */
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: var(--space-2);
+
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-full);
+
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: middle;
+}
+
 /* A checkbox with its label, on the mail screen.
    The whole row is the hit target, because a 13px box is not one on a
    phone. */

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { AlertIcon, CheckIcon, InboxIcon } from "@/components/icons";
+import { AlertIcon } from "@/components/icons";
 
 type Queue = {
   ready: boolean;
@@ -352,8 +352,35 @@ export default function NotificationsPage() {
     }
   }
 
+  /* Nothing can be sent: either the migration or the credentials. */
   const blocked =
     !loading && queue !== null && (!queue.ready || !queue.configured);
+
+  /* Emails, which is what the cap counts and the button sends. */
+  const waiting =
+    queue?.pendingPeople ?? queue?.pendingConfirmations ?? 0;
+
+  const usedToday = queue
+    ? queue.dailyCap - queue.remainingToday
+    : 0;
+
+  const usedPercent = queue?.dailyCap
+    ? Math.min(100, (usedToday / queue.dailyCap) * 100)
+    : 0;
+
+  const capLevel =
+    usedPercent >= 90
+      ? "meter-fill-danger"
+      : usedPercent >= 70
+        ? "meter-fill-warning"
+        : "meter-fill-success";
+
+  /* How many of today's remaining allowance this press would use. */
+  const nextBatch = Math.min(
+    queue?.batchSize ?? 0,
+    waiting,
+    queue?.remainingToday ?? 0
+  );
 
   return (
     <main className="app">
@@ -365,34 +392,18 @@ export default function NotificationsPage() {
           <div>
             <span className="page-eyebrow">V-TAPP / Mail</span>
 
-            <h1 className="page-title">Notifications</h1>
+            <h1 className="page-title">Passes</h1>
 
             <p className="page-subtitle">
               {queue?.sender
-                ? `Sending as ${queue.sender}`
-                : "Registration passes and collection receipts"}
+                ? `One email per person, sending as ${queue.sender}`
+                : "One email per person, every pass in one PDF"}
             </p>
           </div>
         </header>
 
-
-        {error && (
-          <div className="banner banner-danger" role="alert">
-            <AlertIcon size={18} />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {message && (
-          <div className="banner banner-success" role="status">
-            <CheckIcon size={18} />
-            <span>{message}</span>
-          </div>
-        )}
-
-
         {blocked && (
-          <section className="panel">
+          <section className="panel mb-6">
             <div className="empty">
               <div className="empty-icon">
                 <AlertIcon size={22} />
@@ -402,33 +413,100 @@ export default function NotificationsPage() {
 
               <p className="empty-body">
                 {queue?.reason ??
-                  "Set SMTP_USER and SMTP_PASSWORD in the environment, then reload. See docs/email-setup.md."}
+                  "Set SMTP_USER and SMTP_PASSWORD in the environment, then redeploy. See docs/email-setup.md."}
               </p>
             </div>
           </section>
         )}
 
+        {message && (
+          <div className="banner banner-success mb-6" role="status">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="banner banner-danger mb-6" role="alert">
+            {error}
+          </div>
+        )}
+
+        {loading && (
+          <section className="panel">
+            <div className="panel-body stack">
+              <div className="skeleton skeleton-line" />
+              <div className="skeleton skeleton-card" />
+            </div>
+          </section>
+        )}
 
         {!loading && queue?.ready && (
           <>
-            <section className="stat-grid">
+            {/*
+              Today's allowance, first and largest.
+              
+              Everything else on this page is bounded by it: crossing
+              Gmail's limit locks the account for 24 hours, so the
+              number that decides whether you can act at all belongs
+              above the actions rather than beside them.
+            */}
+            <section className="panel mb-6">
+              <div className="panel-body">
+                <div className="meter">
+                  <div className="meter-head">
+                    <span className="meter-label">
+                      Today&apos;s allowance
+                    </span>
+
+                    <span className="meter-value">
+                      {usedToday} of {queue.dailyCap}
+                    </span>
+                  </div>
+
+                  <div
+                    className="meter-track"
+                    role="progressbar"
+                    aria-valuenow={Math.round(usedPercent)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Daily sending allowance used"
+                  >
+                    <div
+                      className={`meter-fill ${capLevel}`}
+                      style={{ width: `${usedPercent}%` }}
+                    />
+                  </div>
+
+                  <div className="meter-foot">
+                    <span>{queue.remainingToday} left today</span>
+
+                    <span>
+                      {waiting === 0
+                        ? "Queue empty"
+                        : `${Math.ceil(
+                            waiting / Math.max(queue.dailyCap, 1)
+                          )} more day${
+                            Math.ceil(
+                              waiting / Math.max(queue.dailyCap, 1)
+                            ) === 1
+                              ? ""
+                              : "s"
+                          } at this cap`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="stat-grid mb-6">
               <div className="stat stat-feature">
                 <span className="stat-label">Waiting</span>
 
-                <strong className="stat-value">
-                  {queue.pendingPeople ?? queue.pendingConfirmations}
-                </strong>
+                <strong className="stat-value">{waiting}</strong>
 
-                {/*
-                  Emails, because that is what the daily cap counts and
-                  what the button sends. The pass total is the detail
-                  underneath -- showing 1,408 up here would imply four
-                  days of sending when it is three.
-                */}
                 <span className="stat-meta">
-                  {queue.pendingPeople === undefined
-                    ? "Passes not yet emailed"
-                    : `emails · ${queue.pendingConfirmations} passes`}
+                  emails ·{" "}
+                  {queue.pendingConfirmations} passes
                 </span>
               </div>
 
@@ -440,118 +518,43 @@ export default function NotificationsPage() {
                 </strong>
 
                 <span className="stat-meta">
-                  {queue.sentCollections} collection receipt
-                  {queue.sentCollections === 1 ? "" : "s"}
+                  {queue.lastSentAt
+                    ? `Last ${new Date(
+                        queue.lastSentAt
+                      ).toLocaleString("en-IN")}`
+                    : "None yet"}
                 </span>
               </div>
 
               <div className="stat">
-                <span className="stat-label">Left today</span>
+                <span className="stat-label">Failed</span>
 
-                <strong className="stat-value">
-                  {queue.remainingToday}
+                <strong
+                  className={`stat-value ${
+                    queue.failedLast24h > 0 ? "stat-danger" : ""
+                  }`}
+                >
+                  {queue.failedLast24h}
                 </strong>
 
-                {/* Gmail's cap is per rolling 24 hours, and crossing it
-                    locks the account out for a day. */}
                 <span className="stat-meta">
-                  {queue.sentLast24h} of {queue.dailyCap} used
+                  Last 24h · they stay in the queue
                 </span>
               </div>
-
-              {queue.failedLast24h > 0 && (
-                <div className="stat">
-                  <span className="stat-label">Failed</span>
-
-                  <strong className="stat-value stat-warning">
-                    {queue.failedLast24h}
-                  </strong>
-
-                  <span className="stat-meta">
-                    In the last 24 hours
-                  </span>
-                </div>
-              )}
             </section>
 
-
-            <section className="panel">
+            {/* 1 ---------------------------------------------------- */}
+            <section className="panel mb-6">
               <div className="panel-header">
                 <div>
-                  <h2 className="panel-title">Send a batch</h2>
+                  <h2 className="panel-title">
+                    <span className="step">1</span> Send yourself a
+                    test
+                  </h2>
 
                   <p className="panel-subtitle">
-                    Up to {queue.batchSize} at a time. Preview first —
-                    email cannot be recalled.
-                  </p>
-                </div>
-              </div>
-
-              <div className="panel-body">
-                <div className="header-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={busy || queue.pendingConfirmations === 0}
-                    onClick={() => run(true)}
-                  >
-                    {busy && <span className="btn-spinner" />}
-                    Preview next batch
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={
-                      busy ||
-                      queue.pendingConfirmations === 0 ||
-                      queue.remainingToday === 0
-                    }
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Send up to ${queue.batchSize} emails now? Each carries every pass that person holds. This cannot be undone.`
-                        )
-                      ) {
-                        void run(false);
-                      }
-                    }}
-                  >
-                    {busy && <span className="btn-spinner" />}
-                    Send {Math.min(
-                      queue.batchSize,
-                      queue.pendingPeople ?? queue.pendingConfirmations
-                    )}{" "}
-                    now
-                  </button>
-                </div>
-
-                {queue.pendingConfirmations === 0 && (
-                  <p className="help mt-4">
-                    Everyone with an email address has their pass.
-                  </p>
-                )}
-
-                {queue.remainingToday === 0 &&
-                  queue.pendingConfirmations > 0 && (
-                    <p className="help mt-4">
-                      The daily limit is used up. Sending resumes as the
-                      24-hour window rolls forward.
-                    </p>
-                  )}
-              </div>
-            </section>
-
-
-            {/* Test ------------------------------------------------- */}
-            <section className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2 className="panel-title">Send a test</h2>
-
-                  <p className="panel-subtitle">
-                    One message to any address. Touches nothing —
-                    no registration is marked as sent to.
+                    Proves the password works. Reads no
+                    registrations, marks nobody as sent to.
                   </p>
                 </div>
               </div>
@@ -575,109 +578,34 @@ export default function NotificationsPage() {
                       setTestTo(event.target.value)
                     }
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") sendTest();
+                      if (event.key === "Enter") void sendTest();
                     }}
                   />
 
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={sendTest}
-                    disabled={
-                      busy ||
-                      !queue.configured ||
-                      !testTo.includes("@")
-                    }
+                    className="btn btn-sm"
+                    onClick={() => void sendTest()}
+                    disabled={busy || !testTo.includes("@")}
                   >
                     {busy && <span className="btn-spinner" />}
                     Send test
                   </button>
                 </div>
-
-                <p className="help mt-3">
-                  {queue.configured
-                    ? "Do this first. It proves the App Password works without spending any of the queue."
-                    : "Set SMTP_USER and SMTP_PASSWORD, then redeploy."}
-                </p>
               </div>
             </section>
 
-
-            {/* Automatic sending ------------------------------------ */}
-            <section className="panel">
+            {/* 2 ---------------------------------------------------- */}
+            <section className="panel mb-6">
               <div className="panel-header">
                 <div>
                   <h2 className="panel-title">
-                    Automatic sending
+                    <span className="step">2</span> Send to one person
                   </h2>
 
                   <p className="panel-subtitle">
-                    Off until you turn it on, so nothing goes out
-                    while you are testing.
-                  </p>
-                </div>
-              </div>
-
-              <div className="panel-body">
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={queue.autoSend?.enabled ?? false}
-                    disabled={busy || !queue.configured}
-                    onChange={(event) =>
-                      toggleAutoSend(event.target.checked)
-                    }
-                  />
-
-                  <span>
-                    Mail people who register from now on
-                  </span>
-                </label>
-
-                <p className="help mt-3">
-                  {queue.autoSend?.enabled ? (
-                    <>
-                      On since{" "}
-                      {queue.autoSend.enabledAt
-                        ? new Date(
-                            queue.autoSend.enabledAt
-                          ).toLocaleString("en-IN")
-                        : "just now"}
-                      . Only registrations created after that moment
-                      are sent automatically, up to 15 per sync. The{" "}
-                      {queue.pendingConfirmations} already waiting are
-                      not touched — those stay on the button above.
-                    </>
-                  ) : (
-                    <>
-                      While this is off, the only way an email leaves
-                      is the Send button above. Turning it on does not
-                      mail the {queue.pendingConfirmations} already
-                      waiting; it only covers people who register
-                      afterwards.
-                    </>
-                  )}
-                </p>
-              </div>
-            </section>
-
-
-            {/* Resend ----------------------------------------------- */}
-            <section className="panel">
-              <div className="panel-header">
-                <div>
-                  {/*
-                    Not "Send again": with nothing sent yet, that
-                    title says this panel is not for you, when in fact
-                    it is the only way to mail one named person.
-                  */}
-                  <h2 className="panel-title">
-                    Send to one person
-                  </h2>
-
-                  <p className="panel-subtitle">
-                    Their first copy, or another one — for a pass that
-                    was deleted, or an address since corrected.
+                    Their first copy or another one. Everything they
+                    hold goes in a single PDF.
                   </p>
                 </div>
               </div>
@@ -700,14 +628,14 @@ export default function NotificationsPage() {
                       setArmed(null);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") search();
+                      if (event.key === "Enter") void search();
                     }}
                   />
 
                   <button
                     type="button"
                     className="btn btn-sm"
-                    onClick={search}
+                    onClick={() => void search()}
                     disabled={searching || query.trim().length < 3}
                   >
                     {searching && <span className="btn-spinner" />}
@@ -735,17 +663,12 @@ export default function NotificationsPage() {
                           </div>
 
                           <div className="row-meta">
-                            {person.email}
-                            {" · "}
-                            {person.passes} pass
+                            {person.email} · {person.passes} pass
                             {person.passes === 1 ? "" : "es"}
                           </div>
 
-                          {/*
-                            What is in the PDF, so the sender can see
-                            they are about to send the right person
-                            the right things.
-                          */}
+                          {/* What is in the PDF, so the sender can
+                              see they have the right person. */}
                           <div className="row-meta">
                             {person.what.slice(0, 3).join(" · ")}
                             {person.what.length > 3 &&
@@ -762,12 +685,9 @@ export default function NotificationsPage() {
                         </div>
 
                         <div className="resend-actions">
-                          {/*
-                            Armed per person. A single page-level tick
-                            would stay on after one send and make the
-                            next click, on somebody else, one press
-                            instead of two.
-                          */}
+                          {/* Armed per person: a page-level tick
+                              would stay on and make the next click,
+                              on somebody else, one press not two. */}
                           <label className="check">
                             <input
                               type="checkbox"
@@ -796,7 +716,7 @@ export default function NotificationsPage() {
                             type="button"
                             className="btn btn-primary btn-sm"
                             disabled={busy || armed !== person.email}
-                            onClick={() => resend(person)}
+                            onClick={() => void resend(person)}
                           >
                             {busy && armed === person.email && (
                               <span className="btn-spinner" />
@@ -811,64 +731,178 @@ export default function NotificationsPage() {
               </div>
             </section>
 
+            {/* 3 ---------------------------------------------------- */}
+            <section className="panel mb-6">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">
+                    <span className="step">3</span> Send the queue
+                  </h2>
 
+                  <p className="panel-subtitle">
+                    {waiting} email{waiting === 1 ? "" : "s"} waiting,
+                    {" "}
+                    {queue.batchSize} at a time. Preview first — this
+                    cannot be recalled.
+                  </p>
+                </div>
+              </div>
+
+              <div className="panel-body">
+                <div className="resend-search">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => void run(true)}
+                    disabled={busy || waiting === 0}
+                  >
+                    {busy && <span className="btn-spinner" />}
+                    Preview next {Math.min(queue.batchSize, waiting)}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={busy || nextBatch === 0}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Send ${nextBatch} email${
+                            nextBatch === 1 ? "" : "s"
+                          } now? Each carries every pass that person holds. This cannot be undone.`
+                        )
+                      ) {
+                        void run(false);
+                      }
+                    }}
+                  >
+                    Send {nextBatch} now
+                  </button>
+                </div>
+
+                {waiting === 0 && (
+                  <p className="help mt-4">
+                    Everyone with an email address and a QR code has
+                    been sent their passes.
+                  </p>
+                )}
+
+                {waiting > 0 && queue.remainingToday === 0 && (
+                  <p className="help mt-4">
+                    The daily limit is used up. Sending resumes as the
+                    24-hour window rolls forward.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* Preview, right under the button that produced it. */}
             {preview && (
-              <section className="panel">
+              <section className="panel mb-6">
                 <div className="panel-header">
                   <div>
                     <h2 className="panel-title">Next batch</h2>
 
                     <p className="panel-subtitle">
-                      Nothing here has been sent.
+                      {preview.length} email
+                      {preview.length === 1 ? "" : "s"}. Nothing has
+                      been sent.
                     </p>
                   </div>
 
-                  <span className="badge badge-plain">
-                    {preview.length}
-                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setPreview(null)}
+                  >
+                    Hide
+                  </button>
                 </div>
 
-                {preview.length === 0 ? (
-                  <div className="empty">
-                    <div className="empty-icon">
-                      <InboxIcon size={22} />
-                    </div>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th scope="col">To</th>
+                        <th scope="col">Carrying</th>
+                      </tr>
+                    </thead>
 
-                    <p className="empty-title">Queue is empty</p>
-                  </div>
-                ) : (
-                  <div className="table-wrap">
-                    <table className="table">
-                      <caption className="sr-only">
-                        Recipients in the next batch
-                      </caption>
-
-                      <thead>
-                        <tr>
-                          <th scope="col">Registration</th>
-                          <th scope="col">Recipient</th>
-                          <th scope="col">Subject</th>
+                    <tbody>
+                      {preview.map((row) => (
+                        <tr key={row.email}>
+                          <td>
+                            <div className="row-title">
+                              {row.email}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="row-meta">
+                              {row.registration_id}
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-
-                      <tbody>
-                        {preview.map((row) => (
-                          <tr key={row.registration_id}>
-                            <td className="mono">
-                              #{row.registration_id}
-                            </td>
-
-                            <td>{row.email}</td>
-
-                            <td className="dim">{row.subject}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             )}
+
+            {/* 4 ---------------------------------------------------- */}
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">
+                    <span className="step">4</span> Automatic sending
+                  </h2>
+
+                  <p className="panel-subtitle">
+                    Off until you turn it on, so nothing goes out
+                    while you are testing.
+                  </p>
+                </div>
+              </div>
+
+              <div className="panel-body">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={queue.autoSend?.enabled ?? false}
+                    disabled={busy}
+                    onChange={(event) =>
+                      void toggleAutoSend(event.target.checked)
+                    }
+                  />
+
+                  <span>Mail people who register from now on</span>
+                </label>
+
+                <p className="help mt-3">
+                  {queue.autoSend?.enabled ? (
+                    <>
+                      On since{" "}
+                      {queue.autoSend.enabledAt
+                        ? new Date(
+                            queue.autoSend.enabledAt
+                          ).toLocaleString("en-IN")
+                        : "just now"}
+                      . Only registrations created after that moment
+                      are sent automatically, up to 15 per sync. The{" "}
+                      {waiting} already waiting are not touched —
+                      those stay on the button above.
+                    </>
+                  ) : (
+                    <>
+                      While this is off, the only way an email leaves
+                      is the buttons above. Turning it on does not
+                      mail the {waiting} already waiting; it only
+                      covers people who register afterwards.
+                    </>
+                  )}
+                </p>
+              </div>
+            </section>
           </>
         )}
 
