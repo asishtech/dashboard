@@ -2,6 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { publicUrl } from "@/lib/origin";
+/*
+ * The same order the database ranks by. This list used to be written
+ * out here and had never learned "registrations", so an account
+ * holding {buyer, registrations} resolved to buyer and was sent to
+ * the buyer dashboard -- while profiles.role, ranked by
+ * primary_role(), correctly said registrations. Two orderings, two
+ * answers.
+ */
+import { ROLE_ORDER } from "@/lib/roles";
 
 /*
  * Paths whose handling depends on the caller's role.
@@ -45,7 +54,8 @@ function readOnlyAdminPath(path: string) {
   return (
     path === "/admin/registrations" ||
     path.startsWith("/admin/registrations/") ||
-    path === "/admin/inventory"
+    path === "/admin/inventory" ||
+    path === "/admin/external"
   );
 }
 
@@ -192,9 +202,7 @@ export async function proxy(request: NextRequest) {
   const role =
     requested && held.includes(requested)
       ? requested
-      : (["admin", "faculty", "volunteer", "buyer"].find((r) =>
-          held.includes(r)
-        ) ??
+      : (ROLE_ORDER.find((r) => held.includes(r)) ??
         (profile.role as string));
 
   if (

@@ -45,6 +45,7 @@ const NAV: Record<Role, NavItem[]> = {
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
+    { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/notifications", label: "Mail", icon: InboxIcon },
     { href: "/admin/users", label: "Staff", icon: UsersIcon },
     {
@@ -80,6 +81,7 @@ const NAV: Record<Role, NavItem[]> = {
       icon: ListIcon,
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
+    { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
   ],
 
