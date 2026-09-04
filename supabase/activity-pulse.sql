@@ -69,9 +69,24 @@ language sql
 stable
 as $fn$
 with
+/*
+ * Scans, resolved to the event they belong to.
+ *
+ * Not by joining qr_scans.event_id to events.event_id: the first is a
+ * bigint carrying the upstream numeric id, the second is a text slug
+ * like 'art-attack'. They are different types and different values,
+ * so that join both failed to compile and would have matched nothing
+ * if it had. The registration is what knows which event it is for,
+ * and resolved_event_id is the answer every other query here uses.
+ */
 scans as (
-  select scanned_at, event_id, scanned_by from public.qr_scans
-  where scanned_at > now() - interval '60 minutes'
+  select
+    s.scanned_at,
+    s.scanned_by,
+    r.resolved_event_id as event_slug
+  from public.qr_scans s
+  left join public.registrations r on r.id = s.registration_id
+  where s.scanned_at > now() - interval '60 minutes'
 ),
 gives as (
   select given_at, given_by from public.distributions
@@ -129,11 +144,11 @@ select json_build_object(
     select json_agg(row_to_json(b) order by b.last5 desc, b.hour desc)
     from (
       select
-        coalesce(e.name, s.event_id, 'Unmapped') as name,
+        coalesce(e.name, s.event_slug, 'Unmapped') as name,
         count(*) filter (where s.scanned_at > now() - interval '5 minutes') as last5,
         count(*) as hour
       from scans s
-      left join public.events e on e.event_id = s.event_id
+      left join public.events e on e.event_id = s.event_slug
       group by 1
       order by 2 desc, 3 desc
       limit 6
