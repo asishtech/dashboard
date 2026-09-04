@@ -1100,6 +1100,46 @@ table,
   font-size: var(--text-sm);
 }
 
+/* A whole table row that opens something.
+   Hover and focus both lift it, because the row is the target and a
+   keyboard user gets no cursor to tell them so. */
+.row-clickable {
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.row-clickable:hover,
+.row-clickable:focus-visible {
+  background: var(--surface-inset);
+}
+
+/* The outline belongs on the row, not on one cell of it. */
+.row-clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The chevron at the end of a clickable row. Dim until the row is
+   hovered, so 1,200 of them do not shout down the actual data. */
+.row-open {
+  width: 1px;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.row-clickable:hover .row-open,
+.row-clickable:focus-visible .row-open {
+  color: var(--accent);
+}
+
+/* Anything interactive inside the row sits above it, so pressing
+   Undo does not also navigate away from the row it was on. */
+.row-clickable .btn,
+.row-clickable a {
+  position: relative;
+}
+
 /* A checkbox with its label, on the mail screen.
    The whole row is the hit target, because a 13px box is not one on a
    phone. */

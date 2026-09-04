@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { useLiveRefresh } from "@/lib/use-realtime";
@@ -10,6 +11,7 @@ import {
   DownloadIcon,
   InboxIcon,
   SearchIcon,
+  ArrowRightIcon,
 } from "@/components/icons";
 
 type RegistrationItem = {
@@ -87,6 +89,8 @@ function statusOf(registration: Registration): Status {
 }
 
 export default function RegistrationsPage() {
+  const router = useRouter();
+
   const [registrations, setRegistrations] = useState<Registration[]>(
     []
   );
@@ -766,6 +770,9 @@ export default function RegistrationsPage() {
                       Total
                     </th>
                     <th scope="col">Status</th>
+                    <th scope="col">
+                      <span className="sr-only">Open</span>
+                    </th>
                   </tr>
                 </thead>
 
@@ -779,8 +786,59 @@ export default function RegistrationsPage() {
                       (item) => (merchActive ? itemMatches(item) : true)
                     );
 
+                    const open = () => {
+                      /*
+                       * Selecting an address to copy it ends in a
+                       * click, and at a desk copying the email out of
+                       * this table is a normal thing to do. Navigating
+                       * on that would throw the selection away at the
+                       * moment it was made.
+                       */
+                      if (
+                        window.getSelection()?.toString().trim()
+                      ) {
+                        return;
+                      }
+
+                      router.push(
+                        `/admin/registrations/${encodeURIComponent(
+                          key
+                        )}`
+                      );
+                    };
+
                     return (
-                      <tr key={key}>
+                      /*
+                       * The whole row opens the registration. The only
+                       * way in used to be the "#id" in the first cell,
+                       * which is 11px of dim monospace and read as a
+                       * label rather than a link -- so from the desk,
+                       * searching an email found the person and then
+                       * appeared to be a dead end.
+                       *
+                       * role="link" and the key handler because a
+                       * clickable <tr> is not focusable or operable by
+                       * keyboard on its own.
+                       */
+                      <tr
+                        key={key}
+                        className="row-clickable"
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`Open ${
+                          registration.name || registration.email
+                        }`}
+                        onClick={open}
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Enter" ||
+                            event.key === " "
+                          ) {
+                            event.preventDefault();
+                            open();
+                          }
+                        }}
+                      >
                         <td>
                           <div className="row-title">
                             {registration.name || "—"}
@@ -890,9 +948,11 @@ export default function RegistrationsPage() {
                                   type="button"
                                   className="btn btn-danger btn-sm"
                                   disabled={undoing !== null}
-                                  onClick={() =>
-                                    undoEntry(registration)
-                                  }
+                                  onClick={(click) => {
+                                    /* The row underneath is a link. */
+                                    click.stopPropagation();
+                                    undoEntry(registration);
+                                  }}
                                 >
                                   {undoing === registration.id && (
                                     <span className="btn-spinner" />
@@ -908,6 +968,16 @@ export default function RegistrationsPage() {
                               Not checked in
                             </span>
                           )}
+                        </td>
+
+                        {/*
+                          A row that navigates with nothing to say so
+                          is as undiscoverable as the "#id" link it
+                          replaces. The chevron is the cue; the row is
+                          the target.
+                        */}
+                        <td className="row-open" aria-hidden="true">
+                          <ArrowRightIcon size={14} />
                         </td>
                       </tr>
                     );
