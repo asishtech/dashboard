@@ -10,7 +10,7 @@ import {
   UsersIcon,
 } from "@/components/icons";
 
-type StaffRole = "admin" | "faculty" | "volunteer" | "buyer";
+import type { Role as StaffRole } from "@/lib/roles";
 
 type Filter = StaffRole | "ALL" | "DISABLED";
 
@@ -42,13 +42,18 @@ const ROLES: { value: StaffRole; label: string; help: string }[] = [
   },
   {
     value: "faculty",
-    label: "Faculty",
+    label: "Coordinator",
     help: "Only the events they are assigned to.",
   },
   {
     value: "volunteer",
     label: "Volunteer",
     help: "Scan QR codes and hand merchandise over.",
+  },
+  {
+    value: "registrations",
+    label: "Registrations",
+    help: "Sees every event, order and collection. Changes nothing.",
   },
   {
     value: "buyer",
@@ -245,6 +250,7 @@ export default function AdminUsersPage() {
       admin: 0,
       faculty: 0,
       volunteer: 0,
+      registrations: 0,
       buyer: 0,
     };
 
@@ -283,7 +289,16 @@ export default function AdminUsersPage() {
     { key: "ALL", label: "All", n: users.length },
     { key: "admin", label: "Admins", n: counts.by.admin },
     { key: "volunteer", label: "Volunteers", n: counts.by.volunteer },
-    { key: "faculty", label: "Faculty", n: counts.by.faculty },
+    {
+      key: "faculty",
+      label: "Coordinators",
+      n: counts.by.faculty,
+    },
+    {
+      key: "registrations",
+      label: "Registrations",
+      n: counts.by.registrations,
+    },
     { key: "DISABLED", label: "Disabled", n: counts.disabled },
   ];
 
@@ -359,7 +374,7 @@ export default function AdminUsersPage() {
           </div>
 
           <div className="stat">
-            <span className="stat-label">Faculty</span>
+            <span className="stat-label">Coordinators</span>
             <strong className="stat-value">
               {loading ? "—" : counts.by.faculty}
             </strong>
@@ -375,7 +390,7 @@ export default function AdminUsersPage() {
 
               <p className="panel-subtitle">
                 The role attaches when they first sign in with Google.
-                Faculty also need an event, which is set on the{" "}
+                Coordinators also need an event, which is set on the{" "}
                 <Link href="/admin/coordinators" className="link">
                   coordinators
                 </Link>{" "}

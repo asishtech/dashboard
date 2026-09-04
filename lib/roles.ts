@@ -55,10 +55,22 @@ export function primaryRole(roles: Role[]): Role | null {
   return roles[0] ?? null;
 }
 
-/* What each role is called on screen. */
+/*
+ * What each role is called on screen.
+ *
+ * The label is not the stored value. "faculty" is what the database
+ * holds, what four CHECK constraints allow and what
+ * event_coordinators joins on; renaming it would be a migration
+ * across every one of those for a word. So the value stays and only
+ * the word changes.
+ *
+ * Note that "Faculty" still appears on /admin/coordinators, where it
+ * means something else entirely -- a faculty coordinator as opposed
+ * to a student one, straight from the organisers' sheet.
+ */
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
-  faculty: "Faculty",
+  faculty: "Coordinator",
   volunteer: "Volunteer",
   registrations: "Registrations",
   buyer: "Buyer",

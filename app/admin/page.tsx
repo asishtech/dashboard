@@ -1087,12 +1087,19 @@ export default function AdminPage() {
             </span>
           </div>
 
-          {(["admin", "faculty", "volunteer"] as const).map(
+          {(
+            [
+              "admin",
+              "faculty",
+              "volunteer",
+              "registrations",
+            ] as const
+          ).map(
             (role) => (
               <div className="stat" key={role}>
                 <span className="stat-label">
                   {role === "faculty"
-                    ? "Faculty"
+                    ? "Coordinators"
                     : role.charAt(0).toUpperCase() + role.slice(1)}
                 </span>
 

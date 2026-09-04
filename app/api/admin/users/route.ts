@@ -6,11 +6,18 @@ export const dynamic = "force-dynamic";
 
 const STAFF_COLUMNS = "id,email,role,roles,active,created_at";
 
-/* Roles an admin may hand out from the staff screen. */
+/*
+ * Roles an admin may hand out from the staff screen.
+ *
+ * A role missing from this list is filtered out of the request
+ * silently, so the invite appears to save and the person signs in
+ * with nothing. Every role the picker offers has to be here.
+ */
 const ASSIGNABLE: Role[] = [
   "admin",
   "faculty",
   "volunteer",
+  "registrations",
   "buyer",
 ];
 

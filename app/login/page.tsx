@@ -52,7 +52,7 @@ export default function LoginPage() {
           V-TAPP 2026
         </span>
 
-        <h1 className="page-title mt-2">Merchandise Portal</h1>
+        <h1 className="page-title mt-2">Tickets Portal</h1>
 
         <p className="page-subtitle">
           Sign in with the Google account you were invited with.
