@@ -39,6 +39,44 @@ type Preview = {
 };
 
 /*
+ * Read a response that might not be JSON.
+ *
+ * `await response.json()` on an HTML error page throws a parse error,
+ * so a 404 from a stale service worker or a deploy in flight surfaced
+ * as "Unexpected token '<'" -- which says nothing about what happened
+ * and sent the reader looking in the wrong place entirely. Report the
+ * status instead, and name the usual cause.
+ */
+async function readJson(response: Response) {
+  const body = await response.text();
+
+  let data: Record<string, unknown> = {};
+
+  try {
+    data = body ? JSON.parse(body) : {};
+  } catch {
+    if (response.status === 404) {
+      throw new Error(
+        "The mail endpoint returned 404. The server has it, so this is usually a stale service worker: hard-reload (Cmd/Ctrl+Shift+R), or unregister it under DevTools > Application > Service Workers."
+      );
+    }
+
+    throw new Error(
+      `The server returned ${response.status} and not JSON.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      (data.error as string) ||
+        `Request failed (${response.status})`
+    );
+  }
+
+  return data;
+}
+
+/*
  * Sending is a press, never a schedule.
  *
  * Several hundred emails to real students cannot be recalled, so this
@@ -69,13 +107,9 @@ export default function NotificationsPage() {
         cache: "no-store",
       });
 
-      const data = await response.json();
+      const data = await readJson(response);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Unable to read the mail queue");
-      }
-
-      setQueue(data);
+      setQueue(data as unknown as Queue);
       setError("");
     } catch (err) {
       setError(
@@ -98,13 +132,7 @@ export default function NotificationsPage() {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Request failed");
-    }
-
-    return data;
+    return readJson(response);
   }
 
   async function search() {
@@ -117,7 +145,7 @@ export default function NotificationsPage() {
 
     try {
       const data = await post({ action: "lookup", query });
-      setMatches(data.matches ?? []);
+      setMatches((data.matches as Match[]) ?? []);
     } catch (err) {
       setMatches(null);
       setError(err instanceof Error ? err.message : "Search failed");
