@@ -35,6 +35,62 @@ type Match = {
   times_sent: number;
 };
 
+/*
+ * The search returns one row per registration; this is one row per
+ * person, which is what a send actually is now. Grouped in the
+ * browser rather than in SQL because the search already carries
+ * everything needed and one fewer migration is one fewer thing to
+ * run.
+ */
+type Person = {
+  email: string;
+  name: string | null;
+  passes: number;
+  lastSentAt: string | null;
+  timesSent: number;
+  what: string[];
+};
+
+function groupByPerson(matches: Match[]): Person[] {
+  const people = new Map<string, Person>();
+
+  for (const match of matches) {
+    const key = match.email.trim().toLowerCase();
+
+    const person = people.get(key) ?? {
+      email: match.email.trim(),
+      name: null,
+      passes: 0,
+      lastSentAt: null,
+      timesSent: 0,
+      what: [],
+    };
+
+    person.passes += 1;
+    person.name = person.name ?? match.name;
+
+    /* The most recent send across any of their passes. */
+    if (
+      match.last_sent_at &&
+      (!person.lastSentAt || match.last_sent_at > person.lastSentAt)
+    ) {
+      person.lastSentAt = match.last_sent_at;
+    }
+
+    person.timesSent = Math.max(person.timesSent, match.times_sent);
+
+    person.what.push(
+      match.is_merch
+        ? "Merchandise"
+        : (match.event_name ?? "Event")
+    );
+
+    people.set(key, person);
+  }
+
+  return [...people.values()];
+}
+
 type Preview = {
   registration_id: string;
   email: string;
@@ -98,7 +154,7 @@ export default function NotificationsPage() {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<Match[] | null>(null);
   /* Armed per person, so ticking one row cannot send to another. */
-  const [armed, setArmed] = useState<number | null>(null);
+  const [armed, setArmed] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
 
   /* Test send. */
@@ -157,7 +213,7 @@ export default function NotificationsPage() {
     }
   }
 
-  async function resend(match: Match) {
+  async function resend(person: Person) {
     if (busy) return;
 
     setBusy(true);
@@ -165,13 +221,18 @@ export default function NotificationsPage() {
     setMessage("");
 
     try {
-      await post({
+      const data = await post({
         action: "resend",
-        registrationDbId: match.id,
+        email: person.email,
         confirm: true,
       });
 
-      setMessage(`Sent another copy to ${match.email}.`);
+      setMessage(
+        `Sent ${data.passes} pass${
+          data.passes === 1 ? "" : "es"
+        } to ${data.email} in one email.`
+      );
+
       setArmed(null);
 
       await search();
@@ -663,71 +724,81 @@ export default function NotificationsPage() {
 
                 {matches && matches.length > 0 && (
                   <div className="stack mt-4">
-                    {matches.map((match) => (
-                      <div className="resend-row" key={match.id}>
+                    {groupByPerson(matches).map((person) => (
+                      <div
+                        className="resend-row"
+                        key={person.email.toLowerCase()}
+                      >
                         <div>
                           <div className="row-title">
-                            {match.name || match.email}
+                            {person.name || person.email}
                           </div>
 
                           <div className="row-meta">
-                            {match.email}
+                            {person.email}
                             {" · "}
-                            {match.is_merch
-                              ? "Merchandise"
-                              : (match.event_name ?? "Event")}
-                            {" · #"}
-                            {match.registration_id}
+                            {person.passes} pass
+                            {person.passes === 1 ? "" : "es"}
+                          </div>
+
+                          {/*
+                            What is in the PDF, so the sender can see
+                            they are about to send the right person
+                            the right things.
+                          */}
+                          <div className="row-meta">
+                            {person.what.slice(0, 3).join(" · ")}
+                            {person.what.length > 3 &&
+                              ` · +${person.what.length - 3} more`}
                           </div>
 
                           <div className="row-meta">
-                            {match.last_sent_at
+                            {person.lastSentAt
                               ? `Last sent ${new Date(
-                                  match.last_sent_at
-                                ).toLocaleString("en-IN")} · ${
-                                  match.times_sent
-                                } time${
-                                  match.times_sent === 1 ? "" : "s"
-                                }`
+                                  person.lastSentAt
+                                ).toLocaleString("en-IN")}`
                               : "Never sent"}
                           </div>
                         </div>
 
                         <div className="resend-actions">
                           {/*
-                            Armed per row. A single page-level tick
-                            would stay on after one resend and make
-                            the next click, on a different person,
-                            one press instead of two.
+                            Armed per person. A single page-level tick
+                            would stay on after one send and make the
+                            next click, on somebody else, one press
+                            instead of two.
                           */}
                           <label className="check">
                             <input
                               type="checkbox"
-                              checked={armed === match.id}
+                              checked={armed === person.email}
                               disabled={busy}
                               onChange={(event) =>
                                 setArmed(
                                   event.target.checked
-                                    ? match.id
+                                    ? person.email
                                     : null
                                 )
                               }
                             />
 
                             <span>
-                              Send {match.last_sent_at
-                                ? "another copy"
-                                : "the pass"}
+                              Send{" "}
+                              {person.lastSentAt
+                                ? "again"
+                                : person.passes === 1
+                                  ? "the pass"
+                                  : `all ${person.passes}`}
                             </span>
                           </label>
 
                           <button
                             type="button"
                             className="btn btn-primary btn-sm"
-                            disabled={busy || armed !== match.id}
-                            onClick={() => resend(match)}
+                            disabled={busy || armed !== person.email}
+                            onClick={() => resend(person)}
                           >
-                            {busy && armed === match.id && (
+                            {busy && armed === person.email && (
                               <span className="btn-spinner" />
                             )}
                             Send now

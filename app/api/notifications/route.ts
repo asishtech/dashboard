@@ -328,10 +328,7 @@ async function lookup(query: string) {
  * does it should not be one field away from the request that does
  * not.
  */
-async function resend(body: {
-  registrationDbId?: unknown;
-  confirm?: unknown;
-}) {
+async function resend(body: { email?: unknown; confirm?: unknown }) {
   if (body.confirm !== true) {
     return NextResponse.json(
       { error: "Tick the confirmation box first" },
@@ -349,11 +346,12 @@ async function resend(body: {
     );
   }
 
-  const id = Number(body.registrationDbId);
+  const email =
+    typeof body.email === "string" ? body.email.trim() : "";
 
-  if (!Number.isInteger(id) || id <= 0) {
+  if (!email) {
     return NextResponse.json(
-      { error: "A registration is required" },
+      { error: "An email address is required" },
       { status: 400 }
     );
   }
@@ -380,62 +378,34 @@ async function resend(body: {
   }
 
   /*
-   * Re-read rather than trusting what the browser is showing. The
-   * address may have been corrected since the search, and the
-   * corrected one is the whole reason for resending.
+   * Keyed on the address, which is what the operation is about.
    *
-   * By primary key, directly. This used to go through mail_lookup,
-   * which is a *search*: given "1" its LIKE branch matched every
-   * address containing a 1, then took the twenty newest -- so the one
-   * row actually asked for was crowded out by twenty near-misses and
-   * the resend reported "no registration with id 1" for a row that
-   * plainly exists. A search is the wrong instrument for an exact
-   * lookup.
+   * It used to take a registration id, from back when one
+   * registration was one email. Now the send carries every pass the
+   * person holds, so the id of whichever row happened to be clicked
+   * decided nothing -- and routing it through the search to get back
+   * to the address is how "no registration with id 1" happened.
    */
-  const { data: row, error } = await db
-    .from("registrations")
-    .select("id,email,qr_token")
-    .eq("id", id)
-    .maybeSingle();
+  const { data: personData, error } = await db.rpc("person_passes", {
+    p_email: email,
+  });
 
-  if (error) throw error;
-
-  if (!row?.email?.trim()) {
-    return NextResponse.json(
-      {
-        error: `Registration ${id} has no email address, so there is nowhere to send it.`,
-      },
-      { status: 404 }
-    );
-  }
-
-  /*
-   * Send their whole PDF, not the one page they happened to click.
-   *
-   * The passes travel together now, so a resend that carried a single
-   * page would replace a complete document with a partial one --
-   * and the reason for resending is usually that the first PDF was
-   * lost, not that one page of it was.
-   */
-  const { data: personData, error: personError } = await db.rpc(
-    "person_passes",
-    { p_email: row.email }
-  );
-
-  if (personError?.code === "42883" || personError?.code === "PGRST202") {
+  if (error?.code === "42883" || error?.code === "PGRST202") {
     return NextResponse.json(
       { error: "Run supabase/person-passes.sql to enable resending." },
       { status: 409 }
     );
   }
 
-  if (personError) throw personError;
+  if (error) throw error;
 
   const person = personData as Person | null;
 
   if (!person?.passes?.length) {
     return NextResponse.json(
-      { error: "That person has no passes with a QR code" },
+      {
+        error: `Nothing to send to ${email} — no registration on that address has a QR code.`,
+      },
       { status: 404 }
     );
   }
@@ -451,9 +421,7 @@ async function resend(body: {
     return NextResponse.json(
       {
         error:
-          result.status === "failed"
-            ? result.error
-            : result.reason,
+          result.status === "failed" ? result.error : result.reason,
       },
       { status: 502 }
     );
