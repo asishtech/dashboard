@@ -86,17 +86,27 @@ export default function ActivityPage() {
     }
   }, []);
 
+  /*
+   * The first read is deferred by a tick, matching every other page
+   * here. Calling load() straight from the effect body sets state
+   * during the same commit and React flags it as a cascading render.
+   */
   useEffect(() => {
-    void load();
+    const first = window.setTimeout(() => void load(), 0);
 
-    if (!live) return;
+    if (!live) {
+      return () => window.clearTimeout(first);
+    }
 
     const timer = window.setInterval(() => {
       /* A page nobody is looking at should not be polling. */
       if (document.visibilityState === "visible") void load();
     }, POLL_MS);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
   }, [load, live]);
 
   const peak = Math.max(
