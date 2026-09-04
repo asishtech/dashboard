@@ -9,6 +9,7 @@ import {
   BoxIcon,
   InboxIcon,
   ListIcon,
+  PulseIcon,
   ScanIcon,
   TicketIcon,
   UsersIcon,
@@ -43,6 +44,7 @@ const NAV: Record<Role, NavItem[]> = {
       icon: ListIcon,
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
+    { href: "/admin/activity", label: "Live", icon: PulseIcon },
     { href: "/admin/notifications", label: "Mail", icon: InboxIcon },
     { href: "/admin/users", label: "Staff", icon: UsersIcon },
     {
@@ -78,6 +80,7 @@ const NAV: Record<Role, NavItem[]> = {
       icon: ListIcon,
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
+    { href: "/admin/activity", label: "Live", icon: PulseIcon },
   ],
 
   buyer: [
@@ -110,6 +113,44 @@ export default function NavBar() {
       cancelled = true;
     };
   }, []);
+
+  /*
+   * Heartbeat, so the admin activity page can say who is actually on
+   * the site. Every 45 seconds against a 2-minute "online" window, so
+   * one missed beat does not make a volunteer disappear mid-shift.
+   *
+   * It upserts a single row per account rather than appending, so the
+   * cost is one write a minute per signed-in person -- about twenty
+   * writes a minute across a fest, which is nothing next to the
+   * scanning it is measuring.
+   */
+  useEffect(() => {
+    if (!active) return;
+
+    let stopped = false;
+
+    const beat = () => {
+      if (stopped || document.visibilityState === "hidden") return;
+
+      void fetch("/api/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: window.location.pathname }),
+        keepalive: true,
+      }).catch(() => {
+        /* A gate must not care that the monitor is down. */
+      });
+    };
+
+    beat();
+
+    const timer = window.setInterval(beat, 45_000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [active]);
 
   const items = active ? NAV[active] : [];
 

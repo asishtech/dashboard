@@ -1100,6 +1100,25 @@ table,
   font-size: var(--text-sm);
 }
 
+/* Thirty bars, one per minute, on the live activity page.
+   Deliberately CSS rather than a charting library: thirty numbers do
+   not justify shipping a plotting bundle to a phone on fest wifi. */
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 96px;
+  padding: var(--space-2) 0;
+}
+
+.spark-bar {
+  flex: 1 1 0;
+  min-width: 3px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  transition: height var(--dur) var(--ease);
+}
+
 /* A whole table row that opens something.
    Hover and focus both lift it, because the row is the target and a
    keyboard user gets no cursor to tell them so. */

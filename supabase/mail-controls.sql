@@ -128,7 +128,19 @@ from (
   where coalesce(btrim(r.email), '') <> ''
     and r.qr_token is not null
     and (
-      lower(r.email) = lower(btrim(p_query))
+      /*
+       * The primary key, first.
+       *
+       * The resend endpoint re-reads a person by the id the browser
+       * sent, and that is registrations.id -- not registration_id,
+       * which is the upstream reference and a different number
+       * entirely (8296 against 45654). Without this branch that
+       * lookup matched nothing and every single resend answered
+       * "Registration not found, or it has no email address", which
+       * was true of the query and not of the person.
+       */
+      r.id::text = btrim(p_query)
+      or lower(r.email) = lower(btrim(p_query))
       or lower(r.email) like '%' || lower(btrim(p_query)) || '%'
       or r.registration_id = btrim(p_query)
       or lower(coalesce(r.name, '')) like '%' || lower(btrim(p_query)) || '%'

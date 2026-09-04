@@ -396,7 +396,9 @@ async function resend(body: {
 
   if (!row) {
     return NextResponse.json(
-      { error: "Registration not found, or it has no email address" },
+      {
+        error: `No registration with id ${id}. If this keeps happening, re-run supabase/mail-controls.sql.`,
+      },
       { status: 404 }
     );
   }
