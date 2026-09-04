@@ -1,6 +1,10 @@
 import { vtappApi } from "./env";
 import { readAutoSend } from "./mail-settings";
-import { DAILY_CAP, mailEnabled, sendConfirmation } from "./mailer";
+import {
+  DAILY_CAP,
+  mailEnabled,
+  sendPersonPasses,
+} from "./mailer";
 import { supabaseAdmin } from "./supabase";
 
 type Field = {
@@ -1063,47 +1067,41 @@ async function autoMail(): Promise<number> {
       (summary as { sentLast24h?: number })?.sentLast24h ?? 0
     );
 
-    const room = Math.min(
-      AUTO_MAIL_BATCH,
-      DAILY_CAP - sentLast24h
-    );
+    /* People, which is also messages: one person is one email. */
+    const room = Math.min(AUTO_MAIL_BATCH, DAILY_CAP - sentLast24h);
 
     if (room <= 0) return 0;
 
-    const { data, error } = await db.rpc(
-      "pending_confirmations_since",
-      { p_limit: room, p_since: setting.enabledAt }
-    );
+    const { data, error } = await db.rpc("pending_people_since", {
+      p_limit: room,
+      p_since: setting.enabledAt,
+    });
 
-    /* 42883 / PGRST202: supabase/mail-controls.sql has not been run. */
+    /* The migrations behind this have not been run. */
     if (error) return 0;
 
     const pending = (data ?? []) as {
-      id: number;
-      registration_id: string;
-      name: string | null;
       email: string;
-      qr_token: string;
-      event_name: string | null;
-      event_day: string | null;
-      event_venue: string | null;
-      is_merch: boolean;
+      name: string | null;
+      passes: {
+        id: number;
+        registration_id: string;
+        qr_token: string;
+        event_name: string | null;
+        event_day: string | null;
+        event_venue: string | null;
+        is_merch: boolean;
+      }[];
     }[];
 
     let sent = 0;
 
     /* Sequential: Gmail throttles parallel SMTP from one account. */
-    for (const row of pending) {
-      const result = await sendConfirmation({
-        registrationDbId: row.id,
-        registrationId: row.registration_id,
-        name: row.name,
-        email: row.email,
-        qrToken: row.qr_token,
-        isMerch: Boolean(row.is_merch),
-        eventName: row.event_name,
-        eventDay: row.event_day,
-        eventVenue: row.event_venue,
+    for (const person of pending) {
+      const result = await sendPersonPasses({
+        email: person.email,
+        name: person.name,
+        passes: person.passes ?? [],
       });
 
       if (result.status === "sent") sent += 1;

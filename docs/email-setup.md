@@ -54,9 +54,14 @@ every send returns `skipped` and the app behaves as it does today.
 
 ## 3. Run the migration
 
-`supabase/email-log.sql`. It creates `email_log`, which is what stops a
-re-sync mailing 1,200 people a second copy of their pass. The
-guarantee is a partial unique index, not application code.
+Run in order:
+
+1. `supabase/email-log.sql` — creates `email_log`, which is what stops
+   a re-sync mailing 900 people a second copy of their pass. The
+   guarantee is a partial unique index, not application code.
+2. `supabase/mail-controls.sql` — resending, and the automatic-send
+   switch.
+3. `supabase/person-passes.sql` — the queue grouped by person.
 
 ## 4. Redeploy, then send one
 
@@ -67,11 +72,16 @@ guarantee is a partial unique index, not application code.
 
 | Mail | Trigger | Volume |
 |---|---|---|
-| Registration pass + QR | An admin presses Send | Batches of 20 |
+| Registration passes (PDF) | An admin presses Send | Batches of 20 people |
 | Collection receipt | Automatic, on the last item handed over | One per buyer |
 | Sync failure alert | Automatic, to `ALERT_EMAIL` | Throttled to 1/hour |
 
-Registration passes are **not** wired to the sync. Twelve hundred
+One email per person, not per registration. Everything somebody holds
+arrives as a single PDF, one page per pass, each with its own QR. That
+is 917 emails rather than 1,408 across the fest -- and on a trial
+account capped near 500 a day, those 491 are a whole day of sending.
+
+Registration passes are **not** wired to the sync by default. Twelve hundred
 emails to real students cannot be recalled, so that stays a deliberate
 press with the queue and a preview in front of you.
 
@@ -99,7 +109,7 @@ than three times the real ceiling.
 
 <https://support.google.com/a/answer/166852>
 
-At 400/day, 1,241 pending passes take four days.
+At 400/day, 917 pending emails (1,408 passes) take three days.
 
 If you need the whole queue out in an afternoon, the answer is not a
 bigger cap, it is a different sender. Amazon SES speaks SMTP, so it
@@ -119,7 +129,7 @@ usually clears within a day. Roughly $0.10 per thousand messages.
 
 Batches are 20 because Gmail takes roughly a second per message and a
 serverless function is killed well before a thousand of them finish.
-At 1,241 pending that is 63 presses, or 20 presses a day against a 400
+At 917 pending emails that is 46 presses, or 20 a day against a 400
 cap — ask if you want a "send until today's allowance is used" mode.
 
 ## If mail stops arriving

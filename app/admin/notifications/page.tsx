@@ -13,6 +13,9 @@ type Queue = {
   dailyCap: number;
   remainingToday: number;
   pendingConfirmations: number;
+  /* Emails, not passes: one person is one message. Absent until
+     supabase/person-passes.sql runs. */
+  pendingPeople?: number;
   sentConfirmations: number;
   sentCollections: number;
   failedLast24h: number;
@@ -352,11 +355,19 @@ export default function NotificationsPage() {
                 <span className="stat-label">Waiting</span>
 
                 <strong className="stat-value">
-                  {queue.pendingConfirmations}
+                  {queue.pendingPeople ?? queue.pendingConfirmations}
                 </strong>
 
+                {/*
+                  Emails, because that is what the daily cap counts and
+                  what the button sends. The pass total is the detail
+                  underneath -- showing 1,408 up here would imply four
+                  days of sending when it is three.
+                */}
                 <span className="stat-meta">
-                  Passes not yet emailed
+                  {queue.pendingPeople === undefined
+                    ? "Passes not yet emailed"
+                    : `emails · ${queue.pendingConfirmations} passes`}
                 </span>
               </div>
 
@@ -438,7 +449,7 @@ export default function NotificationsPage() {
                     onClick={() => {
                       if (
                         window.confirm(
-                          `Send up to ${queue.batchSize} emails now? This cannot be undone.`
+                          `Send up to ${queue.batchSize} emails now? Each carries every pass that person holds. This cannot be undone.`
                         )
                       ) {
                         void run(false);
@@ -448,7 +459,7 @@ export default function NotificationsPage() {
                     {busy && <span className="btn-spinner" />}
                     Send {Math.min(
                       queue.batchSize,
-                      queue.pendingConfirmations
+                      queue.pendingPeople ?? queue.pendingConfirmations
                     )}{" "}
                     now
                   </button>

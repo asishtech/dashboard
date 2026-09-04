@@ -4,6 +4,7 @@ import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { mailConfig } from "./env";
 import { escape, shell } from "./mail-templates";
 import { supabaseAdmin } from "./supabase";
+import { buildPassPdf, type Pass } from "./pass-pdf";
 
 export type MailKind =
   | "confirmation"
@@ -198,7 +199,7 @@ export async function sendConfirmation(
     html,
     text,
     kind: input.resend ? "confirmation-resend" : "confirmation",
-    registrationDbId: input.registrationDbId,
+    registrationDbIds: [input.registrationDbId],
     attachments: [await qrAttachment(claimUrl)],
   });
 }
@@ -253,7 +254,7 @@ export async function sendCollectionReceipt(
     html,
     text,
     kind: "collection",
-    registrationDbId: input.registrationDbId,
+    registrationDbIds: [input.registrationDbId],
   });
 }
 
@@ -304,7 +305,7 @@ export async function sendAlert(
     ),
     text: `${subject}\n\n${detail}`,
     kind: "alert",
-    registrationDbId: null,
+    registrationDbIds: [],
   });
 }
 
@@ -314,7 +315,13 @@ type DeliverInput = {
   html: string;
   text: string;
   kind: MailKind;
-  registrationDbId: number | null;
+  /*
+   * Every registration this one message covers. A person with nine
+   * passes gets one PDF and nine log rows, so email_log_once keeps
+   * guaranteeing that no registration is confirmed twice while the
+   * message count stays honest.
+   */
+  registrationDbIds: number[];
   attachments?: {
     filename: string;
     content: Buffer;
@@ -349,15 +356,21 @@ async function deliver(input: DeliverInput): Promise<SendResult> {
       attachments: input.attachments,
     });
 
-    const { error } = await db.from("email_log").insert({
-      registration_id: input.registrationDbId,
+    const rows = (
+      input.registrationDbIds.length > 0
+        ? input.registrationDbIds
+        : [null]
+    ).map((id) => ({
+      registration_id: id,
       /* The column is email_type, not kind: this table predates the
          current mail code and its names win. */
       email_type: input.kind,
       recipient: input.to,
       subject: input.subject,
       status: "sent",
-    });
+    }));
+
+    const { error } = await db.from("email_log").insert(rows);
 
     /*
      * 23505: something else logged this send first, so a duplicate went
@@ -373,14 +386,19 @@ async function deliver(input: DeliverInput): Promise<SendResult> {
     const message =
       error instanceof Error ? error.message : String(error);
 
-    await db.from("email_log").insert({
-      registration_id: input.registrationDbId,
-      email_type: input.kind,
-      recipient: input.to,
-      subject: input.subject,
-      status: "failed",
-      error_message: message.slice(0, 500),
-    });
+    await db.from("email_log").insert(
+      (input.registrationDbIds.length > 0
+        ? input.registrationDbIds
+        : [null]
+      ).map((id) => ({
+        registration_id: id,
+        email_type: input.kind,
+        recipient: input.to,
+        subject: input.subject,
+        status: "failed",
+        error_message: message.slice(0, 500),
+      }))
+    );
 
     return { status: "failed", error: message };
   }
@@ -431,6 +449,128 @@ export async function sendTest(to: string): Promise<SendResult> {
     text,
     kind: "test",
     /* No registration, so nothing is marked as delivered by this. */
-    registrationDbId: null,
+    registrationDbIds: [],
+  });
+}
+
+
+export type PersonPasses = {
+  email: string;
+  name: string | null;
+  passes: (Pass & { id: number })[];
+  /* An admin asked for another copy; only changes how it is logged. */
+  resend?: boolean;
+};
+
+/*
+ * Every pass one person holds, as a single email with a single PDF.
+ *
+ * The alternative -- one message per registration -- sent somebody
+ * entered for nine events nine near-identical emails, and cost 491
+ * messages across the fest that a 500-a-day trial account cannot
+ * spare.
+ *
+ * The PDF rather than inline images: a student can save it, print it,
+ * and open it at a gate with no signal, and it survives being
+ * forwarded. Inline images are the thing mail clients hide.
+ */
+export async function sendPersonPasses(
+  input: PersonPasses
+): Promise<SendResult> {
+  const config = mailConfig();
+
+  if (!config) {
+    return { status: "skipped", reason: "Mail is not configured" };
+  }
+
+  if (input.passes.length === 0) {
+    return { status: "skipped", reason: "Nothing to send" };
+  }
+
+  const count = input.passes.length;
+  const one = count === 1;
+
+  const pdf = await buildPassPdf({
+    name: input.name,
+    email: input.email,
+    passes: input.passes,
+    appUrl: config.appUrl,
+  });
+
+  const subject = one
+    ? "Your V-TAPP pass"
+    : `Your ${count} V-TAPP passes`;
+
+  const rows = input.passes
+    .map((pass) => {
+      const what = pass.is_merch
+        ? "Merchandise collection"
+        : (pass.event_name ?? "V-TAPP event");
+
+      const where = pass.is_merch
+        ? "V-TAPP counter"
+        : [pass.event_day, pass.event_venue]
+            .filter(Boolean)
+            .join(" · ");
+
+      return `<tr><td style="padding:7px 0;border-bottom:1px solid #eeeef1;font-size:14px">${escape(
+        what
+      )}${where ? `<br><span style="color:#8a8a94;font-size:12px">${escape(where)}</span>` : ""}</td></tr>`;
+    })
+    .join("");
+
+  const html = shell(
+    `Hello${input.name ? ` ${escape(input.name.split(" ")[0])}` : ""},`,
+    `<p style="margin:0 0 14px;font-size:15px;line-height:1.6">Your ${
+      one ? "pass is" : `${count} passes are`
+    } attached as a PDF — one page each, with the QR code to show at the ${
+      one ? "gate" : "gate or counter"
+    }.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px">${rows}</table>
+<p style="margin:0 0 14px;font-size:13px;color:#6a6a74">Save the PDF to your phone before you arrive. It works without a signal.</p>
+<p style="margin:0;font-size:13px;color:#6a6a74">If a code will not scan, the link printed under it opens the same pass in a browser.</p>`
+  );
+
+  const text = [
+    `Hello${input.name ? ` ${input.name.split(" ")[0]}` : ""},`,
+    "",
+    one
+      ? "Your V-TAPP pass is attached as a PDF."
+      : `Your ${count} V-TAPP passes are attached as a PDF, one page each.`,
+    "",
+    ...input.passes.map((pass) => {
+      const what = pass.is_merch
+        ? "Merchandise collection"
+        : (pass.event_name ?? "V-TAPP event");
+
+      const where = pass.is_merch
+        ? "V-TAPP counter"
+        : [pass.event_day, pass.event_venue].filter(Boolean).join(" - ");
+
+      return `- ${what}${where ? ` (${where})` : ""}`;
+    }),
+    "",
+    "Save the PDF to your phone before you arrive. It works without a",
+    "signal. If a code will not scan, the link printed under it opens",
+    "the same pass in a browser.",
+    "",
+    "Sent by the V-TAPP registration desk, VIT-AP University.",
+  ].join("\n");
+
+  return deliver({
+    to: input.email,
+    subject,
+    html,
+    text,
+    kind: input.resend ? "confirmation-resend" : "confirmation",
+    registrationDbIds: input.passes.map((pass) => pass.id),
+    attachments: [
+      {
+        filename: one ? "vtapp-pass.pdf" : "vtapp-passes.pdf",
+        content: pdf,
+        cid: "vtapppdf",
+        contentType: "application/pdf",
+      },
+    ],
   });
 }

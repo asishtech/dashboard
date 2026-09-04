@@ -4,7 +4,7 @@ import { mailConfig } from "@/lib/env";
 import {
   DAILY_CAP,
   mailEnabled,
-  sendConfirmation,
+  sendPersonPasses,
   sendTest,
 } from "@/lib/mailer";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -25,16 +25,22 @@ export const dynamic = "force-dynamic";
 const BATCH_SIZE = 20;
 const MAX_BATCH = 40;
 
-type Pending = {
+/* One pass. Several of these belong to one Person. */
+type Pass = {
   id: number;
   registration_id: string;
-  name: string | null;
-  email: string;
   qr_token: string;
   event_name: string | null;
   event_day: string | null;
   event_venue: string | null;
   is_merch: boolean;
+};
+
+/* One email: everything one address is owed. */
+type Person = {
+  email: string;
+  name: string | null;
+  passes: Pass[];
 };
 
 /*
@@ -192,25 +198,39 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data, error } = await db.rpc("pending_confirmations", {
+    const { data, error } = await db.rpc("pending_people", {
       p_limit: limit,
     });
 
+    /* 42883 / PGRST202: supabase/person-passes.sql has not been run. */
+    if (error?.code === "42883" || error?.code === "PGRST202") {
+      return NextResponse.json(
+        {
+          error:
+            "Run supabase/person-passes.sql to send passes as one email per person.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (error) throw error;
 
-    const pending = (data ?? []) as Pending[];
+    const pending = (data ?? []) as Person[];
 
     if (dryRun) {
       return NextResponse.json({
         success: true,
         dryRun: true,
         wouldSend: pending.length,
-        recipients: pending.map((row) => ({
-          registration_id: row.registration_id,
-          email: row.email,
-          subject: row.is_merch
-            ? "Your V-TAPP merchandise collection pass"
-            : `Your V-TAPP pass — ${row.event_name ?? "your V-TAPP event"}`,
+        recipients: pending.map((person) => ({
+          registration_id: `${person.passes.length} pass${
+            person.passes.length === 1 ? "" : "es"
+          }`,
+          email: person.email,
+          subject:
+            person.passes.length === 1
+              ? "Your V-TAPP pass"
+              : `Your ${person.passes.length} V-TAPP passes`,
         })),
       });
     }
@@ -225,17 +245,11 @@ export async function POST(request: Request) {
      * connections from one account, and a burst that trips it fails the
      * whole batch rather than one message.
      */
-    for (const row of pending) {
-      const result = await sendConfirmation({
-        registrationDbId: row.id,
-        registrationId: row.registration_id,
-        name: row.name,
-        email: row.email,
-        qrToken: row.qr_token,
-        isMerch: Boolean(row.is_merch),
-        eventName: row.event_name,
-        eventDay: row.event_day,
-        eventVenue: row.event_venue,
+    for (const person of pending) {
+      const result = await sendPersonPasses({
+        email: person.email,
+        name: person.name,
+        passes: person.passes ?? [],
       });
 
       if (result.status === "sent") {
@@ -244,7 +258,7 @@ export async function POST(request: Request) {
         failed += 1;
 
         if (errors.length < 5) {
-          errors.push({ email: row.email, error: result.error });
+          errors.push({ email: person.email, error: result.error });
         }
       }
     }
@@ -366,9 +380,9 @@ async function resend(body: {
   }
 
   /*
-   * Re-read the row rather than trusting the one the browser is
-   * showing. The address may have been corrected since the search,
-   * and the corrected one is the whole reason for resending.
+   * Re-read rather than trusting what the browser is showing. The
+   * address may have been corrected since the search, and the
+   * corrected one is the whole reason for resending.
    */
   const { data: rows, error } = await db.rpc("mail_lookup", {
     p_query: String(id),
@@ -376,7 +390,7 @@ async function resend(body: {
 
   if (error) throw error;
 
-  const row = ((rows ?? []) as Pending[]).find(
+  const row = ((rows ?? []) as { id: number; email: string }[]).find(
     (candidate) => Number(candidate.id) === id
   );
 
@@ -387,17 +401,42 @@ async function resend(body: {
     );
   }
 
-  const result = await sendConfirmation({
+  /*
+   * Send their whole PDF, not the one page they happened to click.
+   *
+   * The passes travel together now, so a resend that carried a single
+   * page would replace a complete document with a partial one --
+   * and the reason for resending is usually that the first PDF was
+   * lost, not that one page of it was.
+   */
+  const { data: personData, error: personError } = await db.rpc(
+    "person_passes",
+    { p_email: row.email }
+  );
+
+  if (personError?.code === "42883" || personError?.code === "PGRST202") {
+    return NextResponse.json(
+      { error: "Run supabase/person-passes.sql to enable resending." },
+      { status: 409 }
+    );
+  }
+
+  if (personError) throw personError;
+
+  const person = personData as Person | null;
+
+  if (!person?.passes?.length) {
+    return NextResponse.json(
+      { error: "That person has no passes with a QR code" },
+      { status: 404 }
+    );
+  }
+
+  const result = await sendPersonPasses({
     resend: true,
-    registrationDbId: row.id,
-    registrationId: row.registration_id,
-    name: row.name,
-    email: row.email,
-    qrToken: row.qr_token,
-    isMerch: Boolean(row.is_merch),
-    eventName: row.event_name,
-    eventDay: row.event_day,
-    eventVenue: row.event_venue,
+    email: person.email,
+    name: person.name,
+    passes: person.passes,
   });
 
   if (result.status !== "sent") {
@@ -415,7 +454,8 @@ async function resend(body: {
   return NextResponse.json({
     success: true,
     sent: 1,
-    email: row.email,
+    email: person.email,
+    passes: person.passes.length,
   });
 }
 
