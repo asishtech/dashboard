@@ -7,6 +7,7 @@ import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
   ArrowRightIcon,
+  DownloadIcon,
   InboxIcon,
   SearchIcon,
 } from "@/components/icons";
@@ -64,6 +65,14 @@ export default function EventsPage() {
   const [search, setSearch] = useState("");
   const [canSetPricing, setCanSetPricing] = useState(false);
   const [pricingTab, setPricingTab] = useState<Pricing | "all">("all");
+
+  /*
+   * Separate from the pricing tabs on purpose. "Paid / free" and "has
+   * anybody signed up" are different questions, and folding the second
+   * into the first row would mean you could not ask both at once --
+   * which is exactly the combination worth asking two days out.
+   */
+  const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [saving, setSaving] = useState("");
 
   const [counts, setCounts] = useState<PricingCounts>({
@@ -138,6 +147,10 @@ export default function EventsPage() {
         return false;
       }
 
+      if (onlyEmpty && Number(event.registrations ?? 0) > 0) {
+        return false;
+      }
+
       if (!query) return true;
 
       return (
@@ -145,7 +158,15 @@ export default function EventsPage() {
         String(event.event_id).toLowerCase().includes(query)
       );
     });
-  }, [events, search, pricingTab]);
+  }, [events, search, pricingTab, onlyEmpty]);
+
+  const emptyCount = useMemo(
+    () =>
+      events.filter(
+        (event) => Number(event.registrations ?? 0) === 0
+      ).length,
+    [events]
+  );
 
   /*
    * Totals follow the visible tab. Reading "Revenue" while the Free
@@ -372,6 +393,48 @@ export default function EventsPage() {
                   </button>
                 );
               })}
+            </div>
+
+            {/*
+              A separate control, because "nobody has signed up" is a
+              different question from "paid or free" and you want to
+              ask both at once two days out.
+            */}
+            <div className="events-tools">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={onlyEmpty}
+                  onChange={(event) =>
+                    setOnlyEmpty(event.target.checked)
+                  }
+                />
+
+                <span>
+                  No registrations
+                  <span className="segmented-count">
+                    {emptyCount}
+                  </span>
+                </span>
+              </label>
+
+              <a
+                className="btn btn-ghost btn-sm"
+                href={`/api/events/export${
+                  onlyEmpty ? "?filter=empty" : ""
+                }`}
+                /*
+                 * A plain link, not a fetch-and-blob. The server sets
+                 * Content-Disposition, so the browser saves it with
+                 * the right name and never holds a megabyte of
+                 * spreadsheet in memory on a phone.
+                 */
+                download
+              >
+                <DownloadIcon size={13} />
+                Download {onlyEmpty ? emptyCount : filtered.length} as
+                Excel
+              </a>
             </div>
           </div>
 

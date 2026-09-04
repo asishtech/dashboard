@@ -1159,6 +1159,18 @@ table,
   position: relative;
 }
 
+/* The row under the events tabs: the empty-events toggle and the
+   download. Wraps rather than shrinking, so the label stays readable
+   on a phone. */
+.events-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
 /* Step number beside a panel title.
    The mail page is a sequence — test, one person, the queue, then
    automatic — and the numbers say so, because the order matters more
