@@ -96,9 +96,27 @@ returns json
 language sql
 stable
 as $fn$
-select coalesce(json_agg(row_to_json(x) order by x.created_at desc), '[]'::json)
+select coalesce(
+  json_agg(row_to_json(x) order by x.rank, x.created_at desc),
+  '[]'::json
+)
 from (
   select
+    /*
+     * Exact matches first.
+     *
+     * Without this, searching "1" hit the LIKE branch on every
+     * address containing a 1, and `limit 20` then kept the twenty
+     * newest -- so the row actually asked for was crowded out by
+     * near-misses. Rank before recency, or a precise query gets the
+     * same answer as a vague one.
+     */
+    case
+      when r.id::text = btrim(p_query)                     then 0
+      when r.registration_id = btrim(p_query)              then 1
+      when lower(r.email) = lower(btrim(p_query))          then 2
+      else 3
+    end as rank,
     r.id,
     r.registration_id,
     r.name,
@@ -145,7 +163,23 @@ from (
       or r.registration_id = btrim(p_query)
       or lower(coalesce(r.name, '')) like '%' || lower(btrim(p_query)) || '%'
     )
-  order by r.created_at desc
+  /*
+   * Rank inside the limit, not outside it.
+   *
+   * Ordering the twenty rows *after* they were chosen by recency
+   * sorted the wrong twenty: the exact match was dropped before the
+   * ranking ever saw it. The limit has to be taken from the ranked
+   * order, or it is recency that decides and rank only rearranges
+   * the leftovers.
+   */
+  order by
+    case
+      when r.id::text = btrim(p_query)            then 0
+      when r.registration_id = btrim(p_query)     then 1
+      when lower(r.email) = lower(btrim(p_query)) then 2
+      else 3
+    end,
+    r.created_at desc
   limit 20
 ) x;
 $fn$;

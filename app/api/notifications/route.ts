@@ -383,21 +383,27 @@ async function resend(body: {
    * Re-read rather than trusting what the browser is showing. The
    * address may have been corrected since the search, and the
    * corrected one is the whole reason for resending.
+   *
+   * By primary key, directly. This used to go through mail_lookup,
+   * which is a *search*: given "1" its LIKE branch matched every
+   * address containing a 1, then took the twenty newest -- so the one
+   * row actually asked for was crowded out by twenty near-misses and
+   * the resend reported "no registration with id 1" for a row that
+   * plainly exists. A search is the wrong instrument for an exact
+   * lookup.
    */
-  const { data: rows, error } = await db.rpc("mail_lookup", {
-    p_query: String(id),
-  });
+  const { data: row, error } = await db
+    .from("registrations")
+    .select("id,email,qr_token")
+    .eq("id", id)
+    .maybeSingle();
 
   if (error) throw error;
 
-  const row = ((rows ?? []) as { id: number; email: string }[]).find(
-    (candidate) => Number(candidate.id) === id
-  );
-
-  if (!row) {
+  if (!row?.email?.trim()) {
     return NextResponse.json(
       {
-        error: `No registration with id ${id}. If this keeps happening, re-run supabase/mail-controls.sql.`,
+        error: `Registration ${id} has no email address, so there is nowhere to send it.`,
       },
       { status: 404 }
     );
