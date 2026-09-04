@@ -18,6 +18,18 @@ type Queue = {
   failedLast24h: number;
   sentLast24h: number;
   lastSentAt: string | null;
+  autoSend?: { enabled: boolean; enabledAt: string | null };
+};
+
+type Match = {
+  id: number;
+  registration_id: string;
+  name: string | null;
+  email: string;
+  event_name: string | null;
+  is_merch: boolean;
+  last_sent_at: string | null;
+  times_sent: number;
 };
 
 type Preview = {
@@ -40,6 +52,13 @@ export default function NotificationsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  /* Resend box. */
+  const [query, setQuery] = useState("");
+  const [matches, setMatches] = useState<Match[] | null>(null);
+  /* Armed per person, so ticking one row cannot send to another. */
+  const [armed, setArmed] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +87,93 @@ export default function NotificationsPage() {
     const timer = window.setTimeout(() => load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  async function post(body: Record<string, unknown>) {
+    const response = await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Request failed");
+    }
+
+    return data;
+  }
+
+  async function search() {
+    if (searching) return;
+
+    setSearching(true);
+    setError("");
+    setMessage("");
+    setArmed(null);
+
+    try {
+      const data = await post({ action: "lookup", query });
+      setMatches(data.matches ?? []);
+    } catch (err) {
+      setMatches(null);
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function resend(match: Match) {
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await post({
+        action: "resend",
+        registrationDbId: match.id,
+        confirm: true,
+      });
+
+      setMessage(`Sent another copy to ${match.email}.`);
+      setArmed(null);
+
+      await search();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Resend failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleAutoSend(enabled: boolean) {
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await post({ action: "autoSend", enabled });
+
+      setMessage(
+        enabled
+          ? "Automatic sending is on. Anyone who registers from now on is mailed after the next sync; the existing backlog is not."
+          : "Automatic sending is off."
+      );
+
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not save"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(dryRun: boolean) {
     if (busy) return;
@@ -306,6 +412,198 @@ export default function NotificationsPage() {
                       24-hour window rolls forward.
                     </p>
                   )}
+              </div>
+            </section>
+
+
+            {/* Automatic sending ------------------------------------ */}
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">
+                    Automatic sending
+                  </h2>
+
+                  <p className="panel-subtitle">
+                    Off until you turn it on, so nothing goes out
+                    while you are testing.
+                  </p>
+                </div>
+              </div>
+
+              <div className="panel-body">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={queue.autoSend?.enabled ?? false}
+                    disabled={busy || !queue.configured}
+                    onChange={(event) =>
+                      toggleAutoSend(event.target.checked)
+                    }
+                  />
+
+                  <span>
+                    Mail people who register from now on
+                  </span>
+                </label>
+
+                <p className="help mt-3">
+                  {queue.autoSend?.enabled ? (
+                    <>
+                      On since{" "}
+                      {queue.autoSend.enabledAt
+                        ? new Date(
+                            queue.autoSend.enabledAt
+                          ).toLocaleString("en-IN")
+                        : "just now"}
+                      . Only registrations created after that moment
+                      are sent automatically, up to 15 per sync. The{" "}
+                      {queue.pendingConfirmations} already waiting are
+                      not touched — those stay on the button above.
+                    </>
+                  ) : (
+                    <>
+                      While this is off, the only way an email leaves
+                      is the Send button above. Turning it on does not
+                      mail the {queue.pendingConfirmations} already
+                      waiting; it only covers people who register
+                      afterwards.
+                    </>
+                  )}
+                </p>
+              </div>
+            </section>
+
+
+            {/* Resend ----------------------------------------------- */}
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">Send again</h2>
+
+                  <p className="panel-subtitle">
+                    For a pass that was deleted, or an address that has
+                    since been corrected.
+                  </p>
+                </div>
+              </div>
+
+              <div className="panel-body">
+                <div className="resend-search">
+                  <label className="sr-only" htmlFor="resend-query">
+                    Search by email, name or registration ID
+                  </label>
+
+                  <input
+                    id="resend-query"
+                    className="input"
+                    placeholder="Email, name or registration ID"
+                    value={query}
+                    disabled={searching}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setMatches(null);
+                      setArmed(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") search();
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={search}
+                    disabled={searching || query.trim().length < 3}
+                  >
+                    {searching && <span className="btn-spinner" />}
+                    {searching ? "Searching" : "Search"}
+                  </button>
+                </div>
+
+                {matches?.length === 0 && (
+                  <p className="help mt-4">
+                    Nobody matches that. Only registrations with an
+                    email address and a QR code can be sent to.
+                  </p>
+                )}
+
+                {matches && matches.length > 0 && (
+                  <div className="stack mt-4">
+                    {matches.map((match) => (
+                      <div className="resend-row" key={match.id}>
+                        <div>
+                          <div className="row-title">
+                            {match.name || match.email}
+                          </div>
+
+                          <div className="row-meta">
+                            {match.email}
+                            {" · "}
+                            {match.is_merch
+                              ? "Merchandise"
+                              : (match.event_name ?? "Event")}
+                            {" · #"}
+                            {match.registration_id}
+                          </div>
+
+                          <div className="row-meta">
+                            {match.last_sent_at
+                              ? `Last sent ${new Date(
+                                  match.last_sent_at
+                                ).toLocaleString("en-IN")} · ${
+                                  match.times_sent
+                                } time${
+                                  match.times_sent === 1 ? "" : "s"
+                                }`
+                              : "Never sent"}
+                          </div>
+                        </div>
+
+                        <div className="resend-actions">
+                          {/*
+                            Armed per row. A single page-level tick
+                            would stay on after one resend and make
+                            the next click, on a different person,
+                            one press instead of two.
+                          */}
+                          <label className="check">
+                            <input
+                              type="checkbox"
+                              checked={armed === match.id}
+                              disabled={busy}
+                              onChange={(event) =>
+                                setArmed(
+                                  event.target.checked
+                                    ? match.id
+                                    : null
+                                )
+                              }
+                            />
+
+                            <span>
+                              Send {match.last_sent_at
+                                ? "another copy"
+                                : "the pass"}
+                            </span>
+                          </label>
+
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy || armed !== match.id}
+                            onClick={() => resend(match)}
+                          >
+                            {busy && armed === match.id && (
+                              <span className="btn-spinner" />
+                            )}
+                            Send now
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
 

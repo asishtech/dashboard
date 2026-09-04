@@ -5,7 +5,20 @@ import { mailConfig } from "./env";
 import { escape, shell } from "./mail-templates";
 import { supabaseAdmin } from "./supabase";
 
-export type MailKind = "confirmation" | "collection" | "alert";
+export type MailKind =
+  | "confirmation"
+  | "collection"
+  | "alert"
+  /*
+   * A deliberate second copy, sent by an admin from the mail screen.
+   *
+   * Logged under its own name so it is outside email_log_once (see
+   * supabase/mail-controls.sql): the index has to keep refusing an
+   * automatic duplicate while allowing this one. It still records
+   * status = "sent", so it still counts against the daily cap --
+   * Gmail charges for it either way.
+   */
+  | "confirmation-resend";
 
 export type SendResult =
   | { status: "sent" }
@@ -13,11 +26,28 @@ export type SendResult =
   | { status: "failed"; error: string };
 
 /*
- * Gmail's Workspace ceiling. Not enforced by us so much as respected:
- * crossing it gets the account rate-limited for 24 hours, which during
- * a fest means nobody's pass arrives.
+ * Gmail's ceiling. Not enforced by us so much as respected: crossing
+ * it gets the account rate-limited for 24 hours, which during a fest
+ * means nobody's pass arrives.
+ *
+ * The number depends on the plan, and the gap is large:
+ *
+ *   Google Workspace, paid      ~2,000 recipients / day
+ *   Google Workspace, trial       ~500 recipients / day
+ *
+ * A trial account is the dangerous case, because 1,800 looks like a
+ * safe margin and is more than three times the real limit. Nothing in
+ * the API says which plan an account is on, so this is configuration
+ * rather than detection -- set MAIL_DAILY_CAP to about 400 while on
+ * trial and raise it when the plan is paid for.
  */
-export const DAILY_CAP = 1800;
+export const DAILY_CAP = (() => {
+  const configured = Number(process.env.MAIL_DAILY_CAP);
+
+  return Number.isFinite(configured) && configured > 0
+    ? Math.floor(configured)
+    : 1800;
+})();
 
 let cached: Transporter | null = null;
 
@@ -63,6 +93,9 @@ export function mailEnabled() {
 }
 
 export type ConfirmationInput = {
+  /* True when an admin asked for another copy. Only changes how the
+     send is logged; the message itself is identical. */
+  resend?: boolean;
   registrationDbId: number;
   registrationId: string;
   name: string | null;
@@ -157,7 +190,7 @@ export async function sendConfirmation(
     subject,
     html,
     text,
-    kind: "confirmation",
+    kind: input.resend ? "confirmation-resend" : "confirmation",
     registrationDbId: input.registrationDbId,
     attachments: [await qrAttachment(claimUrl)],
   });

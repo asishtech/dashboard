@@ -1100,6 +1100,64 @@ table,
   font-size: var(--text-sm);
 }
 
+/* A checkbox with its label, on the mail screen.
+   The whole row is the hit target, because a 13px box is not one on a
+   phone. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-base);
+  line-height: 1.4;
+}
+
+.check input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+
+.check input:disabled,
+.check input:disabled + span {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Search box and its button, side by side until the panel narrows. */
+.resend-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.resend-search .input {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/* One person found by the search: who they are on the left, the
+   two-step send on the right. */
+.resend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-inset);
+  border-radius: var(--radius);
+}
+
+.resend-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 /* Capacity editor on an event page. The input is sized to a seat
    count rather than filling the panel, so it does not read as a
    free-text field. */

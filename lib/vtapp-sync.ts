@@ -1,4 +1,6 @@
 import { vtappApi } from "./env";
+import { readAutoSend } from "./mail-settings";
+import { DAILY_CAP, mailEnabled, sendConfirmation } from "./mailer";
 import { supabaseAdmin } from "./supabase";
 
 type Field = {
@@ -1014,12 +1016,102 @@ async function runSync() {
 
   await clock.time("syncState", () => recordSyncState(true, null));
 
+  const mailed = await clock.time("autoMail", autoMail);
+
   return {
     fetched: records.length,
     created,
     updated,
     itemsRewritten: itemsToInsert.length,
+    mailed,
     durationMs: Date.now() - startedAt,
     timings: clock.timings,
   };
+}
+
+/*
+ * Mail the people who registered since automatic sending was switched
+ * on, if it was.
+ *
+ * Bounded at AUTO_MAIL_BATCH per sync, because this runs inside the
+ * sync request and Gmail takes about a second a message. Anyone left
+ * over is picked up by the next sync, or by the manual button --
+ * pending_confirmations still sees them, since nothing was logged.
+ *
+ * Never throws. A mail failure must not fail the sync and roll the
+ * registrations back; the sync is the part that matters.
+ */
+const AUTO_MAIL_BATCH = 15;
+
+async function autoMail(): Promise<number> {
+  try {
+    const setting = await readAutoSend();
+
+    if (!setting.enabled || !setting.enabledAt) return 0;
+    if (!mailEnabled()) return 0;
+
+    const db = supabaseAdmin();
+
+    /*
+     * The cap is Gmail's, and it does not care that this send was
+     * automatic. Stopping short leaves the allowance for the manual
+     * batches an admin is watching.
+     */
+    const { data: summary } = await db.rpc("email_queue_summary");
+
+    const sentLast24h = Number(
+      (summary as { sentLast24h?: number })?.sentLast24h ?? 0
+    );
+
+    const room = Math.min(
+      AUTO_MAIL_BATCH,
+      DAILY_CAP - sentLast24h
+    );
+
+    if (room <= 0) return 0;
+
+    const { data, error } = await db.rpc(
+      "pending_confirmations_since",
+      { p_limit: room, p_since: setting.enabledAt }
+    );
+
+    /* 42883 / PGRST202: supabase/mail-controls.sql has not been run. */
+    if (error) return 0;
+
+    const pending = (data ?? []) as {
+      id: number;
+      registration_id: string;
+      name: string | null;
+      email: string;
+      qr_token: string;
+      event_name: string | null;
+      event_day: string | null;
+      event_venue: string | null;
+      is_merch: boolean;
+    }[];
+
+    let sent = 0;
+
+    /* Sequential: Gmail throttles parallel SMTP from one account. */
+    for (const row of pending) {
+      const result = await sendConfirmation({
+        registrationDbId: row.id,
+        registrationId: row.registration_id,
+        name: row.name,
+        email: row.email,
+        qrToken: row.qr_token,
+        isMerch: Boolean(row.is_merch),
+        eventName: row.event_name,
+        eventDay: row.event_day,
+        eventVenue: row.event_venue,
+      });
+
+      if (result.status === "sent") sent += 1;
+    }
+
+    return sent;
+  } catch (error) {
+    console.error("Automatic mail after sync failed:", error);
+    return 0;
+  }
 }
