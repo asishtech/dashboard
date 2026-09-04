@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { CapacityEditor } from "@/components/CapacityEditor";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
@@ -38,6 +39,15 @@ type EventDetail = {
   external_guest?: boolean | null;
   certificates?: string | null;
   description?: string | null;
+  /*
+   * Absent until supabase/event-capacity.sql runs; null where the
+   * organisers' sheet gave no figure. Neither means zero seats.
+   */
+  capacity?: number | null;
+  capacityNote?: string | null;
+  /* Signed: negative means the event is past its cap. */
+  seatsRemaining?: number | null;
+  fillPercentage?: number | null;
 };
 
 const LIVE_TABLES = ["registrations", "qr_scans"];
@@ -50,6 +60,7 @@ export default function EventDetailPage({
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [canSeeRevenue, setCanSeeRevenue] = useState(false);
+  const [canSetCapacity, setCanSetCapacity] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -73,6 +84,8 @@ export default function EventDetailPage({
       setEvent(data.event);
       setAttendees(data.attendees ?? []);
       setCanSeeRevenue(Boolean(data.canSeeRevenue));
+      /* Same permission the pricing control uses: admins only. */
+      setCanSetCapacity(Boolean(data.canSetPricing));
       setError("");
     } catch (err) {
       setError(
@@ -318,6 +331,40 @@ export default function EventDetailPage({
             <span className="stat-meta">Awaiting check-in</span>
           </div>
 
+          {event.capacity !== undefined && (
+            <div className="stat">
+              <span className="stat-label">Seats left</span>
+
+              <strong
+                className={`stat-value ${
+                  event.capacity === null
+                    ? ""
+                    : Number(event.seatsRemaining) < 0
+                      ? "stat-danger"
+                      : Number(event.fillPercentage) >= 85
+                        ? "stat-warning"
+                        : "stat-success"
+                }`}
+              >
+                {event.capacity === null
+                  ? "—"
+                  : Number(event.seatsRemaining) < 0
+                    ? `${Math.abs(Number(event.seatsRemaining))} over`
+                    : event.seatsRemaining}
+              </strong>
+
+              <span className="stat-meta">
+                {event.capacity === null
+                  ? "No expected figure in the sheet"
+                  : `${event.registrations} of ${event.capacity} taken${
+                      event.capacityNote
+                        ? ` · sheet says ${event.capacityNote}`
+                        : ""
+                    }`}
+              </span>
+            </div>
+          )}
+
           {canSeeRevenue && event.revenue !== undefined && (
             <div className="stat">
               <span className="stat-label">Revenue</span>
@@ -328,6 +375,15 @@ export default function EventDetailPage({
             </div>
           )}
         </section>
+
+        {canSetCapacity && event.capacity !== undefined && (
+          <CapacityEditor
+            eventId={event.event_id}
+            capacity={event.capacity}
+            registrations={event.registrations}
+            onSaved={load}
+          />
+        )}
 
         <section className="panel">
           <div className="panel-header">

@@ -1100,6 +1100,48 @@ table,
   font-size: var(--text-sm);
 }
 
+/* Capacity editor on an event page. The input is sized to a seat
+   count rather than filling the panel, so it does not read as a
+   free-text field. */
+.capacity-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.capacity-editor .input {
+  width: 8rem;
+}
+
+/* Help text and the result banner each take their own line, so the
+   input and button stay side by side as the panel narrows. */
+.capacity-editor > p {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+/* Seats-left meter in the events table.
+   Narrower than a standalone meter, because it sits in a table cell
+   next to five numeric columns and must not squeeze them. */
+.seats {
+  min-width: 8.5rem;
+  max-width: 12rem;
+}
+
+.seats .meter-foot {
+  margin-top: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An event past its cap. Bold as well as coloured, so it survives
+   being read on a phone in daylight and does not rely on colour
+   alone. */
+.seats-over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 /* Big two-part distribution readout on the volunteer dashboard. */
 .split {
   display: grid;

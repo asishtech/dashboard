@@ -79,7 +79,7 @@ export async function GET(
      * the row type collapses to unknown.
      */
     const DETAIL_COLUMNS =
-      "event_id,name,event_date,day,venue,pricing,event_type,time_slot,team_size,registration_fee,prize_pool,logistics,external_guest,certificates,description";
+      "event_id,name,event_date,day,venue,pricing,event_type,time_slot,team_size,registration_fee,prize_pool,logistics,external_guest,certificates,description,capacity,capacity_note";
 
     const BASIC_COLUMNS = "event_id,name,event_date,day,venue,pricing";
 
@@ -97,9 +97,10 @@ export async function GET(
       ]);
 
     /*
-     * 42703: supabase/event-details.sql has not been run, so the sheet
-     * columns do not exist yet. Fall back rather than 500 -- the totals
-     * and the attendee list are the part people actually need.
+     * 42703: supabase/event-details.sql or event-capacity.sql has not
+     * been run, so those sheet columns do not exist yet. Fall back
+     * rather than 500 -- the totals and the attendee list are the part
+     * people actually need.
      */
     const eventResult =
       detailed.error?.code === "42703"
@@ -135,6 +136,10 @@ export async function GET(
         internalRegistrations?: number;
         unknownRegistrations?: number;
         externalParticipants?: number;
+        capacity?: number | null;
+        capacityNote?: string | null;
+        seatsRemaining?: number | null;
+        fillPercentage?: number | null;
       }[]
     ).find((row) => String(row.event_id) === event_id);
 
@@ -163,6 +168,16 @@ export async function GET(
         internalRegistrations: summary?.internalRegistrations,
         unknownRegistrations: summary?.unknownRegistrations,
         externalParticipants: summary?.externalParticipants,
+
+        /*
+         * The row above already carries capacity and capacity_note.
+         * These two are the arithmetic against live registrations, so
+         * they come from the summary -- and camelCased to match what
+         * <SeatsMeter> reads on the events list.
+         */
+        capacityNote: summary?.capacityNote,
+        seatsRemaining: summary?.seatsRemaining,
+        fillPercentage: summary?.fillPercentage,
 
         /*
          * Money is omitted from the payload entirely for
@@ -202,12 +217,18 @@ export async function GET(
 /*
  * PATCH /api/events/[event_id]
  *
- * Label an event paid or free. Only needed for events with no
- * registrations yet -- once tickets sell, the totals classify it on
- * their own. Sending `null` hands it back to the data.
+ * Label an event paid or free, and set how many seats it has.
+ *
+ * Pricing is only needed for events with no registrations yet -- once
+ * tickets sell, the totals classify it on their own. Sending `null`
+ * hands either field back to the data.
+ *
+ * Capacity is seeded from the organisers' sheet by
+ * supabase/event-capacity.sql; this is for the ones that change after
+ * a venue is swapped, and the nineteen the sheet left blank.
  *
  * Admin only: a coordinator can read their own event but must not
- * relabel it.
+ * relabel it or move its cap.
  */
 export async function PATCH(
   request: Request,
@@ -224,34 +245,88 @@ export async function PATCH(
 
     const body = await request.json();
 
-    const pricing = body.pricing;
+    const update: Record<string, unknown> = {};
 
-    if (
-      pricing !== null &&
-      pricing !== "paid" &&
-      pricing !== "free"
-    ) {
+    /*
+     * Both fields are optional and independent: the pricing control
+     * and the capacity control are separate, and each sends only its
+     * own key. `in` rather than a truthiness check, because null is a
+     * meaningful value for both -- it hands the field back to the
+     * data.
+     */
+    if ("pricing" in body) {
+      const pricing = body.pricing;
+
+      if (
+        pricing !== null &&
+        pricing !== "paid" &&
+        pricing !== "free"
+      ) {
+        return NextResponse.json(
+          { error: "pricing must be 'paid', 'free' or null" },
+          { status: 400 }
+        );
+      }
+
+      update.pricing = pricing;
+    }
+
+    if ("capacity" in body) {
+      const capacity = body.capacity;
+
+      if (capacity === null) {
+        /* Back to "the sheet gave no figure", not to zero seats. */
+        update.capacity = null;
+      } else {
+        const seats = Number(capacity);
+
+        if (!Number.isInteger(seats) || seats < 0) {
+          return NextResponse.json(
+            {
+              error:
+                "capacity must be a whole number of seats, or null",
+            },
+            { status: 400 }
+          );
+        }
+
+        update.capacity = seats;
+      }
+    }
+
+    if (Object.keys(update).length === 0) {
       return NextResponse.json(
-        { error: "pricing must be 'paid', 'free' or null" },
+        { error: "Nothing to update" },
         { status: 400 }
       );
     }
 
     const { data, error } = await supabaseAdmin()
       .from("events")
-      .update({ pricing })
+      .update(update)
       .eq("event_id", event_id)
-      .select("event_id,pricing")
+      .select("event_id,pricing,capacity")
       .maybeSingle();
 
-    /* 42703: supabase/event-pricing.sql has not been run yet. */
+    /* 42703: supabase/event-pricing.sql or event-capacity.sql has not
+       been run yet. */
     if (error?.code === "42703") {
       return NextResponse.json(
         {
           error:
-            "Run supabase/event-pricing.sql before labelling events.",
+            "capacity" in update
+              ? "Run supabase/event-capacity.sql before setting a cap."
+              : "Run supabase/event-pricing.sql before labelling events.",
         },
         { status: 409 }
+      );
+    }
+
+    /* 23514: the events_capacity_non_negative check. */
+    if (error?.code === "23514") {
+      return NextResponse.json(
+        { error: "Capacity cannot be negative" },
+        { status: 400 }
       );
     }
 

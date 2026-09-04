@@ -11,6 +11,7 @@ import {
   SearchIcon,
 } from "@/components/icons";
 import { PRICING_LABEL, type Pricing } from "@/lib/event-pricing";
+import { SeatsMeter } from "@/components/SeatsMeter";
 
 type EventSummary = {
   event_id: string;
@@ -30,6 +31,16 @@ type EventSummary = {
   externalRegistrations?: number;
   internalRegistrations?: number;
   unknownRegistrations?: number;
+  /*
+   * Absent until supabase/event-capacity.sql runs; null on an event the
+   * organisers' sheet gave no figure for. Those two are different, and
+   * neither means zero seats.
+   */
+  capacity?: number | null;
+  capacityNote?: string | null;
+  /* Signed: negative means the event is over its cap. */
+  seatsRemaining?: number | null;
+  fillPercentage?: number | null;
 };
 
 type PricingCounts = Record<Pricing, number>;
@@ -62,6 +73,7 @@ export default function EventsPage() {
   });
 
   const [originAvailable, setOriginAvailable] = useState(false);
+  const [capacityAvailable, setCapacityAvailable] = useState(false);
 
   const loadEvents = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -87,6 +99,7 @@ export default function EventsPage() {
       }
 
       setOriginAvailable(Boolean(data.originAvailable));
+      setCapacityAvailable(Boolean(data.capacityAvailable));
 
       setError("");
     } catch (err) {
@@ -449,6 +462,9 @@ export default function EventsPage() {
                     <th scope="col" className="table-num">
                       Checked in
                     </th>
+                    {capacityAvailable && (
+                      <th scope="col">Seats left</th>
+                    )}
                     {originAvailable && (
                       <th scope="col" className="table-num">
                         External
@@ -552,6 +568,12 @@ export default function EventsPage() {
                           {scanned}
                           <span className="dim"> ({percent}%)</span>
                         </td>
+
+                        {capacityAvailable && (
+                          <td>
+                            <SeatsMeter event={event} />
+                          </td>
+                        )}
 
                         {originAvailable && (
                           <td className="table-num">

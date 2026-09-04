@@ -31,6 +31,15 @@ export type EventSummary = {
   internalRegistrations?: number;
   unknownRegistrations?: number;
   externalParticipants?: number;
+  /*
+   * Absent until supabase/event-capacity.sql runs. Null where the
+   * organisers' sheet gave no figure, which is not zero seats.
+   */
+  capacity?: number | null;
+  capacityNote?: string | null;
+  /* Signed: negative means the event is over its cap. */
+  seatsRemaining?: number | null;
+  fillPercentage?: number | null;
 };
 
 const PRICING_FILTERS = ["paid", "free", "unclassified"] as const;
@@ -167,6 +176,16 @@ export async function GET(request: Request) {
     );
 
     /*
+     * Same distinction for capacity: the column absent altogether means
+     * supabase/event-capacity.sql has not run, and the whole column is
+     * hidden. A null on one event means the organisers' sheet gave no
+     * figure for it, and that one row reads "—".
+     */
+    const capacityAvailable = classified.some(
+      (event) => event.capacity !== undefined
+    );
+
+    /*
      * Coordinators were scoped to participant name, email and
      * registration number, so revenue is dropped from the payload
      * rather than hidden by the UI.
@@ -190,6 +209,7 @@ export async function GET(request: Request) {
       canSetPricing: isAdmin,
       pricingCounts: counts,
       originAvailable,
+      capacityAvailable,
       originCounts: origin,
       count: payload.length,
       events: payload,
