@@ -25,7 +25,7 @@ function toArray(distribution: ItemRow["distribution"]) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireRole("admin");
+  const auth = await requireRole("admin", "registrations");
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -248,6 +248,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
+      /*
+       * Whether to offer "Undo entry". DELETE /api/checkin enforces
+       * this independently; this keeps the read-only desk from being
+       * shown a button that would 403.
+       */
+      canEdit: auth.activeRole === "admin",
       count: registrationsResult.count ?? registrations.length,
       limit,
       offset,

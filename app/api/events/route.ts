@@ -55,7 +55,11 @@ const PRICING_FILTERS = ["paid", "free", "unclassified"] as const;
  * place.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole("admin", "faculty");
+  const auth = await requireRole(
+    "admin",
+    "faculty",
+    "registrations"
+  );
 
   if (auth instanceof NextResponse) {
     return auth;

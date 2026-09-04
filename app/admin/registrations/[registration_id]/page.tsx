@@ -36,6 +36,9 @@ export default function RegistrationDetailPage({
 }) {
   const [registration, setRegistration] =
     useState<Registration | null>(null);
+  /* Admins reverse a collection; the desk only reads. */
+  const [canEdit, setCanEdit] =
+    useState(false);
 
   const [qrImage, setQrImage] =
     useState("");
@@ -75,6 +78,10 @@ export default function RegistrationDetailPage({
 
         setRegistration(
           data.registration
+        );
+
+        setCanEdit(
+          Boolean(data.canEdit)
         );
 
         const baseUrl =
@@ -351,7 +358,7 @@ export default function RegistrationDetailPage({
                           {given ? "Given" : "Pending"}
                         </span>
 
-                        {given && (
+                        {given && canEdit && (
                           <button
                             type="button"
                             className="btn btn-danger btn-sm"

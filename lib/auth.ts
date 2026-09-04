@@ -5,18 +5,11 @@ import type { User } from "@supabase/supabase-js";
 
 import { supabaseAnonKey, supabaseUrl } from "./env";
 import { supabaseAdmin } from "./supabase";
+import { primaryRole, type Role } from "./roles";
 
-export type Role =
-  | "admin"
-  | "volunteer"
-  | "buyer"
-  /*
-   * Event coordinators, staff and student alike. The assignment
-   * table is still `event_coordinators` because that describes the
-   * relationship (who runs which event); this is the role they sign
-   * in as.
-   */
-  | "faculty";
+export { primaryRole };
+
+export type { Role };
 
 export type Profile = {
   /* Primary role, the highest-privilege one they hold. */
@@ -40,25 +33,6 @@ export type Session = {
 
 /* Cookie carrying the chosen role. Value is never trusted as-is. */
 export const ROLE_COOKIE = "vtapp_active_role";
-
-/*
- * Highest privilege first. Used to pick a default when no role has
- * been chosen, and to resolve the primary role.
- */
-const ROLE_ORDER: Role[] = [
-  "admin",
-  "faculty",
-  "volunteer",
-  "buyer",
-];
-
-export function primaryRole(roles: Role[]): Role | null {
-  for (const r of ROLE_ORDER) {
-    if (roles.includes(r)) return r;
-  }
-
-  return roles[0] ?? null;
-}
 
 /*
  * Request-scoped Supabase client that reads and refreshes the
@@ -292,6 +266,16 @@ export async function allowedEventIds(
    * everything.
    */
   if (session.activeRole === "admin") {
+    return null;
+  }
+
+  /*
+   * The registrations desk is not scoped to assignments either. The
+   * point of the role is a whole-festival view; scoping it by
+   * event_coordinators would hand it an empty list, since nobody puts
+   * the desk down as a coordinator.
+   */
+  if (session.activeRole === "registrations") {
     return null;
   }
 

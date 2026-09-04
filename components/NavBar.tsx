@@ -14,7 +14,7 @@ import {
   UsersIcon,
 } from "@/components/icons";
 
-type Role = "admin" | "faculty" | "volunteer" | "buyer";
+import { ROLE_LABEL, type Role } from "@/lib/roles";
 
 type NavItem = {
   href: string;
@@ -65,16 +65,24 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/volunteer", label: "Scan", icon: ScanIcon },
   ],
 
+  /*
+   * The same three screens an admin uses, minus everything that
+   * writes. No Mail, Staff or Coordinators: those change what the
+   * festival does rather than report on it.
+   */
+  registrations: [
+    { href: "/events", label: "Events", icon: TicketIcon },
+    {
+      href: "/admin/registrations",
+      label: "Registrations",
+      icon: ListIcon,
+    },
+    { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
+  ],
+
   buyer: [
     { href: "/buyer", label: "My V-TAPP", icon: TicketIcon },
   ],
-};
-
-const ROLE_LABEL: Record<Role, string> = {
-  admin: "Admin",
-  faculty: "Faculty",
-  volunteer: "Volunteer",
-  buyer: "Buyer",
 };
 
 export default function NavBar() {

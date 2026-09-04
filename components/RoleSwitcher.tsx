@@ -2,20 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-type Role = "admin" | "faculty" | "volunteer" | "buyer";
+import { ROLE_LABEL as LABEL, type Role } from "@/lib/roles";
 
-const LABEL: Record<Role, string> = {
-  admin: "Admin",
-  faculty: "Faculty",
-  volunteer: "Volunteer",
-  buyer: "Buyer",
-};
-
-/* Where each role belongs once it becomes active. */
+/* Where each role belongs once it becomes active. Mirrors
+   destinationFor() in proxy.ts. */
 const HOME: Record<Role, string> = {
   admin: "/admin",
   faculty: "/events",
   volunteer: "/volunteer",
+  registrations: "/events",
   buyer: "/buyer",
 };
 

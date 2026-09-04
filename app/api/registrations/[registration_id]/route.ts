@@ -27,7 +27,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ registration_id: string }> }
 ) {
-  const auth = await requireRole("admin");
+  const auth = await requireRole("admin", "registrations");
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -104,6 +104,12 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
+
+      /*
+       * Whether to offer "Reverse" on a collected item. PATCH
+       * /api/distribution enforces this independently.
+       */
+      canEdit: auth.activeRole === "admin",
 
       registration: {
         registration_id: data.registration_id,

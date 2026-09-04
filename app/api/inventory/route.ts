@@ -14,7 +14,7 @@ export type SizeRow = {
 };
 
 export async function GET() {
-  const auth = await requireRole("admin");
+  const auth = await requireRole("admin", "registrations");
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -57,6 +57,12 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    /*
+     * Whether to draw the stock inputs at all. PUT enforces this
+     * independently -- this only keeps the desk from being shown a
+     * control that would 403.
+     */
+    canEdit: auth.activeRole === "admin",
     inventory: stock.data ?? [],
     sizesAvailable: !sizesMissing,
     sizes: sizesMissing ? [] : ((sizes.data ?? []) as SizeRow[]),

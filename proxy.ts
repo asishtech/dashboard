@@ -24,9 +24,29 @@ function destinationFor(role: string) {
   if (role === "admin") return "/admin";
   if (role === "volunteer") return "/volunteer";
   if (role === "faculty") return "/events";
+  if (role === "registrations") return "/events";
   if (role === "buyer") return "/buyer";
 
   return "/login";
+}
+
+/*
+ * The two /admin screens the registrations desk may open.
+ *
+ * Listed rather than pattern-matched: /admin/users and
+ * /admin/coordinators change who can sign in, and a prefix rule that
+ * grew to cover them by accident would not announce itself.
+ *
+ * The pages themselves hide their write controls for this role, and
+ * every write route requires "admin" regardless, so this is the outer
+ * of two gates rather than the only one.
+ */
+function readOnlyAdminPath(path: string) {
+  return (
+    path === "/admin/registrations" ||
+    path.startsWith("/admin/registrations/") ||
+    path === "/admin/inventory"
+  );
 }
 
 export async function proxy(request: NextRequest) {
@@ -177,7 +197,11 @@ export async function proxy(request: NextRequest) {
         ) ??
         (profile.role as string));
 
-  if (path.startsWith("/admin") && role !== "admin") {
+  if (
+    path.startsWith("/admin") &&
+    role !== "admin" &&
+    !(role === "registrations" && readOnlyAdminPath(path))
+  ) {
     return redirectPreservingCookies(
       publicUrl(request, destinationFor(role)),
       response
@@ -220,7 +244,8 @@ export async function proxy(request: NextRequest) {
   if (
     path.startsWith("/events") &&
     role !== "admin" &&
-    role !== "faculty"
+    role !== "faculty" &&
+    role !== "registrations"
   ) {
     return redirectPreservingCookies(
       publicUrl(request, destinationFor(role)),

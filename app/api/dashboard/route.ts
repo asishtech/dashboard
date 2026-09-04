@@ -468,7 +468,9 @@ async function readPeople(
 }
 
 export async function GET() {
-  const auth = await requireRole("admin");
+  /* Read-only: the registrations desk sees these totals, and every
+     route that changes them still requires "admin". */
+  const auth = await requireRole("admin", "registrations");
 
   if (auth instanceof NextResponse) {
     return auth;

@@ -112,6 +112,8 @@ export default function RegistrationsPage() {
 
   /* Which registration's entry is being undone. */
   const [undoing, setUndoing] = useState<number | null>(null);
+  /* Admins undo an entry; the registrations desk only reads. */
+  const [canEdit, setCanEdit] = useState(false);
   const [notice, setNotice] = useState("");
 
   const loadRegistrations = useCallback(async (silent = false) => {
@@ -129,6 +131,7 @@ export default function RegistrationsPage() {
       }
 
       setRegistrations(data.registrations ?? []);
+      setCanEdit(Boolean(data.canEdit));
       setError("");
     } catch (err) {
       setError(
@@ -882,19 +885,23 @@ export default function RegistrationsPage() {
                                 {formatTime(registration.entered_at)}
                               </span>
 
-                              <button
-                                type="button"
-                                className="btn btn-danger btn-sm"
-                                disabled={undoing !== null}
-                                onClick={() => undoEntry(registration)}
-                              >
-                                {undoing === registration.id && (
-                                  <span className="btn-spinner" />
-                                )}
-                                {undoing === registration.id
-                                  ? "Undoing"
-                                  : "Undo entry"}
-                              </button>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="btn btn-danger btn-sm"
+                                  disabled={undoing !== null}
+                                  onClick={() =>
+                                    undoEntry(registration)
+                                  }
+                                >
+                                  {undoing === registration.id && (
+                                    <span className="btn-spinner" />
+                                  )}
+                                  {undoing === registration.id
+                                    ? "Undoing"
+                                    : "Undo entry"}
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <span className="badge badge-plain">

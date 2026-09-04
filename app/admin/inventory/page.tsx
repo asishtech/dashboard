@@ -30,6 +30,8 @@ export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [sizes, setSizes] = useState<SizeRow[]>([]);
   const [sizesAvailable, setSizesAvailable] = useState(false);
+  /* Admins edit stock; the registrations desk only reads it. */
+  const [canEdit, setCanEdit] = useState(false);
   const [draft, setDraft] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,6 +64,7 @@ export default function InventoryPage() {
       setInventory(items);
       setSizes(data.sizes ?? []);
       setSizesAvailable(Boolean(data.sizesAvailable));
+      setCanEdit(Boolean(data.canEdit));
 
       const values: Record<number, number> = {};
 
@@ -319,26 +322,32 @@ export default function InventoryPage() {
         <section className="panel">
           <div className="panel-header">
             <div>
-              <h2 className="panel-title">Adjust stock</h2>
+              <h2 className="panel-title">
+                {canEdit ? "Adjust stock" : "Stock"}
+              </h2>
 
               <p className="panel-subtitle">
-                Stock cannot be set below the quantity already sold.
+                {canEdit
+                  ? "Stock cannot be set below the quantity already sold."
+                  : "Read-only. Ask an admin to change a stock figure."}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={saveInventory}
-              disabled={saving || loading || !dirty}
-              className="btn btn-primary btn-sm"
-            >
-              {saving && <span className="btn-spinner" />}
-              {saving
-                ? "Saving"
-                : dirty
-                  ? "Save changes"
-                  : "No changes"}
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={saveInventory}
+                disabled={saving || loading || !dirty}
+                className="btn btn-primary btn-sm"
+              >
+                {saving && <span className="btn-spinner" />}
+                {saving
+                  ? "Saving"
+                  : dirty
+                    ? "Save changes"
+                    : "No changes"}
+              </button>
+            )}
           </div>
 
           {loading ? (
@@ -444,6 +453,13 @@ export default function InventoryPage() {
                         </td>
 
                         <td>
+                          {!canEdit ? (
+                            /* The figure, not a disabled box. A greyed
+                               input still reads as "you may type here,
+                               later". */
+                            <span className="table-num">{stock}</span>
+                          ) : (
+                          <>
                           <label
                             className="sr-only"
                             htmlFor={`stock-${item.id}`}
@@ -482,6 +498,8 @@ export default function InventoryPage() {
                             >
                               Min {sold}
                             </span>
+                          )}
+                          </>
                           )}
                         </td>
                       </tr>
