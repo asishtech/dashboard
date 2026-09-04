@@ -1,0 +1,66 @@
+# AWS Amplify build spec.
+#
+# The reason this file exists is the second build command.
+#
+# Amplify hands the variables from App settings -> Environment
+# variables to the *build*, but Next.js SSR runs afterwards in its own
+# compute, which does not inherit them. Anything read at build time
+# therefore works and anything read at request time does not -- which
+# is why every NEXT_PUBLIC_* value was fine (Next inlines those into
+# the bundle) while SUPABASE_SERVICE_ROLE_KEY, read inside a request,
+# came back "Missing required environment variable" and returned a 500
+# to every signed-in admin.
+#
+# Writing them to .env.production puts them in the deployed bundle,
+# where Next loads them at server start.
+#
+# No secret is committed here. The values still live only in the
+# Amplify console; this copies them at build time. .env.production is
+# gitignored (.gitignore line 34) and is never served -- it sits at the
+# app root, not under public/ or .next/static/.
+
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci --cache .npm --prefer-offline
+
+    build:
+      commands:
+        # Names only, never values: Amplify build logs are readable by
+        # anyone with console access, and this is a diagnostic, not a
+        # dump. If the key is absent here, it was never added to the
+        # console and no amount of build config will conjure it.
+        # `eval` rather than bash's ${!v}: the build image's shell is
+        # not guaranteed, and indirect expansion is a bashism that
+        # aborts the whole step under sh or zsh.
+        - |
+          echo "--- environment ---"
+          for v in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
+                   SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_APP_URL \
+                   VTAPP_API_URL VTAPP_API_KEY; do
+            eval "value=\$$v"
+            if [ -n "$value" ]; then echo "  $v: set"; else echo "  $v: MISSING"; fi
+          done
+          echo "-------------------"
+
+        # Overwrite rather than append: a cached working directory
+        # would otherwise accumulate a duplicate of every variable on
+        # each build.
+        #
+        # Anchored to our own prefixes so the file cannot pick up the
+        # AWS credentials Amplify injects into the build environment.
+        - env | grep -E '^(NEXT_PUBLIC_|SUPABASE_|VTAPP_|SMTP_|MAIL_|ALERT_)' > .env.production || true
+
+        - npm run build
+
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+
+  cache:
+    paths:
+      - .next/cache/**/*
+      - .npm/**/*
