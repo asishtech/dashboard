@@ -60,6 +60,9 @@ export default function NotificationsPage() {
   const [armed, setArmed] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
 
+  /* Test send. */
+  const [testTo, setTestTo] = useState("");
+
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/notifications", {
@@ -144,6 +147,30 @@ export default function NotificationsPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Resend failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendTest() {
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const data = await post({ action: "test", to: testTo });
+
+      setMessage(
+        `Test sent to ${data.to}. If it does not arrive within a minute, check the spam folder before changing anything.`
+      );
+
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Test send failed"
+      );
     } finally {
       setBusy(false);
     }
@@ -412,6 +439,66 @@ export default function NotificationsPage() {
                       24-hour window rolls forward.
                     </p>
                   )}
+              </div>
+            </section>
+
+
+            {/* Test ------------------------------------------------- */}
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">Send a test</h2>
+
+                  <p className="panel-subtitle">
+                    One message to any address. Touches nothing —
+                    no registration is marked as sent to.
+                  </p>
+                </div>
+              </div>
+
+              <div className="panel-body">
+                <div className="resend-search">
+                  <label className="sr-only" htmlFor="test-to">
+                    Address to send the test to
+                  </label>
+
+                  <input
+                    id="test-to"
+                    className="input"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={testTo}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setTestTo(event.target.value)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") sendTest();
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={sendTest}
+                    disabled={
+                      busy ||
+                      !queue.configured ||
+                      !testTo.includes("@")
+                    }
+                  >
+                    {busy && <span className="btn-spinner" />}
+                    Send test
+                  </button>
+                </div>
+
+                <p className="help mt-3">
+                  {queue.configured
+                    ? "Do this first. It proves the App Password works without spending any of the queue."
+                    : "Set SMTP_USER and SMTP_PASSWORD, then redeploy."}
+                </p>
               </div>
             </section>
 

@@ -1152,12 +1152,56 @@ table,
   line-height: 1.4;
 }
 
+/*
+ * Drawn rather than native.
+ *
+ * `accent-color` only paints a checkbox once it is *checked*. Left
+ * native, an unchecked box under `color-scheme: dark` is a dark grey
+ * square on a dark grey panel -- present, focusable, and invisible,
+ * which is exactly how it was reported: "the checkbox is not there".
+ */
 .check input {
+  appearance: none;
+  -webkit-appearance: none;
+
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  accent-color: var(--c-accent);
+  width: 20px;
+  height: 20px;
+  margin: 0;
+
+  background: var(--bg);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.check:hover input:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.check input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/*
+ * The tick, as a rotated L. Drawn in --on-accent, the near-black the
+ * palette pairs with brand fills (white on #d87427 measures 3.26 and
+ * fails; near-black measures 6.07).
+ */
+.check input:checked::after {
+  content: "";
+  display: block;
+  width: 5px;
+  height: 10px;
+  margin: 1px auto 0;
+  border: solid var(--on-accent);
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
 }
 
 .check input:disabled,

@@ -5,6 +5,7 @@ import {
   DAILY_CAP,
   mailEnabled,
   sendConfirmation,
+  sendTest,
 } from "@/lib/mailer";
 import { supabaseAdmin } from "@/lib/supabase";
 import {
@@ -142,6 +143,10 @@ export async function POST(request: Request) {
 
     if (body.action === "resend") {
       return resend(body);
+    }
+
+    if (body.action === "test") {
+      return test(String(body.to ?? ""));
     }
 
     if (body.action === "autoSend") {
@@ -438,4 +443,68 @@ async function setAutoSend(enabled: boolean) {
   if (error) throw error;
 
   return NextResponse.json({ success: true, autoSend: value });
+}
+
+/*
+ * Send one message to a typed-in address.
+ *
+ * The cheapest way to find out whether the App Password is right,
+ * without touching the queue or marking anybody as having been sent
+ * to. Nothing here reads the registrations table at all.
+ */
+async function test(to: string) {
+  const address = to.trim();
+
+  /*
+   * Deliberately loose. This is the same shape check the invite form
+   * uses, and its job is to catch a typo, not to adjudicate RFC 5322.
+   */
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    return NextResponse.json(
+      { error: "That does not look like an email address" },
+      { status: 400 }
+    );
+  }
+
+  if (!mailEnabled()) {
+    return NextResponse.json(
+      {
+        error:
+          "Mail is not configured. Set SMTP_USER and SMTP_PASSWORD.",
+      },
+      { status: 409 }
+    );
+  }
+
+  /* A test is a real message to Gmail, and counts like one. */
+  const { data: summaryData } = await supabaseAdmin().rpc(
+    "email_queue_summary"
+  );
+
+  const sentLast24h = Number(
+    (summaryData as { sentLast24h?: number })?.sentLast24h ?? 0
+  );
+
+  if (sentLast24h + 1 > DAILY_CAP) {
+    return NextResponse.json(
+      {
+        error: `That would pass the daily limit (${sentLast24h} sent in the last 24 hours, cap ${DAILY_CAP}).`,
+      },
+      { status: 429 }
+    );
+  }
+
+  const result = await sendTest(address);
+
+  if (result.status !== "sent") {
+    return NextResponse.json(
+      {
+        error:
+          result.status === "failed" ? result.error : result.reason,
+      },
+      { status: 502 }
+    );
+  }
+
+  return NextResponse.json({ success: true, to: address });
 }

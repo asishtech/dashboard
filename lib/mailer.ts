@@ -18,7 +18,14 @@ export type MailKind =
    * status = "sent", so it still counts against the daily cap --
    * Gmail charges for it either way.
    */
-  | "confirmation-resend";
+  | "confirmation-resend"
+  /*
+   * A message to an arbitrary address, to prove the credentials work
+   * before 1,241 real ones go out. Never tied to a registration, so
+   * email_log_once does not apply and it can be sent as often as
+   * needed.
+   */
+  | "test";
 
 export type SendResult =
   | { status: "sent" }
@@ -377,4 +384,53 @@ async function deliver(input: DeliverInput): Promise<SendResult> {
 
     return { status: "failed", error: message };
   }
+}
+
+
+/*
+ * Send one message to any address, to check the plumbing.
+ *
+ * Deliberately not a copy of a real pass. Somebody testing at a desk
+ * should be able to tell at a glance whether the mail in front of
+ * them is a genuine ticket or their own probe -- and if a test ever
+ * does reach a student by mistake, it should say so itself.
+ */
+export async function sendTest(to: string): Promise<SendResult> {
+  const config = mailConfig();
+
+  if (!config) {
+    return { status: "skipped", reason: "Mail is not configured" };
+  }
+
+  const now = new Date().toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  const html = shell(
+    "Mail is working",
+    `<p style="margin:0 0 14px;font-size:15px;line-height:1.6">This is a test from the V-TAPP dashboard. If you are reading it, the sending account and its password are set up correctly.</p>
+<p style="margin:0 0 8px;font-size:13px;color:#6a6a74">Sent ${escape(now)} from <strong>${escape(config.from)}</strong></p>
+<p style="margin:0;font-size:13px;color:#6a6a74">Passes link to ${escape(config.appUrl)} — check that this is the address students should see.</p>`
+  );
+
+  const text = [
+    "This is a test from the V-TAPP dashboard.",
+    "",
+    "If you are reading it, the sending account and its password are",
+    "set up correctly.",
+    "",
+    `Sent ${now} from ${config.from}`,
+    `Passes link to ${config.appUrl}`,
+  ].join("\n");
+
+  return deliver({
+    to,
+    subject: "V-TAPP dashboard — test message",
+    html,
+    text,
+    kind: "test",
+    /* No registration, so nothing is marked as delivered by this. */
+    registrationDbId: null,
+  });
 }
