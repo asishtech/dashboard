@@ -594,11 +594,18 @@ export default function NotificationsPage() {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2 className="panel-title">Send again</h2>
+                  {/*
+                    Not "Send again": with nothing sent yet, that
+                    title says this panel is not for you, when in fact
+                    it is the only way to mail one named person.
+                  */}
+                  <h2 className="panel-title">
+                    Send to one person
+                  </h2>
 
                   <p className="panel-subtitle">
-                    For a pass that was deleted, or an address that has
-                    since been corrected.
+                    Their first copy, or another one — for a pass that
+                    was deleted, or an address since corrected.
                   </p>
                 </div>
               </div>
