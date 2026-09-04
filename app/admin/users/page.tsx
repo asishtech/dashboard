@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
+import type { Role } from "@/lib/roles";
 import {
   AlertIcon,
   CheckIcon,
@@ -49,6 +50,11 @@ const ROLES: { value: StaffRole; label: string; help: string }[] = [
     value: "volunteer",
     label: "Volunteer",
     help: "Scan QR codes and hand merchandise over.",
+  },
+  {
+    value: "registrations",
+    label: "Registrations",
+    help: "Sees every event, order and collection. Changes nothing.",
   },
   {
     value: "registrations",
