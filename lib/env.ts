@@ -59,7 +59,20 @@ export function vtappApi() {
  * the way the Supabase accessors do. Every caller checks first.
  */
 export function mailConfig() {
-  const user = process.env.SMTP_USER;
+  /*
+   * Two spellings accepted for three of these.
+   *
+   * SMTP_USERNAME / SMTP_FROM_EMAIL / SMTP_FROM_NAME are what most
+   * SMTP tooling calls them, and are what actually got typed into the
+   * hosting console. Reading only our own names meant mailConfig()
+   * returned null, which is indistinguishable from "no App Password
+   * yet": the deploy succeeds, the screen says "not configured", and
+   * nothing anywhere names the variable that was misspelled.
+   *
+   * Our names win where both are set, so this widens what works
+   * without changing what already did.
+   */
+  const user = process.env.SMTP_USER || process.env.SMTP_USERNAME;
   const pass = process.env.SMTP_PASSWORD;
 
   if (!user || !pass) {
@@ -73,14 +86,19 @@ export function mailConfig() {
     pass,
     /* Gmail rewrites From to the authenticated account anyway, so a
        mismatch here would silently be ignored rather than honoured. */
-    from: process.env.MAIL_FROM || user,
+    from:
+      process.env.MAIL_FROM ||
+      process.env.SMTP_FROM_EMAIL ||
+      user,
     /* A display name is what stops this reading as spam. */
-    fromName: process.env.MAIL_FROM_NAME || "V-TAPP 2026",
+    fromName:
+      process.env.MAIL_FROM_NAME ||
+      process.env.SMTP_FROM_NAME ||
+      "V-TAPP 2026",
     /* Where sync failures and other operational mail goes. */
     alertTo: process.env.ALERT_EMAIL || user,
     /* Absolute base for links and QR URLs inside emails. */
     appUrl:
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "https://vtapp-dashboard.netlify.app",
+      process.env.NEXT_PUBLIC_APP_URL || "https://vtapp.co.in",
   };
 }

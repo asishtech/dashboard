@@ -24,8 +24,10 @@ Authentication → 2-Step Verification → allow App Passwords.
 
 ## 2. Set the environment variables
 
-Locally in `.env.local`, and on Netlify under
-**Site settings → Environment variables**:
+Locally in `.env.local`, and on AWS Amplify under
+**App settings → Environment variables**. Redeploy afterwards: saving
+alone does not rebuild, and `amplify.yml` is what carries these into
+the SSR runtime — Amplify hands console variables to the build only.
 
 ```
 SMTP_USER=tickets@vtapp.co.in
@@ -35,6 +37,10 @@ MAIL_FROM_NAME=V-TAPP 2026
 ALERT_EMAIL=<your own address, for sync failures>
 NEXT_PUBLIC_APP_URL=https://vtapp.co.in
 ```
+
+`SMTP_USERNAME`, `SMTP_FROM_EMAIL` and `SMTP_FROM_NAME` also work, as
+aliases for the first, third and fourth. Only `SMTP_USER` (or its
+alias) and `SMTP_PASSWORD` are required; the rest have defaults.
 
 `SMTP_HOST` and `SMTP_PORT` default to `smtp.gmail.com` and `587`.
 
@@ -77,8 +83,9 @@ account out for 24 hours mid-fest. `/admin/notifications` shows how
 much of the allowance is left.
 
 Batches are 20 because Gmail takes roughly a second per message and a
-Netlify function is killed at 26 seconds. At 1,214 registrations that
-is about 60 presses — tell me if you want a "send until empty" mode.
+serverless function is killed well before a thousand of them finish.
+At 1,214 registrations that is about 60 presses — tell me if you want
+a "send until empty" mode.
 
 ## If mail stops arriving
 
