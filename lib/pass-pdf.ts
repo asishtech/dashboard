@@ -80,6 +80,42 @@ function fit(
   return `${cut}...`;
 }
 
+/*
+ * Break a string across lines that fit, rather than cutting it short.
+ *
+ * Only for the claim URL: a truncated event title is still a readable
+ * title, but a truncated URL is a dead link -- and that line is the
+ * entire fallback for a QR that will not scan.
+ */
+function wrap(
+  value: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number
+) {
+  const text = ascii(value);
+
+  const lines: string[] = [];
+
+  let rest = text;
+
+  while (rest.length > 0) {
+    let take = rest.length;
+
+    while (
+      take > 1 &&
+      font.widthOfTextAtSize(rest.slice(0, take), size) > maxWidth
+    ) {
+      take -= 1;
+    }
+
+    lines.push(rest.slice(0, take));
+    rest = rest.slice(take);
+  }
+
+  return lines;
+}
+
 export async function buildPassPdf(input: {
   name: string | null;
   email: string;
@@ -220,11 +256,28 @@ export async function buildPassPdf(input: {
       { x: MARGIN, y, size: 10, font: body, color: DIM }
     );
 
-    /* The link is the fallback when a screen will not scan. */
-    page.drawText(
-      fit(`${input.appUrl}/claim/${pass.qr_token}`, body, 8, inner),
-      { x: MARGIN, y: MARGIN, size: 8, font: body, color: DIM }
+    /*
+     * The link is the fallback when a screen will not scan, so it is
+     * wrapped rather than truncated -- an ellipsis in the middle of a
+     * 64-character token makes the one line that exists to rescue a
+     * failed scan into a dead end.
+     */
+    const linkLines = wrap(
+      `${input.appUrl}/claim/${pass.qr_token}`,
+      body,
+      7,
+      inner
     );
+
+    linkLines.forEach((line, row) => {
+      page.drawText(line, {
+        x: MARGIN,
+        y: MARGIN + (linkLines.length - 1 - row) * 9,
+        size: 7,
+        font: body,
+        color: DIM,
+      });
+    });
   }
 
   return Buffer.from(await pdf.save());
