@@ -138,6 +138,11 @@ const LIVE_TABLES = [
   "registration_items",
   "distributions",
   "inventory",
+  /*
+   * Fires once after the V-TAPP sync fully completes, so this page
+   * refreshes with the complete dataset rather than mid-sync data.
+   */
+  "sync_log",
 ];
 
 export default function AdminPage() {

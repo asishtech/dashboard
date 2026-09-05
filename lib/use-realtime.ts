@@ -5,7 +5,7 @@ import { createSupabaseBrowser } from "./supabase-browser";
 import { usePoll } from "./use-poll";
 
 /* Slow reconciliation pass while pushes are arriving. */
-const LIVE_RECONCILE_MS = 120_000;
+const LIVE_RECONCILE_MS = 20_000;
 
 /* Carries the load on its own when realtime is unavailable. */
 const FALLBACK_POLL_MS = 30_000;

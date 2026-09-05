@@ -46,7 +46,7 @@ type EventSummary = {
 
 type PricingCounts = Record<Pricing, number>;
 
-const LIVE_TABLES = ["registrations", "qr_scans", "events"];
+const LIVE_TABLES = ["registrations", "qr_scans", "events", "sync_log"];
 
 const PRICING_TABS: { key: Pricing | "all"; label: string }[] = [
   { key: "all", label: "All" },
