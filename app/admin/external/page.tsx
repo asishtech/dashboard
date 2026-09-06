@@ -7,6 +7,8 @@ import {
   DownloadIcon,
   SearchIcon,
 } from "@/components/icons";
+import { DeskSearch } from "@/components/DeskSearch";
+import { ExternalDeskCard } from "@/components/ExternalDeskCard";
 
 type College = {
   name: string;
@@ -141,6 +143,35 @@ export default function ExternalPage() {
             <div className="panel-body stack">
               <div className="skeleton skeleton-line" />
               <div className="skeleton skeleton-card" />
+            </div>
+          </section>
+        )}
+
+        {ready && (
+          <section className="panel mb-6">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Visitor desk</h2>
+
+                <p className="panel-subtitle">
+                  Find a visitor, check their college ID, and admit
+                  them without a QR code
+                </p>
+              </div>
+            </div>
+
+            <div className="panel-body">
+              <DeskSearch
+                externalOnly
+                placeholder="Name, email or phone number"
+              >
+                {(person, refresh) => (
+                  <ExternalDeskCard
+                    person={person}
+                    refresh={refresh}
+                  />
+                )}
+              </DeskSearch>
             </div>
           </section>
         )}

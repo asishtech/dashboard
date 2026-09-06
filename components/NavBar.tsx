@@ -11,6 +11,7 @@ import {
   ListIcon,
   PulseIcon,
   ScanIcon,
+  SearchIcon,
   TicketIcon,
   UsersIcon,
 } from "@/components/icons";
@@ -46,6 +47,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
     { href: "/admin/external", label: "External", icon: UsersIcon },
+    { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/notifications", label: "Mail", icon: InboxIcon },
     { href: "/admin/users", label: "Staff", icon: UsersIcon },
     {
@@ -82,6 +84,7 @@ const NAV: Record<Role, NavItem[]> = {
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
     { href: "/admin/external", label: "External", icon: UsersIcon },
+    { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
   ],
 

@@ -1184,6 +1184,17 @@ table,
   box-shadow: inset 3px 0 0 0 var(--warning);
 }
 
+/* The ID card just photographed, shown back so the desk can see it
+   is readable before waving somebody through. Capped in height: a
+   phone photo is 4000px tall and would push the passes off screen. */
+.id-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 /* Step number beside a panel title.
    The mail page is a sequence — test, one person, the queue, then
    automatic — and the numbers say so, because the order matters more

@@ -83,7 +83,12 @@ async function lookup(token: string): Promise<CheckinPass | null> {
  * which is precisely what the old lookup did.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole("volunteer", "admin", "faculty");
+  const auth = await requireRole(
+    "volunteer",
+    "admin",
+    "faculty",
+    "registrations"
+  );
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -152,7 +157,18 @@ export async function GET(request: Request) {
  * "already inside" answer as a late re-scan, which is the truth.
  */
 export async function POST(request: Request) {
-  const auth = await requireRole("volunteer", "admin", "faculty");
+  const auth = await requireRole(
+    "volunteer",
+    "admin",
+    "faculty",
+    /*
+     * The registrations desk admits visitors who have no code to
+     * scan. Everything below is unchanged for them -- same
+     * one-entry-per-pass rule, same coordinator scoping -- so this
+     * widens who may admit, not what admitting means.
+     */
+    "registrations"
+  );
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -161,12 +177,41 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
 
-    const token =
+    /*
+     * A registration id is accepted alongside a token, because the
+     * desk works from a name and a face rather than a phone screen.
+     * The token is still what identifies the pass; it is resolved
+     * here rather than shipped to the browser, so a desk page never
+     * carries a bearer token it could leak.
+     */
+    let token =
       typeof body.token === "string" ? body.token.trim() : "";
+
+    if (!token && body.registrationId !== undefined) {
+      const id = Number(body.registrationId);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return NextResponse.json(
+          { error: "registrationId must be a registration" },
+          { status: 400 }
+        );
+      }
+
+      token = (await tokenForRegistration(id)) ?? "";
+
+      if (!token) {
+        return NextResponse.json(
+          {
+            error: `Registration ${id} has no QR code, so there is nothing to admit.`,
+          },
+          { status: 404 }
+        );
+      }
+    }
 
     if (!token) {
       return NextResponse.json(
-        { error: "Token is required" },
+        { error: "A token or registrationId is required" },
         { status: 400 }
       );
     }
