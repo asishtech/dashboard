@@ -65,14 +65,15 @@ Run in order:
 
 ## 4. Redeploy, then send one
 
-`/admin/notifications` → **Preview next batch** → check the list →
-**Send** → confirm one actually arrives before doing the rest.
+`/admin/notifications` → **Send yourself a test** first → then
+**Preview** the next batch → **Send all**. Confirm one actually
+arrives before letting it run.
 
 ## What sends, and when
 
 | Mail | Trigger | Volume |
 |---|---|---|
-| Registration passes (PDF) | An admin presses Send | Batches of 20 people |
+| Registration passes (PDF) | An admin presses Send all | Until the queue or the cap runs out |
 | Collection receipt | Automatic, on the last item handed over | One per buyer |
 | Sync failure alert | Automatic, to `ALERT_EMAIL` | Throttled to 1/hour |
 
@@ -87,7 +88,7 @@ press with the queue and a preview in front of you.
 
 ## Limits
 
-Set by `MAIL_DAILY_CAP`, default 1800. The app refuses to cross it,
+Set by `MAIL_DAILY_CAP`, default 450. The app refuses to cross it,
 because Gmail locks the account for 24 hours if you do — which
 mid-fest means the remaining passes never arrive.
 `/admin/notifications` shows how much is left.
@@ -97,7 +98,7 @@ The number to use depends on the plan, and the gap is large:
 | Account | Real ceiling | Set |
 |---|---|---|
 | Workspace, paid | ~2,000/day | `1800` |
-| Workspace, **free trial** | ~500/day | `400` |
+| Workspace, **free trial** | ~500/day | `450` (the default) |
 
 **A trial is the dangerous case.** Sending limits are *not* raised
 during a trial, and converting to paid is not enough on its own:
@@ -109,7 +110,7 @@ than three times the real ceiling.
 
 <https://support.google.com/a/answer/166852>
 
-At 400/day, 917 pending emails (1,408 passes) take three days.
+At 450/day, the pending queue takes three to four days.
 
 If you need the whole queue out in an afternoon, the answer is not a
 bigger cap, it is a different sender. Amazon SES speaks SMTP, so it
@@ -127,10 +128,11 @@ Workspace), then request production access — new accounts start in a
 sandbox capped at 200/day to verified addresses only, and the request
 usually clears within a day. Roughly $0.10 per thousand messages.
 
-Batches are 20 because Gmail takes roughly a second per message and a
-serverless function is killed well before a thousand of them finish.
-At 917 pending emails that is 46 presses, or 20 a day against a 400
-cap — ask if you want a "send until today's allowance is used" mode.
+Sending is one press: **Send all** loops until the queue is empty, the
+cap is reached, or you press Stop, showing the rate and an estimate as
+it goes. Each request stops itself at 22 seconds, inside the gateway's
+30-second limit, so a long run is many short requests rather than one
+that times out.
 
 ## If mail stops arriving
 

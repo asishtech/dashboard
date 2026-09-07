@@ -43,18 +43,24 @@ export type SendResult =
  *   Google Workspace, paid      ~2,000 recipients / day
  *   Google Workspace, trial       ~500 recipients / day
  *
- * A trial account is the dangerous case, because 1,800 looks like a
- * safe margin and is more than three times the real limit. Nothing in
- * the API says which plan an account is on, so this is configuration
- * rather than detection -- set MAIL_DAILY_CAP to about 400 while on
- * trial and raise it when the plan is paid for.
+ * The default is the trial figure with headroom, because that is the
+ * account this runs on and the expensive mistake is the other way
+ * round: a default of 1,800 on a trial account looks like a safe
+ * margin while being more than three times the real limit, and the
+ * penalty for crossing it is a day of silence mid-fest.
+ *
+ * Set MAIL_DAILY_CAP to raise it once the plan is paid for. Note that
+ * paying is not enough on its own -- Google lifts the limit only
+ * after the domain has spent $100 and then up to 75 days later, so
+ * check that mail is actually flowing before trusting a bigger
+ * number. See docs/email-setup.md.
  */
 export const DAILY_CAP = (() => {
   const configured = Number(process.env.MAIL_DAILY_CAP);
 
   return Number.isFinite(configured) && configured > 0
     ? Math.floor(configured)
-    : 1800;
+    : 450;
 })();
 
 let cached: Transporter | null = null;
