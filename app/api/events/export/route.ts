@@ -4,7 +4,12 @@ import { classifyPricing, type Pricing } from "@/lib/event-pricing";
 import { merchandiseEventIds } from "@/lib/events";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isTeamEvent, maxTeamSize } from "@/lib/team-events";
-import { collegeFrom, parseRaw, phoneFrom } from "@/lib/form-fields";
+import {
+  collegeFrom,
+  emailFrom,
+  parseRaw,
+  phoneFrom,
+} from "@/lib/form-fields";
 import { readAll } from "@/lib/paged";
 
 export const dynamic = "force-dynamic";
@@ -271,7 +276,7 @@ export async function GET(request: Request) {
           team: size ?? "",
           max: maxTeamSize(size) ?? "",
           name: person.name ?? "",
-          email: person.email ?? "",
+          email: person.email?.trim() || emailFrom(raw),
           phone: phoneFrom(raw),
           college: collegeFrom(raw),
           registration_id: person.registration_id ?? "",

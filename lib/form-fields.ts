@@ -20,8 +20,19 @@
  */
 
 export type RawRegistration = {
+  email?: string;
   field_values?: { field_name?: string; field_value?: string }[];
 } | null;
+
+/*
+ * The address as it arrived, for the rare row whose `email` column is
+ * empty. Today none are, and the upstream payload carries the same
+ * value -- but an export whose Email column is blank looks broken, and
+ * this is where the answer already is.
+ */
+export function emailFrom(raw: RawRegistration) {
+  return (raw?.email ?? "").trim();
+}
 
 /* raw_data is a text column on some rows and json on others. */
 export function parseRaw(raw: unknown): RawRegistration {

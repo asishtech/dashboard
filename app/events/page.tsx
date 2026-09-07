@@ -250,6 +250,17 @@ export default function EventsPage() {
     [events]
   );
 
+  /* People, not events: what the participants download will contain. */
+  const teamRegistrations = useMemo(
+    () =>
+      events.reduce(
+        (sum, event) =>
+          event.isTeam ? sum + Number(event.registrations ?? 0) : sum,
+        0
+      ),
+    [events]
+  );
+
   /*
    * What the download will actually contain.
    *
@@ -591,7 +602,14 @@ export default function EventsPage() {
                 download
               >
                 <DownloadIcon size={13} />
-                Download {exportCount} as Excel
+                {/*
+                  "events", not just a number. Next to the participants
+                  download the two files are easy to mix up, and this
+                  one holds no people at all -- one row per event, no
+                  names and no email addresses.
+                */}
+                Download {exportCount} event
+                {exportCount === 1 ? "" : "s"}
               </a>
 
               {/*
@@ -606,7 +624,7 @@ export default function EventsPage() {
                   download
                 >
                   <DownloadIcon size={13} />
-                  Participants
+                  Download {teamRegistrations} participants
                 </a>
               )}
 
