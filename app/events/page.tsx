@@ -107,6 +107,18 @@ export default function EventsPage() {
     unclassified: 0,
   });
 
+  /*
+   * Registrations that resolve to no event at all. They are counted on
+   * /admin and, until one is added to `events`, in none of the rows
+   * here -- which is the whole of the difference between the two
+   * screens' totals.
+   */
+  const [unmatched, setUnmatched] = useState(0);
+
+  const [unmatchedTickets, setUnmatchedTickets] = useState<
+    { ticket: string; count: number }[]
+  >([]);
+
   const [originAvailable, setOriginAvailable] = useState(false);
   const [capacityAvailable, setCapacityAvailable] = useState(false);
   const [teamAvailable, setTeamAvailable] = useState(false);
@@ -137,6 +149,8 @@ export default function EventsPage() {
       setOriginAvailable(Boolean(data.originAvailable));
       setCapacityAvailable(Boolean(data.capacityAvailable));
       setTeamAvailable(Boolean(data.teamAvailable));
+      setUnmatched(Number(data.unmatchedRegistrations ?? 0));
+      setUnmatchedTickets(data.unmatchedTickets ?? []);
 
       setError("");
     } catch (err) {
@@ -438,7 +452,20 @@ export default function EventsPage() {
               <strong className="stat-value">
                 {totals.registrations}
               </strong>
-              <span className="stat-meta">{scopeLabel}</span>
+
+              {/* Said here, at the number people compare against
+                  /admin, and not only in the banner below. */}
+              <span className="stat-meta">
+                {scopeLabel}
+                {unmatched > 0 && (
+                  <>
+                    {" · "}
+                    <span className="seats-over">
+                      {unmatched} in no event
+                    </span>
+                  </>
+                )}
+              </span>
             </div>
 
             <div className="stat">
@@ -483,6 +510,46 @@ export default function EventsPage() {
               </div>
             )}
           </section>
+        )}
+
+        {/*
+          Named, not just counted.
+
+          These are people holding a ticket for something this table
+          has never heard of: the ticket exists on the portal, the
+          event does not exist here, so their registration lands in no
+          row and the total on this page reads short against /admin's.
+          The fix is to add the event -- so the banner says which.
+        */}
+        {unmatched > 0 && (
+          <div className="banner banner-warning">
+            <AlertIcon size={18} />
+
+            <span>
+              <strong>
+                {unmatched} registration
+                {unmatched === 1 ? "" : "s"} belong to no event
+              </strong>{" "}
+              and are missing from every total below, which is why this
+              page reads lower than the dashboard.
+              {unmatchedTickets.length > 0 && (
+                <>
+                  {" "}
+                  No event is named{" "}
+                  {unmatchedTickets.map((row, index) => (
+                    <span key={row.ticket}>
+                      {index > 0 &&
+                        (index === unmatchedTickets.length - 1
+                          ? " or "
+                          : ", ")}
+                      <strong>{row.ticket}</strong> ({row.count})
+                    </span>
+                  ))}
+                  .
+                </>
+              )}
+            </span>
+          </div>
         )}
 
         <section className="panel">

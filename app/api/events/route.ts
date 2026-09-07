@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [summaries, merchIds, allowed, teamSizes] =
+    const [summaries, merchIds, allowed, teamSizes, unmatched] =
       await Promise.all([
         supabaseAdmin().rpc("event_summaries"),
         merchandiseEventIds(),
@@ -80,6 +80,26 @@ export async function GET(request: Request) {
          * straight from the table and merged below.
          */
         supabaseAdmin().from("events").select("event_id,team_size"),
+
+        /*
+         * Registrations that belong to no event.
+         *
+         * event_summaries() aggregates over events, so a registration
+         * whose ticket matches nothing in `events` is in none of its
+         * rows -- and the totals on this page are quietly short by
+         * that many while /admin, which counts registrations, is not.
+         * That is how 2,418 and 2,397 came to be on two screens.
+         *
+         * The tickets come back too, up to a couple of hundred rows,
+         * because the count alone says something is wrong without
+         * saying what to do: the names are the events that need
+         * adding.
+         */
+        supabaseAdmin()
+          .from("registrations")
+          .select("ticket", { count: "exact" })
+          .is("resolved_event_id", null)
+          .limit(300),
       ]);
 
     if (summaries.error) {
@@ -229,9 +249,39 @@ export async function GET(request: Request) {
           return stripped;
         });
 
+    /*
+     * Only for somebody who sees the whole festival. A coordinator's
+     * totals are their own events' and were never meant to add up to
+     * the site-wide figure, so telling them about 21 registrations in
+     * events they do not run would be noise.
+     */
+    const looseTickets = new Map<string, number>();
+
+    if (allowed === null) {
+      for (const row of (unmatched.data ?? []) as {
+        ticket: string | null;
+      }[]) {
+        const ticket = (row.ticket ?? "").trim() || "No ticket named";
+
+        looseTickets.set(
+          ticket,
+          (looseTickets.get(ticket) ?? 0) + 1
+        );
+      }
+    }
+
     return NextResponse.json({
       success: true,
       scoped: allowed !== null,
+      /*
+       * The difference between this page's total and /admin's. Zero
+       * when every registration resolves, which is the normal state.
+       */
+      unmatchedRegistrations:
+        allowed === null ? (unmatched.count ?? 0) : 0,
+      unmatchedTickets: [...looseTickets.entries()]
+        .map(([ticket, count]) => ({ ticket, count }))
+        .sort((a, b) => b.count - a.count),
       canSeeRevenue: isAdmin,
       canSetPricing: isAdmin,
       pricingCounts: counts,
