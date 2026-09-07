@@ -398,9 +398,15 @@ table,
   min-width: 0;
 }
 
-/* Scrolls rather than wrapping: six admin links do not fit a laptop
-   sidebar-free bar at every zoom level, and a wrapping nav changes
-   the page's vertical offset as you navigate. */
+/*
+   Never wraps and never scrolls out of sight.
+
+   It used to scroll sideways with the scrollbar hidden, which was
+   tolerable at six links and is not at ten: they simply left the
+   right-hand edge with nothing to say they existed. NavLinks measures
+   the row and moves whatever does not fit into a menu, so overflow is
+   a control rather than a disappearance. Wrapping is still out --
+   that changes the page's vertical offset as you navigate. */
 .nav-links {
   display: flex;
   align-items: center;
@@ -408,8 +414,15 @@ table,
 
   flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  /*
+   * Visible, not hidden.
+   *
+   * Hidden clips the More menu, which is absolutely positioned inside
+   * this row -- the button appeared and opening it showed nothing.
+   * Nothing should overflow anyway: the fit runs in a layout effect,
+   * before paint, so the full row never reaches the screen.
+   */
+  overflow: visible;
 }
 
 .nav-links::-webkit-scrollbar {
@@ -456,6 +469,63 @@ table,
 .nav-link-current svg {
   color: var(--accent);
   opacity: 1;
+}
+
+/* The overflow menu. Anchored to its button so it opens under the
+   right-hand end of the bar rather than jumping to the viewport. */
+.nav-more {
+  position: relative;
+  flex: none;
+}
+
+.nav-more-count {
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+
+  color: var(--text-muted);
+  background: var(--surface-inset);
+  border-radius: var(--radius-full);
+
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-more-menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: var(--z-overlay);
+
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  padding: var(--space-2);
+
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  /* Opaque: the bar behind it is blurred and translucent, and a
+     translucent menu over that is unreadable. */
+  backdrop-filter: blur(20px);
+}
+
+.nav-more-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
+
+.nav-more-item:hover {
+  color: var(--text);
+  background: var(--surface-inset);
 }
 
 .nav-actions {
@@ -2500,7 +2570,13 @@ fieldset.role-picker:disabled .role-chip {
   .nav-links {
     flex-direction: column;
     align-items: stretch;
-    overflow-x: visible;
+    overflow: visible;
+  }
+
+  /* Stacked, every link is already on screen, so the menu collapses
+     into the list rather than nesting a dropdown inside a dropdown. */
+  .nav-more {
+    display: none;
   }
 
   .nav-link {

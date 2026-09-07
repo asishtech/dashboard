@@ -18,22 +18,17 @@ import {
 
 import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: (props: { size?: number }) => React.ReactElement;
-  /*
-   * Sections with children match on prefix; leaf routes match
-   * exactly, so /admin does not light up while you are on
-   * /admin/inventory.
-   */
-  exact?: boolean;
-};
+import { NavLinks, type NavItem } from "@/components/NavLinks";
 
 /*
- * What each role can actually open. This mirrors needsRole() in
- * proxy.ts -- a link the active role would be bounced from is worse
+ * What each role can actually open, in the order they matter. The bar
+ * shows as many as fit and moves the rest into a menu, so this list
+ * can grow without anything being silently pushed off the edge.
+ *
+ * `exact` is for sections with children: /admin must not light up
+ * while you are on /admin/inventory.
+ *
+ * This mirrors needsRole() in proxy.ts -- a link the active role would be bounced from is worse
  * than no link, because the bounce reads as a bug.
  */
 const NAV: Record<Role, NavItem[]> = {
@@ -267,28 +262,12 @@ export default function NavBar() {
             open ? " nav-collapse-open" : ""
           }`}
         >
-          <div className="nav-links">
-            {items.map((item) => {
-              const Icon = item.icon;
-              const current = isCurrent(item);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`nav-link${
-                    current ? " nav-link-current" : ""
-                  }`}
-                  aria-current={current ? "page" : undefined}
-                  /* Collapse the mobile menu on the way out. */
-                  onClick={() => setOpen(false)}
-                >
-                  <Icon size={15} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
+          <NavLinks
+            items={items}
+            isCurrent={isCurrent}
+            /* Collapse the mobile menu on the way out. */
+            onNavigate={() => setOpen(false)}
+          />
 
           <div className="nav-actions">
             <RoleSwitcher roles={roles} activeRole={active} />
