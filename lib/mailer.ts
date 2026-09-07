@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
-import type SMTPTransport from "nodemailer/lib/smtp-transport";
+import type SMTPPool from "nodemailer/lib/smtp-pool";
 import { mailConfig } from "./env";
 import { escape, shell } from "./mail-templates";
 import { supabaseAdmin } from "./supabase";
@@ -67,11 +67,26 @@ function transport(): Transporter | null {
   if (cached) return cached;
 
   /*
-   * Typed explicitly: createTransport is overloaded, and an untyped
-   * object literal resolves to the generic Transport overload, which
-   * does not accept `host`.
+   * Typed as the pool options, not the plain SMTP ones:
+   * createTransport is overloaded, and SMTPTransport.Options has no
+   * `pool` field, so the settings below would not compile against
+   * it.
    */
-  const options: SMTPTransport.Options = {
+  const options: SMTPPool.Options = {
+    /*
+     * One connection reused for the whole batch. Unpooled, every
+     * message paid for its own TLS handshake and AUTH -- measured at
+     * 2.2 seconds against smtp.gmail.com before a byte of the message
+     * moved. Twenty messages meant twenty handshakes, which is most
+     * of why a batch ran past the gateway's thirty-second limit.
+     *
+     * One connection because Gmail throttles parallel connections
+     * from a single account, and the sends are sequential anyway.
+     */
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 200,
+
     host: config.host,
     port: config.port,
     /* 587 is STARTTLS, 465 is implicit TLS. */
@@ -84,12 +99,6 @@ function transport(): Transporter | null {
      */
     auth: { user: config.user, pass: config.pass },
   };
-
-  /*
-   * Not pooled. Serverless invocations are short-lived, so a pool would
-   * be torn down before it paid for itself; the transporter is still
-   * reused within one invocation via `cached`.
-   */
 
   cached = nodemailer.createTransport(options);
 
@@ -573,4 +582,19 @@ export async function sendPersonPasses(
       },
     ],
   });
+}
+
+
+/*
+ * Release the pooled connection.
+ *
+ * A serverless function that returns with a socket still open is
+ * frozen mid-connection, and the next invocation inherits a
+ * transporter whose socket the platform has since discarded -- which
+ * surfaced as "Client network socket disconnected before secure TLS
+ * connection was established" on exactly one row of the last batch.
+ */
+export function closeMailer() {
+  cached?.close();
+  cached = null;
 }

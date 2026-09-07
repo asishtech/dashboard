@@ -1,6 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import NavBar from "@/components/NavBar";
 import { AlertIcon } from "@/components/icons";
 
@@ -160,6 +165,20 @@ export default function NotificationsPage() {
   /* Test send. */
   const [testTo, setTestTo] = useState("");
 
+  /*
+   * Draining the queue takes many requests, so the button starts a
+   * run rather than sending one batch. Stopping is a state the user
+   * controls, not something they achieve by closing the tab.
+   */
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{
+    sent: number;
+    failed: number;
+    rate: number | null;
+  } | null>(null);
+
+  const stopRef = useRef(false);
+
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/notifications", {
@@ -291,6 +310,69 @@ export default function NotificationsPage() {
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  /*
+   * Keep sending until the queue is empty, the cap is reached, or the
+   * user stops.
+   *
+   * One request can only do about twenty-two seconds of work before
+   * the gateway gives up, which is a handful of emails -- so a
+   * thousand of them is a hundred presses. The loop does the pressing
+   * and reports as it goes.
+   */
+  async function drain() {
+    if (running || busy) return;
+
+    stopRef.current = false;
+    setRunning(true);
+    setError("");
+    setMessage("");
+    setPreview(null);
+
+    let sent = 0;
+    let failed = 0;
+    let rate: number | null = null;
+
+    try {
+      /* eslint-disable-next-line no-constant-condition */
+      while (true) {
+        if (stopRef.current) break;
+
+        const data = await post({});
+
+        sent += Number(data.sent ?? 0);
+        failed += Number(data.failed ?? 0);
+
+        if (data.msPerEmail) rate = Number(data.msPerEmail);
+
+        setProgress({ sent, failed, rate });
+
+        /* Nothing attempted means the queue is empty. */
+        if (Number(data.attempted ?? 0) === 0) break;
+
+        if (Array.isArray(data.errors) && data.errors.length > 0) {
+          setError(
+            (data.errors as { email: string; error: string }[])
+              .map((e) => `${e.email}: ${e.error}`)
+              .join(" · ")
+          );
+        }
+      }
+
+      setMessage(
+        `Sent ${sent}${failed > 0 ? `, ${failed} failed` : ""}.${
+          stopRef.current ? " Stopped." : " Queue is empty."
+        }`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Sending stopped"
+      );
+    } finally {
+      setRunning(false);
+      await load();
     }
   }
 
@@ -760,25 +842,54 @@ export default function NotificationsPage() {
                     Preview next {Math.min(queue.batchSize, waiting)}
                   </button>
 
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={busy || nextBatch === 0}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Send ${nextBatch} email${
-                            nextBatch === 1 ? "" : "s"
-                          } now? Each carries every pass that person holds. This cannot be undone.`
-                        )
-                      ) {
-                        void run(false);
-                      }
-                    }}
-                  >
-                    Send {nextBatch} now
-                  </button>
+                  {running ? (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => {
+                        stopRef.current = true;
+                      }}
+                    >
+                      <span className="btn-spinner" />
+                      Stop after this batch
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={busy || waiting === 0}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Start sending to all ${waiting} people? It keeps going until the queue is empty, the daily cap is reached, or you stop it. This cannot be undone.`
+                          )
+                        ) {
+                          void drain();
+                        }
+                      }}
+                    >
+                      Send all {waiting}
+                    </button>
+                  )}
                 </div>
+
+                {progress && (
+                  <p className="help mt-4">
+                    {progress.sent} sent
+                    {progress.failed > 0 &&
+                      `, ${progress.failed} failed`}
+                    {progress.rate &&
+                      ` · about ${(progress.rate / 1000).toFixed(
+                        1
+                      )}s each`}
+                    {running &&
+                      progress.rate &&
+                      waiting > 0 &&
+                      ` · roughly ${Math.ceil(
+                        (waiting * progress.rate) / 60000
+                      )} min left`}
+                  </p>
+                )}
 
                 {waiting === 0 && (
                   <p className="help mt-4">

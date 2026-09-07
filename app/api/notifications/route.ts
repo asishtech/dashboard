@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { mailConfig } from "@/lib/env";
 import {
   DAILY_CAP,
+  closeMailer,
   mailEnabled,
   sendPersonPasses,
   sendTest,
@@ -16,14 +17,29 @@ import {
 export const dynamic = "force-dynamic";
 
 /*
- * Batches are small on purpose. Gmail takes roughly a second per
- * message over SMTP, and a Netlify function is cut off at 26 seconds,
- * so 20 leaves room for the round-trips either side. Sending the whole
- * queue in one request would time out halfway and leave nobody able to
- * say which half went.
+ * The most people one request will attempt. The real limit is the
+ * deadline below -- this is just the size of the queue read, so a
+ * fast connection is not capped at a number chosen when every message
+ * cost a TLS handshake.
  */
 const BATCH_SIZE = 20;
 const MAX_BATCH = 40;
+
+/*
+ * How long the send loop may run before it stops and reports.
+ *
+ * The gateway in front of this gives up at thirty seconds. It used to
+ * be the only limit, so a batch of twenty at roughly eight seconds
+ * each ran for three minutes: the browser saw 504, the function
+ * carried on writing rows nobody was watching, and the last message
+ * died mid-handshake when the platform finally froze it. Every one of
+ * those symptoms is the same missing thing -- a deadline the code
+ * knows about.
+ *
+ * Twenty-two seconds leaves room for the queue read, the cap check
+ * and the response.
+ */
+const DEADLINE_MS = 22_000;
 
 /* One pass. Several of these belong to one Person. */
 type Pass = {
@@ -238,6 +254,10 @@ export async function POST(request: Request) {
     let sent = 0;
     let failed = 0;
 
+    const started = Date.now();
+
+    let ranOut = false;
+
     const errors: { email: string; error: string }[] = [];
 
     /*
@@ -246,6 +266,16 @@ export async function POST(request: Request) {
      * whole batch rather than one message.
      */
     for (const person of pending) {
+      /*
+       * Checked before each message rather than after: stopping with
+       * time left is fine, being killed mid-send is what wrote a
+       * half-finished row last time.
+       */
+      if (Date.now() - started > DEADLINE_MS) {
+        ranOut = true;
+        break;
+      }
+
       const result = await sendPersonPasses({
         email: person.email,
         name: person.name,
@@ -263,12 +293,27 @@ export async function POST(request: Request) {
       }
     }
 
+    /*
+     * Hand the socket back before returning. A function frozen with a
+     * pooled connection still open leaves the next invocation holding
+     * a socket the platform has since discarded -- which is exactly
+     * the "socket disconnected before secure TLS" failure in the log.
+     */
+    closeMailer();
+
+    const elapsed = Date.now() - started;
+
     return NextResponse.json({
       success: true,
-      attempted: pending.length,
+      attempted: sent + failed,
       sent,
       failed,
       errors,
+      /* Stopped for time rather than because the batch was done. */
+      ranOut,
+      /* So the screen can say how fast it is actually going. */
+      elapsedMs: elapsed,
+      msPerEmail: sent > 0 ? Math.round(elapsed / sent) : null,
     });
   } catch (error) {
     console.error("Notifications POST error:", error);

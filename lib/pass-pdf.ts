@@ -209,7 +209,11 @@ export async function buildPassPdf(input: {
      */
     const dataUrl = await QRCode.toDataURL(
       `${input.appUrl}/claim/${pass.qr_token}`,
-      { width: 600, margin: 1, errorCorrectionLevel: "H" }
+      /* 420 rather than 600: the page draws it at 348pt, so 600 was
+         oversampling and generation time scales with pixels. Error
+         correction stays at H -- that is about creases and thumbs,
+         not resolution. */
+      { width: 420, margin: 1, errorCorrectionLevel: "H" }
     );
 
     const png = await pdf.embedPng(
