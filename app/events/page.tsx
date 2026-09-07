@@ -528,6 +528,17 @@ export default function EventsPage() {
                 Download {onlyEmpty ? emptyCount : filtered.length} as
                 Excel
               </a>
+
+              {capacityAvailable && (
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href="/api/events/export?filter=seats"
+                  download
+                >
+                  <DownloadIcon size={13} />
+                  Seats left
+                </a>
+              )}
             </div>
           </div>
 

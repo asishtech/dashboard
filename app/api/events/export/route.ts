@@ -42,8 +42,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const onlyEmpty =
-      new URL(request.url).searchParams.get("filter") === "empty";
+    const filter = new URL(request.url).searchParams.get("filter");
+
+    const onlyEmpty = filter === "empty";
+
+    /*
+     * A two-column sheet: event, seats left. Asked for as its own
+     * thing rather than a column on the wide export, because it gets
+     * printed and handed to people on a desk who do not need revenue
+     * or check-in counts on the page.
+     */
+    const seatsOnly = filter === "seats";
 
     const [summaries, merchIds, allowed] = await Promise.all([
       supabaseAdmin().rpc("event_summaries"),
@@ -63,6 +72,12 @@ export async function GET(request: Request) {
       .filter((event) =>
         onlyEmpty ? Number(event.registrations ?? 0) === 0 : true
       )
+      /* No capacity means no answer to "how many left". */
+      .filter((event) =>
+        seatsOnly
+          ? event.capacity !== null && event.capacity !== undefined
+          : true
+      )
       .sort(
         (a, b) =>
           Number(b.registrations ?? 0) -
@@ -80,8 +95,59 @@ export async function GET(request: Request) {
     book.created = new Date();
 
     const sheet = book.addWorksheet(
-      onlyEmpty ? "No registrations" : "Events"
+      seatsOnly
+        ? "Seats left"
+        : onlyEmpty
+          ? "No registrations"
+          : "Events"
     );
+
+    if (seatsOnly) {
+      sheet.columns = [
+        { header: "Event", key: "name", width: 56 },
+        { header: "Seats left", key: "seats", width: 12 },
+      ];
+
+      const head = sheet.getRow(1);
+      head.font = { bold: true };
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      /* Fewest seats first: the point of this sheet is what is about
+         to run out, not an alphabetical inventory. */
+      for (const event of [...rows].sort(
+        (a, b) =>
+          Number(a.seatsRemaining ?? 0) - Number(b.seatsRemaining ?? 0)
+      )) {
+        const left = Number(event.seatsRemaining ?? 0);
+
+        const row = sheet.addRow({
+          name: event.name,
+          /* Negative is the truth, not zero: an event 14 past its cap
+             is a different problem from one exactly full. */
+          seats: left,
+        });
+
+        if (left <= 0) {
+          row.getCell("seats").font = {
+            bold: true,
+            color: { argb: "FFB00020" },
+          };
+        }
+      }
+
+      const buffer = await book.xlsx.writeBuffer();
+
+      return new NextResponse(buffer as ArrayBuffer, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="vtapp-seats-left-${new Date()
+            .toISOString()
+            .slice(0, 10)}.xlsx"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
 
     sheet.columns = [
       { header: "Event", key: "name", width: 46 },
