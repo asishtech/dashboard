@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { Pass, Person } from "@/components/DeskSearch";
 import { CheckIcon } from "@/components/icons";
+import { LivePhotoCapture } from "@/components/LivePhotoCapture";
 
 /*
  * One visitor at the desk: who they are, their college ID, and the
@@ -24,6 +25,13 @@ export function ExternalDeskCard({
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
+
+  /* Whether the live-photo camera is open, and what it proved. */
+  const [capturing, setCapturing] = useState(false);
+  const [photo, setPhoto] = useState<{
+    liveness: string;
+    score: number;
+  } | null>(null);
 
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -181,6 +189,49 @@ export function ExternalDeskCard({
             className="id-preview mt-3"
           />
         )}
+
+        {/* The person, not the document ------------------------- */}
+        <div className="resend-search mt-4">
+          {capturing ? (
+            <LivePhotoCapture
+              registrationId={anchor.id}
+              onDone={(result) => {
+                setPhoto(result);
+                setCapturing(false);
+                setNote(
+                  result.liveness === "blink"
+                    ? "Live photo saved — blink confirmed."
+                    : "Live photo saved — movement confirmed, not a blink."
+                );
+                refresh();
+              }}
+              onCancel={() => setCapturing(false)}
+            />
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setNote("");
+                  setError("");
+                  setCapturing(true);
+                }}
+                disabled={busy !== ""}
+              >
+                {photo ? "Retake live photo" : "Take live photo"}
+              </button>
+
+              {photo && (
+                <span className="row-meta">
+                  {photo.liveness === "blink"
+                    ? `blink confirmed (${photo.score.toFixed(2)})`
+                    : `movement only (${photo.score.toFixed(1)})`}
+                </span>
+              )}
+            </>
+          )}
+        </div>
 
         {/* 2. The passes ----------------------------------------- */}
         <div className="stack mt-4">

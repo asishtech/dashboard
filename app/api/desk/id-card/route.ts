@@ -57,6 +57,13 @@ export async function POST(request: Request) {
       );
     }
 
+    /*
+     * The same route takes both desk photographs: the ID card, and
+     * the live photo of the person holding it. They share a bucket, a
+     * row and a size limit; only the column and the path differ.
+     */
+    const kind = form.get("kind") === "photo" ? "photo" : "id";
+
     const file = form.get("file");
 
     if (!(file instanceof File)) {
@@ -95,7 +102,10 @@ export async function POST(request: Request) {
      * accumulates: the desk photographing a card twice should leave
      * one card, not two.
      */
-    const path = `${id}.${extension}`;
+    const path =
+      kind === "photo"
+        ? `${id}-photo.${extension}`
+        : `${id}.${extension}`;
 
     const { error: uploadError } = await db.storage
       .from(BUCKET)
@@ -106,15 +116,39 @@ export async function POST(request: Request) {
 
     if (uploadError) throw uploadError;
 
-    const { error } = await db.from("external_id_cards").upsert(
-      {
-        registration_id: id,
-        storage_path: path,
-        uploaded_by: auth.user.email ?? null,
-        uploaded_at: new Date().toISOString(),
-      },
-      { onConflict: "registration_id" }
-    );
+    const now = new Date().toISOString();
+
+    /*
+     * storage_path is NOT NULL, so a photo arriving before the card
+     * cannot leave it empty. The photo's own path stands in until a
+     * card is taken, and the card overwrites it -- which is the right
+     * way round, because the row exists to say "this visitor was
+     * checked" and either check starts that.
+     */
+    const patch: Record<string, unknown> =
+      kind === "photo"
+        ? {
+            registration_id: id,
+            storage_path: path,
+            photo_path: path,
+            photo_at: now,
+            photo_by: auth.user.email ?? null,
+            liveness:
+              typeof form.get("liveness") === "string"
+                ? String(form.get("liveness"))
+                : "none",
+            liveness_score: Number(form.get("livenessScore")) || null,
+          }
+        : {
+            registration_id: id,
+            storage_path: path,
+            uploaded_by: auth.user.email ?? null,
+            uploaded_at: now,
+          };
+
+    const { error } = await db
+      .from("external_id_cards")
+      .upsert(patch, { onConflict: "registration_id" });
 
     if (error?.code === "42P01") {
       return NextResponse.json(
@@ -123,9 +157,17 @@ export async function POST(request: Request) {
       );
     }
 
+    /* 42703: the photo columns arrive with desk-photo.sql. */
+    if (error?.code === "42703") {
+      return NextResponse.json(
+        { error: "Run supabase/desk-photo.sql to store live photos." },
+        { status: 409 }
+      );
+    }
+
     if (error) throw error;
 
-    return NextResponse.json({ success: true, path });
+    return NextResponse.json({ success: true, path, kind });
   } catch (error) {
     console.error("ID card upload failed:", error);
 
