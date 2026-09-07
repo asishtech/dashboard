@@ -3,6 +3,9 @@ import { allowedEventIds, requireRole } from "@/lib/auth";
 import { classifyPricing, type Pricing } from "@/lib/event-pricing";
 import { merchandiseEventIds } from "@/lib/events";
 import { supabaseAdmin } from "@/lib/supabase";
+import { isTeamEvent, maxTeamSize } from "@/lib/team-events";
+import { collegeFrom, parseRaw, phoneFrom } from "@/lib/form-fields";
+import { readAll } from "@/lib/paged";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +28,18 @@ type Summary = {
   fillPercentage?: number | null;
 };
 
+type Participant = {
+  id: number;
+  registration_id: string | null;
+  name: string | null;
+  email: string | null;
+  created_at: string | null;
+  resolved_event_id: string | null;
+  raw_data: unknown;
+};
+
 /*
- * GET /api/events/export?filter=empty|all
+ * GET /api/events/export?filter=empty|all|seats|teams|team-participants
  *
  * The events list as a real .xlsx.
  *
@@ -42,9 +55,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const filter = new URL(request.url).searchParams.get("filter");
+    const params = new URL(request.url).searchParams;
 
-    const onlyEmpty = filter === "empty";
+    const filter = params.get("filter");
+
+    /*
+     * Also a modifier, so it can stack with the team filter below.
+     * "Which team events has nobody entered" needs both at once, and
+     * one `filter` value cannot express two questions.
+     */
+    const onlyEmpty = filter === "empty" || params.get("empty") === "1";
 
     /*
      * A two-column sheet: event, seats left. Asked for as its own
@@ -54,11 +74,24 @@ export async function GET(request: Request) {
      */
     const seatsOnly = filter === "seats";
 
-    const [summaries, merchIds, allowed] = await Promise.all([
-      supabaseAdmin().rpc("event_summaries"),
-      merchandiseEventIds(),
-      allowedEventIds(auth),
-    ]);
+    /* The events entered as teams, and separately the people in them. */
+    const teamsOnly = filter === "teams";
+    const teamPeople = filter === "team-participants";
+
+    const [summaries, merchIds, allowed, teamSizes] =
+      await Promise.all([
+        supabaseAdmin().rpc("event_summaries"),
+        merchandiseEventIds(),
+        allowedEventIds(auth),
+        supabaseAdmin().from("events").select("event_id,team_size"),
+      ]);
+
+    const teamSizeById = new Map(
+      ((teamSizes.data ?? []) as {
+        event_id: string;
+        team_size: string | null;
+      }[]).map((row) => [String(row.event_id), row.team_size])
+    );
 
     if (summaries.error) throw summaries.error;
 
@@ -76,6 +109,11 @@ export async function GET(request: Request) {
       .filter((event) =>
         seatsOnly
           ? event.capacity !== null && event.capacity !== undefined
+          : true
+      )
+      .filter((event) =>
+        teamsOnly || teamPeople
+          ? isTeamEvent(teamSizeById.get(String(event.event_id)))
           : true
       )
       .sort(
@@ -97,9 +135,13 @@ export async function GET(request: Request) {
     const sheet = book.addWorksheet(
       seatsOnly
         ? "Seats left"
-        : onlyEmpty
-          ? "No registrations"
-          : "Events"
+        : teamPeople
+          ? "Team participants"
+          : teamsOnly
+            ? "Team events"
+            : onlyEmpty
+              ? "No registrations"
+              : "Events"
     );
 
     if (seatsOnly) {
@@ -149,8 +191,170 @@ export async function GET(request: Request) {
       });
     }
 
+    /*
+     * Everybody registered for a team event, one row each.
+     *
+     * One row each, and not one row per team, because there are no
+     * teams in the data. The feed carries a registration per person
+     * with nothing linking them: no team name, no captain, no shared
+     * order -- 1,000 sampled registrations gave 0 order_ids covering
+     * more than one of them. So this is the roster of people entering
+     * team events, and who stands with whom is settled at the venue.
+     */
+    if (teamPeople) {
+      const ids = rows.map((event) => String(event.event_id));
+
+      const db = supabaseAdmin();
+
+      const [people, scans] = await Promise.all([
+        ids.length === 0
+          ? Promise.resolve({ rows: [] as Participant[] })
+          : readAll<Participant>((from, to) =>
+              db
+                .from("registrations")
+                .select(
+                  "id,registration_id,name,email,created_at,resolved_event_id,raw_data"
+                )
+                .in("resolved_event_id", ids)
+                .order("id", { ascending: true })
+                .range(from, to)
+            ),
+
+        /*
+         * Every scan rather than the ones for these registrations:
+         * `in` on a couple of thousand ids is a URL no proxy will
+         * carry, and the whole table is three columns.
+         */
+        readAll<{
+          registration_id: number;
+          scanned_at: string | null;
+        }>((from, to) =>
+          db
+            .from("qr_scans")
+            .select("registration_id,scanned_at")
+            .order("id", { ascending: true })
+            .range(from, to)
+        ),
+      ]);
+
+      const enteredAt = new Map<number, string>();
+
+      for (const scan of scans.rows) {
+        const at = scan.scanned_at ?? "";
+
+        /* First scan wins: that is when they came in. */
+        if (at && !enteredAt.has(Number(scan.registration_id))) {
+          enteredAt.set(Number(scan.registration_id), at);
+        }
+      }
+
+      const eventById = new Map(rows.map((e) => [String(e.event_id), e]));
+
+      const sorted = [...people.rows].sort((a, b) => {
+        const left = eventById.get(String(a.resolved_event_id));
+        const right = eventById.get(String(b.resolved_event_id));
+
+        return (
+          (left?.name ?? "").localeCompare(right?.name ?? "") ||
+          (a.name ?? "").localeCompare(b.name ?? "")
+        );
+      });
+
+      const built = sorted.map((person) => {
+        const event = eventById.get(String(person.resolved_event_id));
+        const size = teamSizeById.get(String(person.resolved_event_id));
+        const raw = parseRaw(person.raw_data);
+        const entered = enteredAt.get(person.id);
+
+        return {
+          event: event?.name ?? person.resolved_event_id ?? "",
+          team: size ?? "",
+          max: maxTeamSize(size) ?? "",
+          name: person.name ?? "",
+          email: person.email ?? "",
+          phone: phoneFrom(raw),
+          college: collegeFrom(raw),
+          registration_id: person.registration_id ?? "",
+          registered: person.created_at
+            ? new Date(person.created_at).toLocaleString("en-IN")
+            : "",
+          checkedIn: entered
+            ? new Date(entered).toLocaleString("en-IN")
+            : "",
+        };
+      });
+
+      /*
+       * Phone is dropped when nobody has one.
+       *
+       * Only some forms ask for a number, and today none of the team
+       * events do -- all 157 phone numbers in the feed came in on
+       * merchandise orders. A "Phone" heading over 1,010 blank cells
+       * reads as an export that failed rather than as a question that
+       * was never asked, so the column appears only once an answer
+       * exists.
+       */
+      const anyPhone = built.some((row) => row.phone);
+
+      sheet.columns = [
+        { header: "Event", key: "event", width: 40 },
+        { header: "Team size", key: "team", width: 22 },
+        { header: "Max per team", key: "max", width: 13 },
+        { header: "Name", key: "name", width: 28 },
+        { header: "Email", key: "email", width: 32 },
+        ...(anyPhone
+          ? [{ header: "Phone", key: "phone", width: 15 }]
+          : []),
+        { header: "College", key: "college", width: 34 },
+        { header: "Registration ID", key: "registration_id", width: 16 },
+        { header: "Registered", key: "registered", width: 20 },
+        { header: "Checked in", key: "checkedIn", width: 20 },
+      ];
+
+      const head = sheet.getRow(1);
+      head.font = { bold: true };
+      head.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF3E6DA" },
+      };
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      for (const row of built) {
+        sheet.addRow(row);
+      }
+
+      sheet.addRow({});
+
+      const summary = sheet.addRow({
+        event: `${sorted.length} registration${
+          sorted.length === 1 ? "" : "s"
+        } across ${rows.length} team event${
+          rows.length === 1 ? "" : "s"
+        }`,
+      });
+
+      summary.font = { bold: true };
+
+      const teamBuffer = await book.xlsx.writeBuffer();
+
+      return new NextResponse(teamBuffer as ArrayBuffer, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="vtapp-team-participants-${new Date()
+            .toISOString()
+            .slice(0, 10)}.xlsx"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     sheet.columns = [
       { header: "Event", key: "name", width: 46 },
+      ...(teamsOnly
+        ? [{ header: "Team size", key: "team", width: 22 }]
+        : []),
       { header: "Day", key: "day", width: 10 },
       { header: "Venue", key: "venue", width: 22 },
       { header: "Pricing", key: "pricing", width: 10 },
@@ -183,6 +387,9 @@ export async function GET(request: Request) {
 
       sheet.addRow({
         name: event.name,
+        ...(teamsOnly
+          ? { team: teamSizeById.get(String(event.event_id)) ?? "" }
+          : {}),
         day: event.event_date ?? "",
         venue: event.venue ?? "",
         pricing: classifyPricing(event) as Pricing,
@@ -253,7 +460,13 @@ export async function GET(request: Request) {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="vtapp-${
-          onlyEmpty ? "events-with-no-registrations" : "events"
+          teamsOnly
+            ? onlyEmpty
+              ? "team-events-with-no-registrations"
+              : "team-events"
+            : onlyEmpty
+              ? "events-with-no-registrations"
+              : "events"
         }-${stamp}.xlsx"`,
         "Cache-Control": "no-store",
       },

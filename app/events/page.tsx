@@ -43,6 +43,12 @@ type EventSummary = {
   /* Signed: negative means the event is over its cap. */
   seatsRemaining?: number | null;
   fillPercentage?: number | null;
+  /*
+   * Free text off the organisers' sheet: "Individual", "Team(2)",
+   * "Team (3-5 members)". `isTeam` is the server's reading of it.
+   */
+  teamSize?: string | null;
+  isTeam?: boolean;
 };
 
 type PricingCounts = Record<Pricing, number>;
@@ -76,6 +82,13 @@ export default function EventsPage() {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
 
   /*
+   * The events entered as teams. Stacks with the other two rather than
+   * replacing them -- "which team events has nobody entered" is a real
+   * question and one checkbox each is what lets it be asked.
+   */
+  const [onlyTeams, setOnlyTeams] = useState(false);
+
+  /*
    * Fullest first by default.
    *
    * The list arrives ordered by registrations, which puts the biggest
@@ -96,6 +109,7 @@ export default function EventsPage() {
 
   const [originAvailable, setOriginAvailable] = useState(false);
   const [capacityAvailable, setCapacityAvailable] = useState(false);
+  const [teamAvailable, setTeamAvailable] = useState(false);
 
   const loadEvents = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -122,6 +136,7 @@ export default function EventsPage() {
 
       setOriginAvailable(Boolean(data.originAvailable));
       setCapacityAvailable(Boolean(data.capacityAvailable));
+      setTeamAvailable(Boolean(data.teamAvailable));
 
       setError("");
     } catch (err) {
@@ -164,6 +179,10 @@ export default function EventsPage() {
         return false;
       }
 
+      if (onlyTeams && !event.isTeam) {
+        return false;
+      }
+
       if (!query) return true;
 
       return (
@@ -201,7 +220,7 @@ export default function EventsPage() {
         Number(b.registrations ?? 0) - Number(a.registrations ?? 0)
       );
     });
-  }, [events, search, pricingTab, onlyEmpty, sortMode]);
+  }, [events, search, pricingTab, onlyEmpty, onlyTeams, sortMode]);
 
   /* How many need looking at, regardless of the current filters. */
   const pressure = useMemo(() => {
@@ -224,6 +243,36 @@ export default function EventsPage() {
         (event) => Number(event.registrations ?? 0) === 0
       ).length,
     [events]
+  );
+
+  const teamCount = useMemo(
+    () => events.filter((event) => event.isTeam).length,
+    [events]
+  );
+
+  /*
+   * What the download will actually contain.
+   *
+   * The export takes the two checkboxes and nothing else -- not the
+   * search box, not the pricing tab -- so counting `filtered` here
+   * would promise a number the file does not deliver.
+   */
+  const exportQuery = onlyTeams
+    ? onlyEmpty
+      ? "?filter=teams&empty=1"
+      : "?filter=teams"
+    : onlyEmpty
+      ? "?filter=empty"
+      : "";
+
+  const exportCount = useMemo(
+    () =>
+      events.filter(
+        (event) =>
+          (!onlyTeams || event.isTeam) &&
+          (!onlyEmpty || Number(event.registrations ?? 0) === 0)
+      ).length,
+    [events, onlyTeams, onlyEmpty]
   );
 
   /*
@@ -476,6 +525,25 @@ export default function EventsPage() {
                 </span>
               </label>
 
+              {teamAvailable && (
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={onlyTeams}
+                    onChange={(event) =>
+                      setOnlyTeams(event.target.checked)
+                    }
+                  />
+
+                  <span>
+                    Team events
+                    <span className="segmented-count">
+                      {teamCount}
+                    </span>
+                  </span>
+                </label>
+              )}
+
               {capacityAvailable && (
                 <label className="check">
                   <input
@@ -513,9 +581,7 @@ export default function EventsPage() {
 
               <a
                 className="btn btn-ghost btn-sm"
-                href={`/api/events/export${
-                  onlyEmpty ? "?filter=empty" : ""
-                }`}
+                href={`/api/events/export${exportQuery}`}
                 /*
                  * A plain link, not a fetch-and-blob. The server sets
                  * Content-Disposition, so the browser saves it with
@@ -525,9 +591,24 @@ export default function EventsPage() {
                 download
               >
                 <DownloadIcon size={13} />
-                Download {onlyEmpty ? emptyCount : filtered.length} as
-                Excel
+                Download {exportCount} as Excel
               </a>
+
+              {/*
+                Offered only with the box ticked, so it reads as "the
+                people in these events" rather than a second export
+                that happens to sit next to the first.
+              */}
+              {onlyTeams && (
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href="/api/events/export?filter=team-participants"
+                  download
+                >
+                  <DownloadIcon size={13} />
+                  Participants
+                </a>
+              )}
 
               {capacityAvailable && (
                 <a
@@ -620,6 +701,7 @@ export default function EventsPage() {
                   <tr>
                     <th scope="col">Event</th>
                     <th scope="col">Price</th>
+                    {teamAvailable && <th scope="col">Entry</th>}
                     <th scope="col" className="table-num">
                       Registrations
                     </th>
@@ -744,6 +826,31 @@ export default function EventsPage() {
                             </span>
                           )}
                         </td>
+
+                        {teamAvailable && (
+                          <td>
+                            {/*
+                              The sheet's own words, not a tidied-up
+                              version: "Individual/Team(upto 4)" means
+                              something to the club running it, and
+                              rewriting it as "Team" would lose that.
+                            */}
+                            {event.teamSize ? (
+                              <span
+                                className={`badge ${
+                                  event.isTeam
+                                    ? "badge-accent"
+                                    : "badge-plain"
+                                }`}
+                                title={event.teamSize}
+                              >
+                                {event.teamSize}
+                              </span>
+                            ) : (
+                              <span className="dim">—</span>
+                            )}
+                          </td>
+                        )}
 
                         <td className="table-num">{registrations}</td>
 

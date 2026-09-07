@@ -6,6 +6,7 @@ import {
   type Pricing,
 } from "@/lib/event-pricing";
 import { merchandiseEventIds } from "@/lib/events";
+import { isTeamEvent } from "@/lib/team-events";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -66,11 +67,20 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [summaries, merchIds, allowed] = await Promise.all([
-      supabaseAdmin().rpc("event_summaries"),
-      merchandiseEventIds(),
-      allowedEventIds(auth),
-    ]);
+    const [summaries, merchIds, allowed, teamSizes] =
+      await Promise.all([
+        supabaseAdmin().rpc("event_summaries"),
+        merchandiseEventIds(),
+        allowedEventIds(auth),
+        /*
+         * team_size is not in event_summaries and does not belong
+         * there -- it never changes as registrations come in, so
+         * recomputing it inside an aggregate over 2,400 rows would be
+         * work done per request for a value written once. Read
+         * straight from the table and merged below.
+         */
+        supabaseAdmin().from("events").select("event_id,team_size"),
+      ]);
 
     if (summaries.error) {
       throw summaries.error;
@@ -115,11 +125,24 @@ export async function GET(request: Request) {
      * screen and the counts below can never disagree about which
      * bucket an event is in.
      */
-    const classified = searched.map((event) => ({
-      ...event,
-      pricingResolved: classifyPricing(event),
-      pricingMixed: isMixed(event),
-    }));
+    const teamSizeById = new Map(
+      ((teamSizes.data ?? []) as {
+        event_id: string;
+        team_size: string | null;
+      }[]).map((row) => [String(row.event_id), row.team_size])
+    );
+
+    const classified = searched.map((event) => {
+      const teamSize = teamSizeById.get(String(event.event_id));
+
+      return {
+        ...event,
+        pricingResolved: classifyPricing(event),
+        pricingMixed: isMixed(event),
+        teamSize: teamSize ?? null,
+        isTeam: isTeamEvent(teamSize),
+      };
+    });
 
     const requested = new URL(request.url).searchParams.get("pricing");
 
@@ -214,6 +237,11 @@ export async function GET(request: Request) {
       pricingCounts: counts,
       originAvailable,
       capacityAvailable,
+      /* Absent only if supabase/event-details.sql never ran. */
+      teamAvailable: classified.some(
+        (event) => event.teamSize !== null
+      ),
+      teamCount: classified.filter((event) => event.isTeam).length,
       originCounts: origin,
       count: payload.length,
       events: payload,
