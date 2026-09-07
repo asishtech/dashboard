@@ -17,6 +17,7 @@ import {
 } from "@/components/icons";
 
 import { ROLE_LABEL, type Role } from "@/lib/roles";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 type NavItem = {
   href: string;
@@ -93,6 +94,35 @@ const NAV: Record<Role, NavItem[]> = {
   ],
 };
 
+/*
+ * A session that has lapsed while the page stayed open.
+ *
+ * The proxy only runs on navigation, so a tab left sitting keeps
+ * rendering long after its token expired -- and every API call under
+ * it answers 401 while the screen still looks signed in. That reads
+ * as the app being broken rather than as needing to sign in again.
+ *
+ * The sign-out is not tidiness. /login checks for a client-side
+ * session and bounces straight back to /auth/redirect, so redirecting
+ * with the stale session still in storage is a loop. Clearing it
+ * first is what makes the redirect terminate.
+ */
+async function sessionLapsed(pathname: string) {
+  if (pathname.startsWith("/login") || pathname.startsWith("/auth/")) {
+    return;
+  }
+
+  try {
+    await createSupabaseBrowser().auth.signOut();
+  } catch {
+    /* Going to /login matters more than a clean sign-out. */
+  }
+
+  window.location.href = `/login?next=${encodeURIComponent(
+    pathname
+  )}`;
+}
+
 export default function NavBar() {
   const pathname = usePathname();
 
@@ -104,7 +134,20 @@ export default function NavBar() {
     let cancelled = false;
 
     fetch("/api/auth/role", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        /*
+         * 401 is the only status treated as "signed out". A 500 or a
+         * dropped connection is the server having a bad moment, and
+         * throwing somebody back to the login screen for that would
+         * lose whatever they were in the middle of.
+         */
+        if (r.status === 401) {
+          if (!cancelled) await sessionLapsed(pathname);
+          return null;
+        }
+
+        return r.ok ? r.json() : null;
+      })
       .then((data) => {
         if (cancelled || !data?.success) return;
         setRoles(data.roles ?? []);
@@ -117,7 +160,7 @@ export default function NavBar() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   /*
    * Heartbeat, so the admin activity page can say who is actually on
@@ -142,9 +185,18 @@ export default function NavBar() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: window.location.pathname }),
         keepalive: true,
-      }).catch(() => {
-        /* A gate must not care that the monitor is down. */
-      });
+      })
+        .then((r) => {
+          /* The heartbeat is also the liveness check on the session:
+             a tab left open finds out within one interval rather than
+             on the next click. */
+          if (r.status === 401 && !stopped) {
+            void sessionLapsed(window.location.pathname);
+          }
+        })
+        .catch(() => {
+          /* A gate must not care that the monitor is down. */
+        });
     };
 
     beat();
