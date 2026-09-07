@@ -1195,6 +1195,13 @@ table,
   border-radius: var(--radius);
 }
 
+/* The expanded people list under a college row. Inset so it reads as
+   belonging to the row above rather than as more rows. */
+.drill {
+  padding: var(--space-4);
+  background: var(--bg);
+}
+
 /* Step number beside a panel title.
    The mail page is a sequence — test, one person, the queue, then
    automatic — and the numbers say so, because the order matters more

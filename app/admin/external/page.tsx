@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import NavBar from "@/components/NavBar";
 import {
   AlertIcon,
@@ -10,9 +16,27 @@ import {
 import { DeskSearch } from "@/components/DeskSearch";
 import { ExternalDeskCard } from "@/components/ExternalDeskCard";
 
+type CollegePerson = {
+  name: string | null;
+  email: string;
+  phone: string | null;
+  college_as_typed: string | null;
+  passes: number;
+  revenue: number;
+  admitted: number;
+  passes_detail: {
+    registration_id: string;
+    event_name: string | null;
+    event_day: string | null;
+    entered_at: string | null;
+  }[];
+};
+
 type College = {
   name: string;
   key: string;
+  /* Every spelling folded into this group. */
+  variants?: string[];
   registrations: number;
   people: number;
   events: number;
@@ -38,6 +62,45 @@ export default function ExternalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+
+  /* Which college is open, and who is in it. */
+  const [open, setOpen] = useState<string | null>(null);
+  const [people, setPeople] = useState<CollegePerson[] | null>(null);
+  const [peopleBusy, setPeopleBusy] = useState(false);
+
+  async function toggle(key: string) {
+    if (open === key) {
+      setOpen(null);
+      setPeople(null);
+      return;
+    }
+
+    setOpen(key);
+    setPeople(null);
+    setPeopleBusy(true);
+
+    try {
+      const response = await fetch(
+        `/api/external?key=${encodeURIComponent(key)}`,
+        { cache: "no-store" }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not load that college");
+      }
+
+      setPeople(data.people ?? []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not load"
+      );
+      setOpen(null);
+    } finally {
+      setPeopleBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -301,36 +364,145 @@ export default function ExternalPage() {
 
                     <tbody>
                       {filtered.map((college) => (
-                        <tr key={college.key}>
-                          <td>
-                            <div className="row-title">
-                              {college.name}
-                            </div>
-
-                            {college.spellings > 1 && (
-                              <div className="row-meta">
-                                typed {college.spellings} different
-                                ways
+                        <Fragment key={college.key}>
+                          <tr
+                            className="row-clickable"
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={open === college.key}
+                            onClick={() => void toggle(college.key)}
+                            onKeyDown={(event) => {
+                              if (
+                                event.key === "Enter" ||
+                                event.key === " "
+                              ) {
+                                event.preventDefault();
+                                void toggle(college.key);
+                              }
+                            }}
+                          >
+                            <td>
+                              <div className="row-title">
+                                {college.name}
                               </div>
-                            )}
-                          </td>
 
-                          <td className="table-num">
-                            {college.registrations}
-                          </td>
+                              {/*
+                                The spellings folded into this row,
+                                shown outright. A merge nobody can
+                                inspect is a merge nobody can trust --
+                                and these were stated by hand, so they
+                                can be wrong.
+                              */}
+                              {college.spellings > 1 && (
+                                <div className="row-meta">
+                                  {(college.variants ?? [])
+                                    .slice(0, 4)
+                                    .join(" · ")}
+                                  {(college.variants ?? []).length >
+                                    4 &&
+                                    ` · +${
+                                      (college.variants ?? []).length -
+                                      4
+                                    } more`}
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="table-num">
-                            {college.people}
-                          </td>
+                            <td className="table-num">
+                              {college.registrations}
+                            </td>
 
-                          <td className="table-num">
-                            {college.events}
-                          </td>
+                            <td className="table-num">
+                              {college.people}
+                            </td>
 
-                          <td className="table-num">
-                            {formatAmount(Number(college.revenue))}
-                          </td>
-                        </tr>
+                            <td className="table-num">
+                              {college.events}
+                            </td>
+
+                            <td className="table-num">
+                              {formatAmount(Number(college.revenue))}
+                            </td>
+                          </tr>
+
+                          {open === college.key && (
+                            <tr>
+                              <td colSpan={5} className="drill">
+                                {peopleBusy && (
+                                  <div className="skeleton skeleton-line" />
+                                )}
+
+                                {people && people.length === 0 && (
+                                  <p className="help">
+                                    Nobody found for this college.
+                                  </p>
+                                )}
+
+                                {people && people.length > 0 && (
+                                  <div className="stack">
+                                    {people.map((person) => (
+                                      <div
+                                        className="resend-row"
+                                        key={person.email}
+                                      >
+                                        <div>
+                                          <div className="row-title">
+                                            {person.name ||
+                                              person.email}
+                                          </div>
+
+                                          <div className="row-meta">
+                                            {person.email}
+                                            {person.phone &&
+                                              ` · ${person.phone}`}
+                                          </div>
+
+                                          <div className="row-meta">
+                                            {person.passes_detail
+                                              .map(
+                                                (pass) =>
+                                                  pass.event_name ??
+                                                  "Unmapped"
+                                              )
+                                              .join(" · ")}
+                                          </div>
+
+                                          {/* What they actually
+                                              typed, so a wrong merge
+                                              is visible per person. */}
+                                          {person.college_as_typed &&
+                                            person.college_as_typed !==
+                                              college.name && (
+                                              <div className="row-meta dim">
+                                                typed &ldquo;
+                                                {
+                                                  person.college_as_typed
+                                                }
+                                                &rdquo;
+                                              </div>
+                                            )}
+                                        </div>
+
+                                        <div className="resend-actions">
+                                          <span
+                                            className={`badge ${
+                                              person.admitted > 0
+                                                ? "badge-success"
+                                                : "badge-plain"
+                                            }`}
+                                          >
+                                            {person.admitted} of{" "}
+                                            {person.passes} in
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>

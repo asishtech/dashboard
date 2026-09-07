@@ -9,6 +9,8 @@ const MISSING = ["42883", "PGRST202", "42P01"];
 type College = {
   name: string;
   key: string;
+  /* Every spelling folded into this group, so a merge is inspectable. */
+  variants?: string[];
   registrations: number;
   people: number;
   events: number;
@@ -30,6 +32,33 @@ export async function GET(request: Request) {
   }
 
   try {
+    const params = new URL(request.url).searchParams;
+
+    /*
+     * ?key=... drills into one college. Separate call rather than
+     * shipping every registrant with the summary: 197 people across
+     * 46 colleges is small, but only one college is ever open.
+     */
+    const key = params.get("key");
+
+    if (key) {
+      const { data, error } = await supabaseAdmin().rpc(
+        "external_college_people",
+        { p_key: key }
+      );
+
+      if (error && MISSING.includes(error.code ?? "")) {
+        return NextResponse.json(
+          { error: "Run supabase/college-aliases.sql first." },
+          { status: 409 }
+        );
+      }
+
+      if (error) throw error;
+
+      return NextResponse.json({ success: true, people: data ?? [] });
+    }
+
     const { data, error } = await supabaseAdmin().rpc(
       "external_colleges"
     );
@@ -50,7 +79,7 @@ export async function GET(request: Request) {
       colleges: College[];
     };
 
-    if (new URL(request.url).searchParams.get("xlsx") !== "1") {
+    if (params.get("xlsx") !== "1") {
       return NextResponse.json({
         success: true,
         ready: true,
