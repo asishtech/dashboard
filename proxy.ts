@@ -10,7 +10,7 @@ import { publicUrl } from "@/lib/origin";
  * primary_role(), correctly said registrations. Two orderings, two
  * answers.
  */
-import { ROLE_ORDER } from "@/lib/roles";
+import { landingFor, ROLE_ORDER } from "@/lib/roles";
 
 /*
  * Paths whose handling depends on the caller's role.
@@ -29,15 +29,6 @@ function needsRole(path: string) {
   );
 }
 
-function destinationFor(role: string) {
-  if (role === "admin") return "/admin";
-  if (role === "volunteer") return "/volunteer";
-  if (role === "faculty") return "/events";
-  if (role === "registrations") return "/events";
-  if (role === "buyer") return "/buyer";
-
-  return "/login";
-}
 
 /*
  * The two /admin screens the registrations desk may open.
@@ -212,7 +203,7 @@ export async function proxy(request: NextRequest) {
     !(role === "registrations" && readOnlyAdminPath(path))
   ) {
     return redirectPreservingCookies(
-      publicUrl(request, destinationFor(role)),
+      publicUrl(request, landingFor(role)),
       response
     );
   }
@@ -229,21 +220,23 @@ export async function proxy(request: NextRequest) {
     role !== "faculty"
   ) {
     return redirectPreservingCookies(
-      publicUrl(request, destinationFor(role)),
+      publicUrl(request, landingFor(role)),
       response
     );
   }
 
-  if (
-    path.startsWith("/buyer") &&
-    role !== "buyer" &&
-    role !== "admin"
-  ) {
-    return redirectPreservingCookies(
-      publicUrl(request, destinationFor(role)),
-      response
-    );
-  }
+  /*
+   * /buyer is open to anybody signed in.
+   *
+   * It shows one thing: what the caller's own email owns. /api/buyer
+   * reads the address off the verified session and never off the
+   * request, so a volunteer opening it sees their own hoodie order
+   * and a coordinator sees the three events they registered for --
+   * or, far more often, an empty page saying so.
+   *
+   * Gating it by role only meant that staff who had also bought a
+   * ticket could not reach their own pass.
+   */
 
   /*
    * Events are shared between admins and club coordinators. The API
@@ -257,14 +250,14 @@ export async function proxy(request: NextRequest) {
     role !== "registrations"
   ) {
     return redirectPreservingCookies(
-      publicUrl(request, destinationFor(role)),
+      publicUrl(request, landingFor(role)),
       response
     );
   }
 
   if (path === "/") {
     return redirectPreservingCookies(
-      publicUrl(request, destinationFor(role)),
+      publicUrl(request, landingFor(role)),
       response
     );
   }

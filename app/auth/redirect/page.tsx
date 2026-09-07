@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { landingFor } from "@/lib/roles";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 export default function AuthRedirect() {
@@ -141,48 +142,18 @@ export default function AuthRedirect() {
       }
 
       /*
-       * Role routing.
+       * Role routing, from the same table the proxy routes by.
+       *
+       * This used to be a ladder of its own and had never learned
+       * "registrations", so the desk fell through to the branch below
+       * and was signed out with ?error=role on every sign-in. An
+       * unknown role now lands on /buyer, which any signed-in account
+       * may open, rather than being thrown out of a session that is
+       * perfectly valid.
        */
-
-      if (profile.role === "admin") {
-        window.location.href = "/admin";
-        return;
-      }
-
-      if (
-        profile.role ===
-        "volunteer"
-      ) {
-        window.location.href =
-          "/volunteer";
-        return;
-      }
-
-      if (profile.role === "buyer") {
-        window.location.href =
-          "/buyer";
-        return;
-      }
-
-      /*
-       * Faculty and club coordinators land on the events index,
-       * which is scoped to the events assigned to their address.
-       */
-      if (
-        profile.role === "faculty"
-      ) {
-        window.location.href =
-          "/events";
-        return;
-      }
-
-      /*
-       * Unknown role.
-       */
-      await supabase.auth.signOut();
-
-      window.location.href =
-        "/login?error=role";
+      window.location.href = landingFor(
+        profile.role
+      );
     }
 
     redirect();

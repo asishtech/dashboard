@@ -414,10 +414,16 @@ export default function RegistrationDetailPage({
                 />
               )}
 
-              <p className="help mt-4" style={{ textAlign: "center" }}>
-                Token{" "}
-                <span className="mono">{registration.qr_token}</span>
-              </p>
+              {/*
+                No token underneath.
+
+                It is the pass: anyone who can read that string can
+                open /claim/<token> and be admitted as this person. On
+                a screen that gets held up, photographed and shared at
+                a counter, printing it in plain text next to the code
+                that already carries it hands the pass away for
+                nothing. The QR is the thing to show.
+              */}
             </div>
           </section>
         </div>

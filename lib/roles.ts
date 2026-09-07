@@ -56,6 +56,27 @@ export function primaryRole(roles: Role[]): Role | null {
 }
 
 /*
+ * Where a role lands when it has not asked for a page.
+ *
+ * There were two copies of this ladder, in proxy.ts and in
+ * /auth/redirect, and the second had never learned "registrations":
+ * it fell through to the unknown-role branch and signed the desk out
+ * with ?error=role every time they tried to get in.
+ *
+ * Anything unrecognised gets /buyer. Every signed-in account may open
+ * it -- it shows what that person's own email owns and nothing else
+ * -- so it is the safe floor, and it cannot bounce a live session
+ * back to the login page it just came from.
+ */
+export function landingFor(role: string | null | undefined) {
+  if (role === "admin") return "/admin";
+  if (role === "volunteer") return "/volunteer";
+  if (role === "faculty" || role === "registrations") return "/events";
+
+  return "/buyer";
+}
+
+/*
  * What each role is called on screen.
  *
  * The label is not the stored value. "faculty" is what the database

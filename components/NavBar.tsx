@@ -31,6 +31,21 @@ import { NavLinks, type NavItem } from "@/components/NavLinks";
  * This mirrors needsRole() in proxy.ts -- a link the active role would be bounced from is worse
  * than no link, because the bounce reads as a bug.
  */
+/*
+ * Everyone's own passes, last in every list.
+ *
+ * Staff buy hoodies and enter events too, and /buyer only ever shows
+ * what the signed-in address itself owns -- so it is the same link for
+ * every role rather than a buyer-only screen. Last, because it is the
+ * one thing here nobody is on shift for: on a narrow window it is the
+ * first to fold into the menu.
+ */
+const MINE: NavItem = {
+  href: "/buyer",
+  label: "My V-TAPP",
+  icon: TicketIcon,
+};
+
 const NAV: Record<Role, NavItem[]> = {
   admin: [
     { href: "/admin", label: "Overview", icon: ListIcon, exact: true },
@@ -51,11 +66,13 @@ const NAV: Record<Role, NavItem[]> = {
       label: "Coordinators",
       icon: UsersIcon,
     },
+    MINE,
   ],
 
   faculty: [
     { href: "/events", label: "Events", icon: TicketIcon },
     { href: "/volunteer", label: "Scan", icon: ScanIcon },
+    MINE,
   ],
 
   /*
@@ -64,6 +81,7 @@ const NAV: Record<Role, NavItem[]> = {
    */
   volunteer: [
     { href: "/volunteer", label: "Scan", icon: ScanIcon },
+    MINE,
   ],
 
   /*
@@ -82,11 +100,10 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
+    MINE,
   ],
 
-  buyer: [
-    { href: "/buyer", label: "My V-TAPP", icon: TicketIcon },
-  ],
+  buyer: [MINE],
 };
 
 /*
