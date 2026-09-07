@@ -8,16 +8,18 @@
 -- registration whose ticket matches no event is in none of its rows
 -- and simply vanishes from the total.
 --
--- The 21 in the gap hold two tickets that no row in `events` is
+-- The 21 in the gap held two tickets that no row in `events` was
 -- named after:
 --
 --   15  Dance in the Dark            (₹2,250 taken, from 4 Sep)
 --    6  Space Warfare & Engineering  (free, all on 7 Sep)
 --
--- Both went on sale after the organisers' sheet was loaded. They are
--- not renames of anything here -- "Glow in the Dark" and "Satellite
--- Mission Masters" are separate events with their own registrations --
--- so they are added rather than aliased.
+-- Only the second is a new event. "Dance in the Dark" is what the
+-- portal calls "Glow in the Dark" -- I read the two as separate and
+-- added a row for it, which split one event across two. That row is
+-- removed and aliased in supabase/merge-dance-into-glow.sql; it is
+-- deliberately not inserted here, so re-running this file cannot
+-- split them again.
 --
 -- resolve_event() matches a ticket against event names as well as
 -- aliases, so `name` has to stay exactly as the portal spells it. If
@@ -29,7 +31,6 @@ begin;
 
 insert into public.events (event_id, name, source_event_id)
 values
-  ('dance-in-the-dark', 'Dance in the Dark', '514'),
   ('space-warfare-engineering', 'Space Warfare & Engineering', '514')
 on conflict (event_id) do nothing;
 
@@ -55,24 +56,30 @@ where r.resolved_event_id is null
 group by r.ticket
 order by count(*) desc;
 
--- The two should now carry their people, and the day, venue, capacity
--- and fee are still blank -- fill them from the organisers' sheet.
+-- It should now carry its people; day, venue, capacity and fee are
+-- still blank -- fill them from the organisers' sheet.
 select event_id, name, day, venue, capacity, registration_fee
 from public.events
-where event_id in ('dance-in-the-dark', 'space-warfare-engineering');
+where event_id = 'space-warfare-engineering';
 
 -- If the portal's wording is not what should appear on screen --------------
 --
+-- Rename the event and alias the portal's spelling to it, rather than
+-- editing the name alone: resolve_event() matches on the name, so a
+-- rename without an alias sends every one of its registrations back
+-- to being unmatched.
+--
 --   update public.events
---      set name = 'Dance in the Dark (Cultural Club)', name_locked = true
---    where event_id = 'dance-in-the-dark';
+--      set name = 'Space Warfare', name_locked = true
+--    where event_id = 'space-warfare-engineering';
 --
 --   insert into public.event_aliases (ticket_norm, ticket_raw, event_id)
 --   values (
---     public.norm_event_name('Dance in the Dark'),
---     'Dance in the Dark',
---     'dance-in-the-dark'
+--     public.norm_event_name('Space Warfare & Engineering'),
+--     'Space Warfare & Engineering',
+--     'space-warfare-engineering'
 --   )
---   on conflict do nothing;
+--   on conflict (ticket_norm) do update
+--     set event_id = excluded.event_id;
 --
 --   select public.rebuild_resolved_events();
