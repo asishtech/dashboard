@@ -146,9 +146,11 @@ export function NavLinks({
         "[data-nav-more]"
       );
 
+      /* 40 is the icon button's own size plus the gap, used only on
+         the pass before it has ever been rendered. */
       moreWidth.current = more
         ? more.getBoundingClientRect().width + gap
-        : 96;
+        : 40;
     }
 
     fit();
@@ -219,18 +221,30 @@ export function NavLinks({
           <button
             type="button"
             data-nav-more
-            className={`nav-link${
+            className={`nav-more-button${
               currentHidden ? " nav-link-current" : ""
             }`}
             aria-expanded={open}
             aria-haspopup="menu"
+            /*
+             * The count lives in the label rather than on the button.
+             * A bare mark is what people already read as "the rest of
+             * the menu is in here", and it is narrow, which is the
+             * whole point: every pixel this costs is a link that had
+             * to be hidden behind it.
+             */
+            aria-label={`More links (${hidden.length})`}
+            title={`${hidden.length} more`}
             onClick={(event) => {
               event.stopPropagation();
               setOpen((value) => !value);
             }}
           >
-            More
-            <span className="nav-more-count">{hidden.length}</span>
+            <span className="nav-toggle-bars" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
           </button>
 
           {open && (

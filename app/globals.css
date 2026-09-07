@@ -478,16 +478,35 @@ table,
   flex: none;
 }
 
-.nav-more-count {
-  margin-left: var(--space-2);
-  padding: 1px var(--space-2);
+/*
+   A hamburger rather than a "More" button.
+
+   The label cost about 70px of a row whose whole problem is that there
+   is not enough of it: on a 1024px window that was one more link
+   pushed into the menu, to say the menu existed. The mark says it in
+   36px, and it is the same three bars the bar collapses to on a phone,
+   so it is not a new thing to learn. */
+.nav-more-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+
+  width: 36px;
+  height: 36px;
 
   color: var(--text-muted);
-  background: var(--surface-inset);
-  border-radius: var(--radius-full);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 
-  font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.nav-more-button:hover {
+  color: var(--text);
+  background: var(--surface-inset);
 }
 
 .nav-more-menu {
