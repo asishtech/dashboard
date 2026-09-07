@@ -15,22 +15,12 @@ import {
 } from "@/components/icons";
 import { DeskSearch } from "@/components/DeskSearch";
 import { ExternalDeskCard } from "@/components/ExternalDeskCard";
+import {
+  CollegeRoster,
+  type RosterPerson,
+} from "@/components/CollegeRoster";
 
-type CollegePerson = {
-  name: string | null;
-  email: string;
-  phone: string | null;
-  college_as_typed: string | null;
-  passes: number;
-  revenue: number;
-  admitted: number;
-  passes_detail: {
-    registration_id: string;
-    event_name: string | null;
-    event_day: string | null;
-    entered_at: string | null;
-  }[];
-};
+type CollegePerson = RosterPerson;
 
 type College = {
   name: string;
@@ -68,15 +58,19 @@ export default function ExternalPage() {
   const [people, setPeople] = useState<CollegePerson[] | null>(null);
   const [peopleBusy, setPeopleBusy] = useState(false);
 
-  async function toggle(key: string) {
-    if (open === key) {
+  async function toggle(key: string, reload = false) {
+    if (open === key && !reload) {
       setOpen(null);
       setPeople(null);
       return;
     }
 
     setOpen(key);
-    setPeople(null);
+
+    /* On a reload the list stays on screen while it refreshes: the
+       desk is mid-queue and a flash of empty reads as a failure. */
+    if (!reload) setPeople(null);
+
     setPeopleBusy(true);
 
     try {
@@ -439,65 +433,15 @@ export default function ExternalPage() {
                                 )}
 
                                 {people && people.length > 0 && (
-                                  <div className="stack">
-                                    {people.map((person) => (
-                                      <div
-                                        className="resend-row"
-                                        key={person.email}
-                                      >
-                                        <div>
-                                          <div className="row-title">
-                                            {person.name ||
-                                              person.email}
-                                          </div>
-
-                                          <div className="row-meta">
-                                            {person.email}
-                                            {person.phone &&
-                                              ` · ${person.phone}`}
-                                          </div>
-
-                                          <div className="row-meta">
-                                            {person.passes_detail
-                                              .map(
-                                                (pass) =>
-                                                  pass.event_name ??
-                                                  "Unmapped"
-                                              )
-                                              .join(" · ")}
-                                          </div>
-
-                                          {/* What they actually
-                                              typed, so a wrong merge
-                                              is visible per person. */}
-                                          {person.college_as_typed &&
-                                            person.college_as_typed !==
-                                              college.name && (
-                                              <div className="row-meta dim">
-                                                typed &ldquo;
-                                                {
-                                                  person.college_as_typed
-                                                }
-                                                &rdquo;
-                                              </div>
-                                            )}
-                                        </div>
-
-                                        <div className="resend-actions">
-                                          <span
-                                            className={`badge ${
-                                              person.admitted > 0
-                                                ? "badge-success"
-                                                : "badge-plain"
-                                            }`}
-                                          >
-                                            {person.admitted} of{" "}
-                                            {person.passes} in
-                                          </span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <CollegeRoster
+                                    people={
+                                      people as unknown as RosterPerson[]
+                                    }
+                                    collegeName={college.name}
+                                    onChanged={() =>
+                                      void toggle(college.key, true)
+                                    }
+                                  />
                                 )}
                               </td>
                             </tr>

@@ -178,6 +178,19 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
 
     /*
+     * Leaving is not undoing.
+     *
+     * DELETE removes the scan and claims the entry never happened,
+     * which is right for a mis-scan. Somebody who watched the event
+     * and walked out did enter, and a hall being counted needs to
+     * know they are no longer in it -- so that is a stamp on the
+     * existing row, not the loss of one.
+     */
+    if (body.action === "exit") {
+      return markExit(auth, body.registrationId);
+    }
+
+    /*
      * A registration id is accepted alongside a token, because the
      * desk works from a name and a face rather than a phone screen.
      * The token is still what identifies the pass; it is resolved
@@ -392,4 +405,74 @@ export async function DELETE(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/*
+ * Stamp somebody out of the event they were admitted to.
+ *
+ * Open scans only: re-pressing Exit on a row already stamped is a
+ * double press at a busy door, not a correction, so it reports the
+ * time they left rather than moving it.
+ */
+async function markExit(
+  auth: Exclude<Awaited<ReturnType<typeof requireRole>>, NextResponse>,
+  rawId: unknown
+) {
+  const id = Number(rawId);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return NextResponse.json(
+      { error: "A registration is required" },
+      { status: 400 }
+    );
+  }
+
+  const db = supabaseAdmin();
+
+  const { data: open, error: readError } = await db
+    .from("qr_scans")
+    .select("id,scanned_at,exited_at")
+    .eq("registration_id", id)
+    .order("scanned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  /* 42703: supabase/event-exit.sql has not been run. */
+  if (readError?.code === "42703") {
+    return NextResponse.json(
+      { error: "Run supabase/event-exit.sql to record exits." },
+      { status: 409 }
+    );
+  }
+
+  if (readError) throw readError;
+
+  if (!open) {
+    return NextResponse.json(
+      {
+        error:
+          "They have not been admitted, so there is nothing to exit.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (open.exited_at) {
+    return NextResponse.json({
+      success: true,
+      alreadyExited: true,
+      exitedAt: open.exited_at,
+    });
+  }
+
+  const now = new Date().toISOString();
+
+  const { error } = await db
+    .from("qr_scans")
+    .update({ exited_at: now, exited_by: auth.user.email ?? null })
+    .eq("id", open.id);
+
+  if (error) throw error;
+
+  return NextResponse.json({ success: true, exitedAt: now });
 }

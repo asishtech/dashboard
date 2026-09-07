@@ -1232,6 +1232,21 @@ table,
   transform: scaleX(-1);
 }
 
+/* One pass inside a college roster row: the event, the control, and
+   the state, on one line until the width runs out. */
+.roster-passes {
+  flex: 1 1 22rem;
+  align-items: stretch;
+}
+
+.roster-pass {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
 /* Step number beside a panel title.
    The mail page is a sequence — test, one person, the queue, then
    automatic — and the numbers say so, because the order matters more
