@@ -62,6 +62,24 @@ function rupees(value: number | string | null | undefined) {
   return /^-?\d+(\.\d+)?$/.test(cleaned) ? Number(cleaned) : text;
 }
 
+/*
+ * The advance paid before the event: 70% of the proposed budget.
+ *
+ * Only where the budget parsed as a number. Eight of the figures on
+ * the organisers' sheet are words -- "above 7k only", "RC car for
+ * winners" -- and 70% of a phrase is not a number to hand the finance
+ * committee.
+ */
+const ADVANCE_SHARE = 0.7;
+
+function advanceOn(budget: number | string | null | undefined) {
+  const value = rupees(budget);
+
+  return typeof value === "number"
+    ? Math.round(value * ADVANCE_SHARE)
+    : "";
+}
+
 type Participant = {
   id: number;
   registration_id: string | null;
@@ -136,7 +154,7 @@ export async function GET(request: Request) {
         supabaseAdmin()
           .from("events")
           .select(
-            "event_id,team_size,registration_fee,prize_pool,budget"
+            "event_id,team_size,registration_fee,prize_pool,budget,proposed_by,proposer_name"
           ),
       ]);
 
@@ -146,6 +164,9 @@ export async function GET(request: Request) {
       registration_fee: number | string | null;
       prize_pool: string | null;
       budget: string | null;
+      /* Absent until supabase/event-proposers.sql runs. */
+      proposed_by?: string | null;
+      proposer_name?: string | null;
     }[];
 
     const teamSizeById = new Map(
@@ -160,6 +181,8 @@ export async function GET(request: Request) {
           fee: row.registration_fee,
           prize: row.prize_pool,
           budget: row.budget,
+          proposedBy: row.proposed_by ?? null,
+          proposerName: row.proposer_name ?? null,
         },
       ])
     );
@@ -339,12 +362,27 @@ export async function GET(request: Request) {
 
       quiet.columns = [
         { header: "Event", key: "name", width: 52 },
+        { header: "Proposed by", key: "proposedBy", width: 13 },
+        { header: "Club / Chapter / Faculty", key: "proposerName", width: 30 },
         { header: "Registrations", key: "registrations", width: 13 },
         { header: "Capacity", key: "capacity", width: 10 },
         { header: "Filled %", key: "fill", width: 9 },
         { header: "Prize money", key: "prize", width: 13 },
         { header: "Registration cost", key: "fee", width: 16 },
         { header: "Proposed budget", key: "budget", width: 16 },
+        /* 70% of the budget, paid up front. Blank where the budget is
+           not a number -- 70% of "above 7k only" is not a figure to
+           put in front of the finance committee. */
+        { header: "Advance (70%)", key: "advance", width: 14 },
+        ...(isAdmin
+          ? [
+              {
+                header: "Revenue generated",
+                key: "revenue",
+                width: 16,
+              },
+            ]
+          : []),
         { header: "Faculty coordinator", key: "coordinator", width: 30 },
         { header: "Email", key: "email", width: 34 },
       ];
@@ -376,9 +414,15 @@ export async function GET(request: Request) {
           registrations: Number(event.registrations ?? 0),
           capacity: event.capacity ?? "",
           fill: Number(event.fillPercentage ?? 0) / 100,
+          proposedBy: money?.proposedBy ?? "Not recorded",
+          proposerName: money?.proposerName ?? "",
           prize: rupees(money?.prize),
           fee: rupees(money?.fee),
           budget: rupees(money?.budget),
+          advance: advanceOn(money?.budget),
+          ...(isAdmin
+            ? { revenue: Number(event.revenue ?? 0) }
+            : {}),
           /* Said, not left blank. A gap in a column reads as a bug in
              the export; "None recorded" reads as the job it is. */
           coordinator:
@@ -402,20 +446,52 @@ export async function GET(request: Request) {
 
       /* Only the cells that parsed as numbers are formatted as money;
          a cell still holding "TBD" is left as the text it is. */
-      for (const key of ["prize", "fee", "budget"]) {
+      for (const key of ["prize", "fee", "budget", "advance"]) {
         quiet.getColumn(key).numFmt = '"\u20B9"#,##0';
+      }
+
+      if (isAdmin) {
+        quiet.getColumn("revenue").numFmt = '"\u20B9"#,##0';
       }
 
       quiet.addRow({});
 
+      /* Only the rows whose figures are numbers are summed, and the
+         label says how many that was -- a total under a column with
+         eight words in it would otherwise read as the whole festival's
+         budget. */
+      const numericBudgets = rows
+        .map((event) =>
+          rupees(moneyById.get(String(event.event_id))?.budget)
+        )
+        .filter((value): value is number => typeof value === "number");
+
+      const budgetTotal = numericBudgets.reduce(
+        (sum, value) => sum + value,
+        0
+      );
+
       const total = quiet.addRow({
         name: `${rows.length} event${
           rows.length === 1 ? "" : "s"
-        } under ${belowPercent}% full`,
+        } under ${belowPercent}% full` +
+          (numericBudgets.length < rows.length
+            ? ` · budget totals ${numericBudgets.length} of them`
+            : ""),
         registrations: rows.reduce(
           (sum, event) => sum + Number(event.registrations ?? 0),
           0
         ),
+        budget: budgetTotal,
+        advance: Math.round(budgetTotal * ADVANCE_SHARE),
+        ...(isAdmin
+          ? {
+              revenue: rows.reduce(
+                (sum, event) => sum + Number(event.revenue ?? 0),
+                0
+              ),
+            }
+          : {}),
       });
 
       total.font = { bold: true };

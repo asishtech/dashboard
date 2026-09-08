@@ -64,10 +64,14 @@ type Spelling = {
 const LIVE_TABLES = ["registrations", "qr_scans", "events", "sync_log"];
 
 /*
- * "Not selling". Matches the default in the export, which accepts
- * ?below= for the day this number should be 50 instead.
+ * "Not selling", at two thresholds.
+ *
+ * Both, rather than one and a box to type in: 30% is the list of
+ * events in trouble and 50% is the list to watch, they get sent to
+ * different people, and a number somebody has to retype is a number
+ * that gets retyped wrongly. The export takes any ?below= value.
  */
-const QUIET_PERCENT = 30;
+const QUIET_THRESHOLDS = [30, 50];
 
 const PRICING_TABS: { key: Pricing | "all"; label: string }[] = [
   { key: "all", label: "All" },
@@ -326,18 +330,21 @@ export default function EventsPage() {
   );
 
   /*
-   * Under-filled, and countable here so the button says how many
+   * Under-filled, and countable here so each button says how many
    * before anyone downloads it. Events with no capacity are not
    * counted: 0% of nothing is not empty, it is unknown.
    */
-  const quietCount = useMemo(
+  const quietCounts = useMemo(
     () =>
-      events.filter(
-        (event) =>
-          event.capacity !== null &&
-          event.capacity !== undefined &&
-          Number(event.fillPercentage ?? 0) < QUIET_PERCENT
-      ).length,
+      QUIET_THRESHOLDS.map((below) => ({
+        below,
+        count: events.filter(
+          (event) =>
+            event.capacity !== null &&
+            event.capacity !== undefined &&
+            Number(event.fillPercentage ?? 0) < below
+        ).length,
+      })),
     [events]
   );
 
@@ -915,17 +922,19 @@ export default function EventsPage() {
                 event with the faculty coordinator's address on it --
                 and it gets forwarded rather than read here.
               */}
-              {capacityAvailable && (
-                <a
-                  className="btn btn-ghost btn-sm"
-                  href={`/api/events/export?filter=quiet&below=${QUIET_PERCENT}`}
-                  download
-                  title={`Events less than ${QUIET_PERCENT}% full, with the faculty coordinator for each`}
-                >
-                  <DownloadIcon size={13} />
-                  Under {QUIET_PERCENT}% ({quietCount})
-                </a>
-              )}
+              {capacityAvailable &&
+                quietCounts.map(({ below, count }) => (
+                  <a
+                    key={below}
+                    className="btn btn-ghost btn-sm"
+                    href={`/api/events/export?filter=quiet&below=${below}`}
+                    download
+                    title={`Events less than ${below}% full, with who proposed each one, its budget and its faculty coordinator`}
+                  >
+                    <DownloadIcon size={13} />
+                    Under {below}% ({count})
+                  </a>
+                ))}
             </div>
           </div>
 
