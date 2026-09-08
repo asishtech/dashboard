@@ -5,6 +5,7 @@ import {
   mailEnabled,
   sendPersonPasses,
 } from "./mailer";
+import { readAll } from "./paged";
 import { supabaseAdmin } from "./supabase";
 
 type Field = {
@@ -570,6 +571,77 @@ type PreparedRegistration = {
 
 const CHUNK = 500;
 
+/*
+ * Whether the feed's version of a registration matches the stored one.
+ *
+ * Compared column by column rather than by hashing the whole record:
+ * the stored row is what Postgres gives back, so `total` is a string
+ * where we wrote a number and a JSON column comes back re-ordered.
+ * Comparing the values we actually write, loosely, is the comparison
+ * that means "nothing to do" -- a stricter one would report every row
+ * as changed and put the write phase straight back.
+ */
+function sameRow(
+  stored: Record<string, unknown>,
+  next: Record<string, unknown>
+) {
+  for (const [key, value] of Object.entries(next)) {
+    if (key === "raw_data") {
+      /* The upstream payload, stored verbatim. Key order is not
+         stable across JSON round trips, so compare the parsed shape
+         rather than the text. */
+      if (
+        JSON.stringify(sortKeys(stored[key])) !==
+        JSON.stringify(sortKeys(value))
+      ) {
+        return false;
+      }
+
+      continue;
+    }
+
+    const a = stored[key];
+    const b = value;
+
+    if (a === b) continue;
+
+    /* null and undefined both mean "not set" here. */
+    if (a == null && b == null) continue;
+
+    /* numeric(10,2) comes back as "150.00" for the 150 we wrote. */
+    if (
+      a != null &&
+      b != null &&
+      Number.isFinite(Number(a)) &&
+      Number.isFinite(Number(b)) &&
+      Number(a) === Number(b)
+    ) {
+      continue;
+    }
+
+    if (String(a ?? "") === String(b ?? "")) continue;
+
+    return false;
+  }
+
+  return true;
+}
+
+/* Deep key sort, so two equal objects serialise identically. */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, sortKeys(v)])
+    );
+  }
+
+  return value;
+}
+
 function chunk<T>(values: T[], size = CHUNK): T[][] {
   const chunks: T[][] = [];
 
@@ -738,6 +810,15 @@ async function runSync() {
   const { url, key } = vtappApi();
 
   const payload = await clock.time("upstreamApi", async () => {
+    /*
+     * A deadline, because the gateway has one.
+     *
+     * This call has been measured at 10 and at 17 seconds for the
+     * same 2.5 MB, and the function in front of it is killed at
+     * thirty. Without a limit here a slow upstream becomes a 504
+     * with an empty body, which reads as "the dashboard is broken"
+     * rather than "the events portal is slow today".
+     */
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -745,6 +826,15 @@ async function runSync() {
         Accept: "application/json",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    }).catch((error) => {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new Error(
+          "The V-TAPP events portal did not answer within 20 seconds. Nothing was changed; try again in a minute."
+        );
+      }
+
+      throw error;
     });
 
     if (!response.ok) {
@@ -792,13 +882,66 @@ async function runSync() {
   const db = supabaseAdmin();
 
   /*
-   * 1. Upsert every registration in batches.
+   * 0. What is already stored.
    *
-   *    This replaces one round-trip per record.
+   *    The upstream API has no "changed since" parameter, so every
+   *    sync receives all 4,287 registrations whether or not any of
+   *    them moved. Writing all of them back took longer than the
+   *    gateway's thirty seconds and the manual sync began returning
+   *    504 -- and it gets worse with every registration the fest
+   *    takes.
+   *
+   *    Reading the stored copy first costs about three seconds and
+   *    turns the write phase into "the handful that actually
+   *    changed", which on a normal sync is none of them. Reading
+   *    beats writing by enough that this is worth the round trip
+   *    even when everything has changed.
+   */
+  const stored = new Map<
+    string,
+    { id: number; row: Record<string, unknown> }
+  >();
+
+  await clock.time("readExisting", async () => {
+    const { rows } = await readAll<
+      Record<string, unknown> & { id: number; registration_id: string }
+    >((from, to) =>
+      db
+        .from("registrations")
+        .select(
+          "id,registration_id,event_id,name,email,event_date,order_id,receipt_id,product,product_meta,payment_date,invoice_number,total,ticket,sale_type,raw_data"
+        )
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+
+    for (const row of rows) {
+      stored.set(String(row.registration_id), { id: row.id, row });
+    }
+  });
+
+  /*
+   * 1. Upsert only what differs.
    */
   const idByRegistrationId = new Map<string, number>();
 
-  for (const batch of chunk(entries)) {
+  const changed: PreparedRegistration[] = [];
+
+  let unchanged = 0;
+
+  for (const entry of entries) {
+    const existing = stored.get(entry.registrationId);
+
+    if (existing && sameRow(existing.row, entry.row)) {
+      idByRegistrationId.set(entry.registrationId, existing.id);
+      unchanged += 1;
+      continue;
+    }
+
+    changed.push(entry);
+  }
+
+  for (const batch of chunk(changed)) {
     const data = await clock.time("upsertRegistrations", async () => {
       const { data, error } = await db
         .from("registrations")
@@ -896,7 +1039,15 @@ async function runSync() {
     });
   }
 
-  const registrationIds = [...idByRegistrationId.values()];
+  /*
+   * Only the changed ones. A registration whose stored row is
+   * identical cannot have different merchandise -- the items are
+   * parsed from `ticket`, which is part of the comparison -- so
+   * reading its items would be a round trip to confirm nothing.
+   */
+  const registrationIds = changed
+    .map((entry) => idByRegistrationId.get(entry.registrationId))
+    .filter((id): id is number => id !== undefined);
 
   /*
    * 2. Read the existing items for every registration at once.
@@ -955,7 +1106,7 @@ async function runSync() {
   let created = 0;
   let updated = 0;
 
-  for (const entry of entries) {
+  for (const entry of changed) {
     const registrationId = idByRegistrationId.get(
       entry.registrationId
     );
@@ -1026,6 +1177,9 @@ async function runSync() {
     fetched: records.length,
     created,
     updated,
+    /* Rows the feed sent back exactly as they are stored. On a quiet
+       minute this is all of them, and the sync writes nothing. */
+    unchanged,
     itemsRewritten: itemsToInsert.length,
     mailed,
     durationMs: Date.now() - startedAt,
