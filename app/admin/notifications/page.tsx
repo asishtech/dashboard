@@ -188,7 +188,13 @@ export default function NotificationsPage() {
 
   const stopRef = useRef(false);
 
-  const load = useCallback(async () => {
+  /*
+   * Returns what it read, so the end of a run can report the
+   * database's count rather than the running total it kept in a
+   * variable. Those two disagree exactly when it matters: a batch
+   * that half-succeeded, a cap reached, a tab that was closed.
+   */
+  const load = useCallback(async (): Promise<Queue | null> => {
     try {
       const response = await fetch("/api/notifications", {
         cache: "no-store",
@@ -198,10 +204,14 @@ export default function NotificationsPage() {
 
       setQueue(data as unknown as Queue);
       setError("");
+
+      return data as unknown as Queue;
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to read the queue"
       );
+
+      return null;
     } finally {
       setLoading(false);
     }
@@ -370,10 +380,32 @@ export default function NotificationsPage() {
         }
       }
 
+      /*
+       * Ask the database, do not report the tally.
+       *
+       * "Queue is empty" was inferred from a batch attempting
+       * nothing, which is also what a reached cap and a run of
+       * failures look like from here. The count that matters is how
+       * many people are still waiting, and only the server knows it.
+       */
+      const fresh = await load();
+
+      const left =
+        fresh?.pendingPeople ?? fresh?.pendingConfirmations ?? null;
+
       setMessage(
-        `Sent ${sent}${failed > 0 ? `, ${failed} failed` : ""}.${
-          stopRef.current ? " Stopped." : " Queue is empty."
-        }`
+        `Sent ${sent}${failed > 0 ? `, ${failed} failed` : ""}.` +
+          (left === null
+            ? ""
+            : left === 0
+              ? " Everyone has their passes."
+              : ` ${left} still waiting${
+                  stopRef.current
+                    ? " — you stopped the run."
+                    : failed > 0
+                      ? " — see the errors above; press Send all again to retry them."
+                      : " — the daily cap was reached. Try again tomorrow, or raise MAIL_DAILY_CAP."
+                }`)
       );
     } catch (err) {
       setError(
@@ -1021,6 +1053,8 @@ export default function NotificationsPage() {
                         ? "Nothing waiting."
                         : `${waiting} ${
                             waiting === 1 ? "person" : "people"
+                          } holding ${queue.pendingConfirmations} pass${
+                            queue.pendingConfirmations === 1 ? "" : "es"
                           }, ${
                             queue.concurrency && queue.concurrency > 1
                               ? `${queue.concurrency} at a time`
