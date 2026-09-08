@@ -33,6 +33,35 @@ type Summary = {
   fillPercentage?: number | null;
 };
 
+/*
+ * A money figure off the organisers' sheet, as a number where it is
+ * one.
+ *
+ * prize_pool and budget are free text and were typed by hand: "0/-",
+ * "8775/-", "15000". A number is what a spreadsheet can total and
+ * sort, so anything that parses cleanly is returned as one -- and
+ * anything that does not ("TBD", "sponsor covering it") is returned
+ * as the text it is, rather than as a zero that would quietly join
+ * the sum.
+ *
+ * Commas are stripped because "1,20,000" is how the sheet writes it.
+ */
+function rupees(value: number | string | null | undefined) {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : "";
+  }
+
+  const text = value.trim();
+
+  if (!text) return "";
+
+  const cleaned = text.replace(/[,\s₹]/g, "").replace(/\/-$/, "");
+
+  return /^-?\d+(\.\d+)?$/.test(cleaned) ? Number(cleaned) : text;
+}
+
 type Participant = {
   id: number;
   registration_id: string | null;
@@ -104,14 +133,35 @@ export async function GET(request: Request) {
         supabaseAdmin().rpc("event_summaries"),
         merchandiseEventIds(),
         allowedEventIds(auth),
-        supabaseAdmin().from("events").select("event_id,team_size"),
+        supabaseAdmin()
+          .from("events")
+          .select(
+            "event_id,team_size,registration_fee,prize_pool,budget"
+          ),
       ]);
 
+    const eventRows = (teamSizes.data ?? []) as {
+      event_id: string;
+      team_size: string | null;
+      registration_fee: number | string | null;
+      prize_pool: string | null;
+      budget: string | null;
+    }[];
+
     const teamSizeById = new Map(
-      ((teamSizes.data ?? []) as {
-        event_id: string;
-        team_size: string | null;
-      }[]).map((row) => [String(row.event_id), row.team_size])
+      eventRows.map((row) => [String(row.event_id), row.team_size])
+    );
+
+    /* The organisers' own figures, straight off their sheet. */
+    const moneyById = new Map(
+      eventRows.map((row) => [
+        String(row.event_id),
+        {
+          fee: row.registration_fee,
+          prize: row.prize_pool,
+          budget: row.budget,
+        },
+      ])
     );
 
     if (summaries.error) throw summaries.error;
@@ -292,6 +342,9 @@ export async function GET(request: Request) {
         { header: "Registrations", key: "registrations", width: 13 },
         { header: "Capacity", key: "capacity", width: 10 },
         { header: "Filled %", key: "fill", width: 9 },
+        { header: "Prize money", key: "prize", width: 13 },
+        { header: "Registration cost", key: "fee", width: 16 },
+        { header: "Proposed budget", key: "budget", width: 16 },
         { header: "Faculty coordinator", key: "coordinator", width: 30 },
         { header: "Email", key: "email", width: 34 },
       ];
@@ -305,18 +358,27 @@ export async function GET(request: Request) {
       };
       quiet.views = [{ state: "frozen", ySplit: 1 }];
 
-      /* Emptiest first: this sheet is a worklist, not an index. */
+      /*
+       * Fewest registrations first: the worst-off event is the first
+       * row, and the sheet is worked down. Fill percentage breaks
+       * ties, so 3 of 40 sits above 3 of 400.
+       */
       for (const event of [...rows].sort(
         (a, b) =>
+          Number(a.registrations ?? 0) - Number(b.registrations ?? 0) ||
           Number(a.fillPercentage ?? 0) - Number(b.fillPercentage ?? 0)
       )) {
         const faculty = facultyByEvent.get(String(event.event_id)) ?? [];
+        const money = moneyById.get(String(event.event_id));
 
         const row = quiet.addRow({
           name: event.name,
           registrations: Number(event.registrations ?? 0),
           capacity: event.capacity ?? "",
           fill: Number(event.fillPercentage ?? 0) / 100,
+          prize: rupees(money?.prize),
+          fee: rupees(money?.fee),
+          budget: rupees(money?.budget),
           /* Said, not left blank. A gap in a column reads as a bug in
              the export; "None recorded" reads as the job it is. */
           coordinator:
@@ -337,6 +399,12 @@ export async function GET(request: Request) {
       }
 
       quiet.getColumn("fill").numFmt = "0%";
+
+      /* Only the cells that parsed as numbers are formatted as money;
+         a cell still holding "TBD" is left as the text it is. */
+      for (const key of ["prize", "fee", "budget"]) {
+        quiet.getColumn(key).numFmt = '"\u20B9"#,##0';
+      }
 
       quiet.addRow({});
 
