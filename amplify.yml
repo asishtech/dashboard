@@ -58,7 +58,14 @@ frontend:
         #
         # Anchored to our own prefixes so the file cannot pick up the
         # AWS credentials Amplify injects into the build environment.
-        - env | grep -E '^(NEXT_PUBLIC_|SUPABASE_|VTAPP_|SMTP_|MAIL_|ALERT_)' > .env.production || true
+        # The mail variables are deliberately excluded here and set
+        # below instead. The console holds stale Gmail values that
+        # nobody can currently delete, and a console value that wins
+        # produced the worst of both: smtp.gmail.com reached with a
+        # ZeptoMail token, which Gmail answers with
+        # "535-5.7.8 Username and Password not accepted" on every
+        # message. Mixed credentials fail harder than either set alone.
+        - env | grep -E '^(NEXT_PUBLIC_|SUPABASE_|VTAPP_|ALERT_)' > .env.production || true
 
         # Mail settings that are not secret, defaulted here.
         #
@@ -72,8 +79,9 @@ frontend:
         # way to notice is to read the DKIM signature on a delivered
         # message. That is exactly what happened.
         #
-        # Only defaults: a variable already set in the console wins, so
-        # this cannot override a deliberate choice.
+        # These OVERRIDE the console rather than defaulting to it --
+        # see the grep above for why. To move mail back under console
+        # control, delete this block; nothing else depends on it.
         #
         # SMTP_PASSWORD IS IN THIS FILE, AND THIS REPOSITORY IS PUBLIC.
         #
@@ -90,28 +98,20 @@ frontend:
         # the new token in the Amplify console instead of here and
         # delete the line below.
         - |
-          default_env() {
-            eval "current=\$$1"
-            if [ -z "$current" ]; then
-              echo "$1=$2" >> .env.production
-              echo "  $1: defaulted"
-            else
-              echo "  $1: from console"
-            fi
+          set_env() {
+            echo "$1=$2" >> .env.production
+            echo "  $1: set by amplify.yml"
           }
 
           echo "--- mail ---"
-          default_env SMTP_HOST smtp.zeptomail.in
-          default_env SMTP_PORT 587
-          default_env SMTP_USER emailapikey
-          default_env MAIL_FROM tickets@vtapp.co.in
-          default_env MAIL_FROM_NAME "TICKETS VTAPP 2026"
-          default_env MAIL_DAILY_CAP 5000
-          default_env SMTP_PASSWORD 'PHtE6r1fQuno2GAr9RABt6CxFZbwMNgpr+1nKQRE5I4RWfZSGE1VqNl/lWLl+hYuBvdAQabKwNg+5O7JsbrUd2jkMmxPXmqyqK3sx/VYSPOZsbq6x00ctloaf0LVVYHoetRp1ybfudraNA=='
+          set_env SMTP_HOST smtp.zeptomail.in
+          set_env SMTP_PORT 587
+          set_env SMTP_USER emailapikey
+          set_env MAIL_FROM tickets@vtapp.co.in
+          set_env MAIL_FROM_NAME "TICKETS VTAPP 2026"
+          set_env MAIL_DAILY_CAP 5000
+          set_env SMTP_PASSWORD 'PHtE6r1fQuno2GAr9RABt6CxFZbwMNgpr+1nKQRE5I4RWfZSGE1VqNl/lWLl+hYuBvdAQabKwNg+5O7JsbrUd2jkMmxPXmqyqK3sx/VYSPOZsbq6x00ctloaf0LVVYHoetRp1ybfudraNA=='
 
-          if [ -z "$SMTP_PASSWORD" ]; then
-            echo "  SMTP_PASSWORD: MISSING - nothing will send"
-          fi
           echo "------------"
 
         - npm run build

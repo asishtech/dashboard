@@ -130,6 +130,21 @@ function transport(): Transporter | null {
      * itself and renews it, so nothing here has to track expiry.
      */
     auth: { user: config.user, pass: config.pass },
+
+    /*
+     * Timeouts, because the gateway has one too.
+     *
+     * Nodemailer's defaults let a socket sit for minutes. The
+     * function in front of this is killed at thirty seconds, and a
+     * request killed mid-flight returns 502 with nothing in the log
+     * to say which message was hanging -- the deadline in the route
+     * cannot help, because it is only checked between messages.
+     *
+     * Ten seconds is generous for a relay that answers in under one.
+     */
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   };
 
   cached = nodemailer.createTransport(options);
