@@ -18,6 +18,12 @@
 # Amplify console; this copies them at build time. .env.production is
 # gitignored (.gitignore line 34) and is never served -- it sits at the
 # app root, not under public/ or .next/static/.
+#
+# The mail block near the bottom does commit settings, but only the
+# ones that are not secret: the relay host, the port, the literal
+# username ZeptoMail uses, the sender and the daily cap. The token
+# stays in the console. Those are defaults -- a console variable of
+# the same name still wins.
 
 version: 1
 frontend:
@@ -53,6 +59,46 @@ frontend:
         # Anchored to our own prefixes so the file cannot pick up the
         # AWS credentials Amplify injects into the build environment.
         - env | grep -E '^(NEXT_PUBLIC_|SUPABASE_|VTAPP_|SMTP_|MAIL_|ALERT_)' > .env.production || true
+
+        # Mail settings that are not secret, defaulted here.
+        #
+        # Everything about the relay except the token is public
+        # knowledge -- the host is in Zoho's documentation and the
+        # username is the literal string "emailapikey" -- and keeping
+        # them in the console meant six variables had to be typed
+        # correctly for mail to move. A single missed one falls back to
+        # smtp.gmail.com, which is not an error: it sends, from the
+        # wrong provider, against a 500-a-day trial cap, and the only
+        # way to notice is to read the DKIM signature on a delivered
+        # message. That is exactly what happened.
+        #
+        # Only defaults: a variable already set in the console wins, so
+        # this cannot override a deliberate choice. SMTP_PASSWORD is
+        # never defaulted -- a token in a git repository is a token to
+        # rotate.
+        - |
+          default_env() {
+            eval "current=\$$1"
+            if [ -z "$current" ]; then
+              echo "$1=$2" >> .env.production
+              echo "  $1: defaulted"
+            else
+              echo "  $1: from console"
+            fi
+          }
+
+          echo "--- mail ---"
+          default_env SMTP_HOST smtp.zeptomail.in
+          default_env SMTP_PORT 587
+          default_env SMTP_USER emailapikey
+          default_env MAIL_FROM tickets@vtapp.co.in
+          default_env MAIL_FROM_NAME "TICKETS VTAPP 2026"
+          default_env MAIL_DAILY_CAP 3000
+
+          if [ -z "$SMTP_PASSWORD" ]; then
+            echo "  SMTP_PASSWORD: MISSING - nothing will send"
+          fi
+          echo "------------"
 
         - npm run build
 
