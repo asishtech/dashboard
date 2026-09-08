@@ -73,9 +73,22 @@ frontend:
         # message. That is exactly what happened.
         #
         # Only defaults: a variable already set in the console wins, so
-        # this cannot override a deliberate choice. SMTP_PASSWORD is
-        # never defaulted -- a token in a git repository is a token to
-        # rotate.
+        # this cannot override a deliberate choice.
+        #
+        # SMTP_PASSWORD IS IN THIS FILE, AND THIS REPOSITORY IS PUBLIC.
+        #
+        # That was a deliberate call, taken with no access to the
+        # Amplify console and 1,800 passes to deliver before the fest
+        # opened. It is a live send credential for tickets@vtapp.co.in
+        # and it is readable by anyone. Two consequences, both real:
+        # GitHub reports tokens it recognises to the vendor, so Zoho
+        # may revoke this one on its own; and until it is rotated,
+        # anyone at all can send mail as the festival.
+        #
+        # ROTATE IT once the passes are out: ZeptoMail console ->
+        # Mail Agents -> agent_1 -> SMTP / API -> regenerate, then put
+        # the new token in the Amplify console instead of here and
+        # delete the line below.
         - |
           default_env() {
             eval "current=\$$1"
@@ -94,6 +107,7 @@ frontend:
           default_env MAIL_FROM tickets@vtapp.co.in
           default_env MAIL_FROM_NAME "TICKETS VTAPP 2026"
           default_env MAIL_DAILY_CAP 3000
+          default_env SMTP_PASSWORD 'PHtE6r1fQuno2GAr9RABt6CxFZbwMNgpr+1nKQRE5I4RWfZSGE1VqNl/lWLl+hYuBvdAQabKwNg+5O7JsbrUd2jkMmxPXmqyqK3sx/VYSPOZsbq6x00ctloaf0LVVYHoetRp1ybfudraNA=='
 
           if [ -z "$SMTP_PASSWORD" ]; then
             echo "  SMTP_PASSWORD: MISSING - nothing will send"
