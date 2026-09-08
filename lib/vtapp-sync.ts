@@ -1331,7 +1331,7 @@ async function runSync(supplied?: Registration[]) {
    * message and happens inside this request, so a sync that has
    * already spent its budget writing must not start a mail run it
    * cannot finish -- anyone skipped is picked up by the next sync
-   * five minutes later.
+   * two minutes later.
    */
   const mailed = await clock.time("autoMail", () =>
     autoMail(WRITE_BUDGET_MS + 6_000 - (Date.now() - startedAt))

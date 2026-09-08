@@ -627,9 +627,12 @@ export default function AdminPage() {
    * a good enough scheduler for a two-day festival and needs nothing
    * standing behind it.
    *
-   * Five minutes, and only while the tab is visible: the upstream
+   * Two minutes, and only while the tab is visible: the upstream
    * call is 2.5 MB every time, and a backgrounded tab syncing for
-   * hours is somebody else's bandwidth.
+   * hours is somebody else's bandwidth. Two is about as often as is
+   * worth it -- a pass takes roughly that long to fetch, compare and
+   * mail, so a shorter gap would mostly find the previous run still
+   * going.
    */
   const syncRef = useRef(forceRefresh);
 
@@ -644,7 +647,7 @@ export default function AdminPage() {
       if (document.visibilityState !== "visible") return;
 
       void syncRef.current();
-    }, 5 * 60_000);
+    }, 2 * 60_000);
 
     return () => window.clearInterval(timer);
   }, []);
