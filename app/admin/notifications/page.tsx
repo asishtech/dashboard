@@ -14,6 +14,11 @@ type Queue = {
   reason?: string;
   configured: boolean;
   sender: string | null;
+  /* SMTP host in use, and what is wrong with the settings if
+     anything. Both absent on an older deploy. */
+  relay?: string | null;
+  problem?: string | null;
+  concurrency?: number;
   batchSize: number;
   dailyCap: number;
   remainingToday: number;
@@ -176,6 +181,10 @@ export default function NotificationsPage() {
     failed: number;
     rate: number | null;
   } | null>(null);
+
+  /* How many one press of "Send next" attempts. Five by default:
+     the first send after a change is a test, not a drain. */
+  const [batchLimit, setBatchLimit] = useState(5);
 
   const stopRef = useRef(false);
 
@@ -376,6 +385,54 @@ export default function NotificationsPage() {
     }
   }
 
+  /*
+   * One batch, then stop and say what happened.
+   *
+   * drain() keeps going until the queue is empty; this is the same
+   * request made once, which is what you want when the thing being
+   * tested is the relay rather than the queue.
+   */
+  async function sendOnce(limit: number) {
+    if (busy || running) return;
+
+    setBusy(true);
+    setMessage("");
+    setError("");
+    setPreview(null);
+
+    try {
+      const data = await post({ limit });
+
+      const sent = Number(data.sent ?? 0);
+      const failed = Number(data.failed ?? 0);
+      const rate = Number(data.msPerEmail ?? 0);
+
+      setProgress({ sent, failed, rate: rate || null });
+
+      setMessage(
+        sent === 0 && failed === 0
+          ? "Nothing was waiting."
+          : `Sent ${sent}${failed > 0 ? `, ${failed} failed` : ""}${
+              rate ? ` · ${(rate / 1000).toFixed(1)}s each` : ""
+            }. Stopped, as asked.`
+      );
+
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        setError(
+          (data.errors as { email: string; error: string }[])
+            .map((e) => `${e.email}: ${e.error}`)
+            .join(" · ")
+        );
+      }
+
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Send failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function run(dryRun: boolean) {
     if (busy) return;
 
@@ -457,9 +514,15 @@ export default function NotificationsPage() {
         ? "meter-fill-warning"
         : "meter-fill-success";
 
-  /* How many of today's remaining allowance this press would use. */
+  /*
+   * What one press would actually attempt: what you asked for, capped
+   * by who is left and by what today's allowance still permits. The
+   * button says this number rather than the one in the dropdown,
+   * because "Send next 50" with 12 sends left is a promise the server
+   * refuses with a 429.
+   */
   const nextBatch = Math.min(
-    queue?.batchSize ?? 0,
+    batchLimit,
     waiting,
     queue?.remainingToday ?? 0
   );
@@ -480,9 +543,24 @@ export default function NotificationsPage() {
               {queue?.sender
                 ? `One email per person, sending as ${queue.sender}`
                 : "One email per person, every pass in one PDF"}
+              {/* Which relay, because after a move that is the first
+                  thing worth confirming and the last thing visible. */}
+              {queue?.relay && ` · via ${queue.relay}`}
+              {queue?.concurrency &&
+                queue.concurrency > 1 &&
+                ` · ${queue.concurrency} at a time`}
             </p>
           </div>
         </header>
+
+        {/* Configured, and configured wrongly. Said before anything
+            is attempted rather than once per failed message. */}
+        {queue?.problem && (
+          <div className="banner banner-danger" role="alert">
+            <AlertIcon size={18} />
+            <span>{queue.problem}</span>
+          </div>
+        )}
 
         {blocked && (
           <section className="panel mb-6">
@@ -840,6 +918,57 @@ export default function NotificationsPage() {
                   >
                     {busy && <span className="btn-spinner" />}
                     Preview next {Math.min(queue.batchSize, waiting)}
+                  </button>
+
+                  {/*
+                    One batch of a size you choose, and then it stops.
+
+                    "Send all" is the right control for a queue of
+                    1,800 and the wrong one for the first send after
+                    changing the relay, when what you want is five
+                    real emails to real people and a look at where
+                    they landed. Without this the only way to try the
+                    new setup on a handful was to start the drain and
+                    race it with the Stop button.
+                  */}
+                  <label className="check" htmlFor="batch-size">
+                    <span>Batch</span>
+
+                    <select
+                      id="batch-size"
+                      className="select select-sm"
+                      value={batchLimit}
+                      disabled={busy || running}
+                      onChange={(event) =>
+                        setBatchLimit(Number(event.target.value))
+                      }
+                    >
+                      {[5, 10, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={busy || running || nextBatch === 0}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Send to the next ${nextBatch} ${
+                            nextBatch === 1 ? "person" : "people"
+                          } and stop? This cannot be undone.`
+                        )
+                      ) {
+                        void sendOnce(nextBatch);
+                      }
+                    }}
+                  >
+                    {busy && <span className="btn-spinner" />}
+                    Send next {nextBatch}
                   </button>
 
                   {running ? (

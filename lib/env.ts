@@ -79,26 +79,74 @@ export function mailConfig() {
     return null;
   }
 
+  /*
+   * The username is not always an address.
+   *
+   * On Gmail it is the mailbox, and Gmail rewrites From to the
+   * authenticated account anyway, so falling back to it was free. On
+   * ZeptoMail the username is the literal string "emailapikey" -- so
+   * the same fallback puts `emailapikey` in the From header and in
+   * ALERT_EMAIL, and every message is rejected by a relay that will
+   * not explain itself. Only fall back when it is actually an
+   * address; mailProblem() below says so plainly when it is not.
+   */
+  const userIsAddress = user.includes("@");
+
   return {
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: Number(process.env.SMTP_PORT || 587),
     user,
     pass,
-    /* Gmail rewrites From to the authenticated account anyway, so a
-       mismatch here would silently be ignored rather than honoured. */
     from:
       process.env.MAIL_FROM ||
       process.env.SMTP_FROM_EMAIL ||
-      user,
+      (userIsAddress ? user : ""),
     /* A display name is what stops this reading as spam. */
     fromName:
       process.env.MAIL_FROM_NAME ||
       process.env.SMTP_FROM_NAME ||
       "V-TAPP 2026",
     /* Where sync failures and other operational mail goes. */
-    alertTo: process.env.ALERT_EMAIL || user,
+    alertTo:
+      process.env.ALERT_EMAIL ||
+      process.env.MAIL_FROM ||
+      (userIsAddress ? user : ""),
     /* Absolute base for links and QR URLs inside emails. */
     appUrl:
       process.env.NEXT_PUBLIC_APP_URL || "https://vtapp.co.in",
   };
+}
+
+/*
+ * What is wrong with the mail settings, in words, or null if nothing.
+ *
+ * Separate from mailConfig() returning null, which means "nobody has
+ * set this up yet" and is a normal state. This is the other kind:
+ * configured, and configured wrongly. A relay answers that with a
+ * 5xx per message and the screen fills with a hundred identical
+ * failures, none of which name the setting at fault.
+ */
+export function mailProblem() {
+  const config = mailConfig();
+
+  if (!config) return null;
+
+  if (!config.from.includes("@")) {
+    return "MAIL_FROM is not set. The SMTP username is not an email address (ZeptoMail uses the literal 'emailapikey'), so there is nothing to send as -- set MAIL_FROM to an address on the verified domain.";
+  }
+
+  /*
+   * ZeptoMail only accepts a From on a domain verified in the
+   * account, and rejects anything else per message. Catching the
+   * common mistake -- leaving a gmail.com sender behind after moving
+   * the host -- is worth one string comparison.
+   */
+  if (
+    config.host.includes("zeptomail") &&
+    /@(gmail|googlemail)\.com$/i.test(config.from)
+  ) {
+    return `MAIL_FROM is ${config.from}, which ZeptoMail will reject: the sender has to be on a domain verified in the ZeptoMail account.`;
+  }
+
+  return null;
 }

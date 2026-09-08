@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
-import { mailConfig } from "@/lib/env";
+import { mailConfig, mailProblem } from "@/lib/env";
 import {
+  CONCURRENCY,
   DAILY_CAP,
   closeMailer,
   mailEnabled,
@@ -23,7 +24,14 @@ export const dynamic = "force-dynamic";
  * cost a TLS handshake.
  */
 const BATCH_SIZE = 20;
-const MAX_BATCH = 40;
+
+/*
+ * Raised with concurrency: five in flight at roughly a second each
+ * clears about a hundred inside the deadline, and a ceiling of forty
+ * would just mean more round trips to send the same queue. The
+ * deadline is still what actually stops the batch.
+ */
+const MAX_BATCH = 150;
 
 /*
  * How long the send loop may run before it stops and reports.
@@ -106,7 +114,14 @@ export async function GET() {
       ready: true,
       configured: config !== null,
       sender: config?.from ?? null,
+      /* Named so the screen can say where mail is going out through,
+         which is the first thing to check after a move. */
+      relay: config?.host ?? null,
+      /* Configured wrongly, in words. Null when it is fine. */
+      problem: mailProblem(),
       batchSize: BATCH_SIZE,
+      maxBatch: MAX_BATCH,
+      concurrency: CONCURRENCY,
       dailyCap: DAILY_CAP,
       autoSend,
       remainingToday: Math.max(
@@ -192,6 +207,14 @@ export async function POST(request: Request) {
       );
     }
 
+    /* Configured, but in a way that cannot work. Said once here
+       rather than a hundred times in the failure list. */
+    const problem = mailProblem();
+
+    if (!dryRun && problem) {
+      return NextResponse.json({ error: problem }, { status: 409 });
+    }
+
     const db = supabaseAdmin();
 
     /*
@@ -261,37 +284,60 @@ export async function POST(request: Request) {
     const errors: { email: string; error: string }[] = [];
 
     /*
-     * Sequential, not Promise.all. Gmail throttles parallel SMTP
-     * connections from one account, and a burst that trips it fails the
-     * whole batch rather than one message.
+     * CONCURRENCY messages at a time, which is 1 on Gmail and 5 on a
+     * transactional relay. Workers pull from one queue rather than
+     * the batch being sliced up front, so a slow message holds up
+     * nothing but itself.
+     *
+     * Not Promise.all over the whole batch: that is what a rate
+     * limiter sees as an attack, and the failure lands on every
+     * message at once instead of one.
      */
-    for (const person of pending) {
-      /*
-       * Checked before each message rather than after: stopping with
-       * time left is fine, being killed mid-send is what wrote a
-       * half-finished row last time.
-       */
-      if (Date.now() - started > DEADLINE_MS) {
-        ranOut = true;
-        break;
-      }
+    let next = 0;
 
-      const result = await sendPersonPasses({
-        email: person.email,
-        name: person.name,
-        passes: person.passes ?? [],
-      });
+    async function worker() {
+      for (;;) {
+        /*
+         * Checked before taking work rather than after finishing it:
+         * stopping with time left is fine, being killed mid-send is
+         * what wrote a half-finished row last time.
+         */
+        if (Date.now() - started > DEADLINE_MS) {
+          /* Only when there was work left to abandon. */
+          if (next < pending.length) ranOut = true;
+          return;
+        }
 
-      if (result.status === "sent") {
-        sent += 1;
-      } else if (result.status === "failed") {
-        failed += 1;
+        /* Safe without a lock: nothing yields between the read and
+           the increment. */
+        const person = pending[next++];
 
-        if (errors.length < 5) {
-          errors.push({ email: person.email, error: result.error });
+        if (!person) return;
+
+        const result = await sendPersonPasses({
+          email: person.email,
+          name: person.name,
+          passes: person.passes ?? [],
+        });
+
+        if (result.status === "sent") {
+          sent += 1;
+        } else if (result.status === "failed") {
+          failed += 1;
+
+          if (errors.length < 5) {
+            errors.push({ email: person.email, error: result.error });
+          }
         }
       }
     }
+
+    await Promise.all(
+      Array.from(
+        { length: Math.min(CONCURRENCY, pending.length || 1) },
+        worker
+      )
+    );
 
     /*
      * Hand the socket back before returning. A function frozen with a

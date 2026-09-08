@@ -63,6 +63,33 @@ export const DAILY_CAP = (() => {
     : 450;
 })();
 
+/*
+ * How many messages are in flight at once.
+ *
+ * One, on Gmail: it throttles parallel SMTP connections from a single
+ * account, and a burst that trips it fails the whole batch rather
+ * than one message. That is a Gmail rule, not a fact about SMTP -- a
+ * transactional relay expects concurrency and is most of the reason
+ * to move to one. Five is deliberately modest; the gain from 1 to 5
+ * is fivefold and the gain from 5 to 20 is a rate limit.
+ *
+ * Keyed off the host so moving the host moves this with it. Nobody
+ * migrating at midnight remembers a second variable, and leaving it
+ * at 1 would make the new relay no faster than the old one -- the
+ * migration would look like it had failed.
+ */
+export const CONCURRENCY = (() => {
+  const configured = Number(process.env.MAIL_CONCURRENCY);
+
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.min(Math.floor(configured), 20);
+  }
+
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+
+  return /gmail|googlemail|google\.com/i.test(host) ? 1 : 5;
+})();
+
 let cached: Transporter | null = null;
 
 function transport(): Transporter | null {
@@ -86,11 +113,10 @@ function transport(): Transporter | null {
      * moved. Twenty messages meant twenty handshakes, which is most
      * of why a batch ran past the gateway's thirty-second limit.
      *
-     * One connection because Gmail throttles parallel connections
-     * from a single account, and the sends are sequential anyway.
+     * How many of them run at once is CONCURRENCY, below.
      */
     pool: true,
-    maxConnections: 1,
+    maxConnections: CONCURRENCY,
     maxMessages: 200,
 
     host: config.host,
