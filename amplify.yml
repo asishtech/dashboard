@@ -39,7 +39,8 @@ frontend:
           echo "--- environment ---"
           for v in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
                    SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_APP_URL \
-                   VTAPP_API_URL VTAPP_API_KEY; do
+                   VTAPP_API_URL VTAPP_API_KEY \
+                   SMTP_HOST SMTP_USER SMTP_PASSWORD MAIL_FROM; do
             eval "value=\$$v"
             if [ -n "$value" ]; then echo "  $v: set"; else echo "  $v: MISSING"; fi
           done
