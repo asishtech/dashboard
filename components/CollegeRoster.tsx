@@ -29,6 +29,9 @@ export type RosterPerson = {
    */
   id_checked?: boolean;
   id_checked_at?: string | null;
+  /* Start of their open visit, or null if not inside. Absent until
+     supabase/gate-log.sql runs. */
+  gate_entered_at?: string | null;
   passes_detail: RosterPass[];
 };
 
@@ -46,14 +49,72 @@ export function CollegeRoster({
   people,
   collegeName,
   onChanged,
+  canAdmitEvents = false,
 }: {
   people: RosterPerson[];
   collegeName: string;
   onChanged: () => void;
+  /* See ExternalDeskCard: off for the registrations desk, which works
+     the gate rather than any event's door. */
+  canAdmitEvents?: boolean;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+
+  /* The gate, per person. The desk's whole job when it is not an
+     admin correcting something. */
+  async function gate(
+    person: RosterPerson,
+    action: "enter" | "exit"
+  ) {
+    if (busy !== null) return;
+
+    /* Keyed on a pass id for the spinner, since that is what the row
+       already tracks; any of their passes identifies the row. */
+    setBusy(person.passes_detail[0]?.id ?? -1);
+    setNote("");
+    setError("");
+
+    try {
+      const response = await fetch("/api/gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          email: person.email,
+          name: person.name,
+          college: collegeName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.alreadyInside
+            ? `Already inside since ${new Date(
+                data.enteredAt
+              ).toLocaleTimeString("en-IN")}`
+            : data.error || "That did not work"
+        );
+      }
+
+      setNote(
+        action === "exit"
+          ? `${person.name || person.email} marked out at the gate`
+          : `${person.name || person.email} let in at the gate`
+      );
+
+      onChanged();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "That did not work"
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function act(pass: RosterPass, action: "enter" | "exit") {
     if (busy !== null) return;
@@ -191,6 +252,50 @@ export function CollegeRoster({
           </div>
 
           <div className="stack stack-tight roster-passes">
+            {/*
+              The gate first, because for this desk it is the whole
+              transaction. The passes below it are what the events'
+              own volunteers have recorded, not buttons.
+            */}
+            {!canAdmitEvents &&
+              person.gate_entered_at !== undefined && (
+                <div className="roster-pass">
+                  {person.gate_entered_at ? (
+                    <>
+                      <span className="badge badge-success">
+                        <CheckIcon size={12} /> Inside since{" "}
+                        {new Date(
+                          person.gate_entered_at
+                        ).toLocaleTimeString("en-IN")}
+                      </span>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => void gate(person, "exit")}
+                        disabled={busy !== null}
+                      >
+                        Gate exit
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => void gate(person, "enter")}
+                      disabled={busy !== null || blocked}
+                      title={
+                        blocked
+                          ? "Their college ID has not been photographed. Find them on the External desk first."
+                          : undefined
+                      }
+                    >
+                      Gate entry
+                    </button>
+                  )}
+                </div>
+              )}
+
             {person.passes_detail.map((pass) => {
               const entered = Boolean(pass.entered_at);
               const left = Boolean(pass.exited_at);
@@ -202,7 +307,29 @@ export function CollegeRoster({
                     {pass.event_day && ` · ${pass.event_day}`}
                   </span>
 
-                  {left ? (
+                  {!canAdmitEvents ? (
+                    /* Status, not a control: this desk works the gate
+                       and each event scans its own door. */
+                    left ? (
+                      <span className="badge badge-plain">
+                        Left{" "}
+                        {new Date(
+                          pass.exited_at as string
+                        ).toLocaleTimeString("en-IN")}
+                      </span>
+                    ) : entered ? (
+                      <span className="badge badge-success">
+                        <CheckIcon size={12} /> In at{" "}
+                        {new Date(
+                          pass.entered_at as string
+                        ).toLocaleTimeString("en-IN")}
+                      </span>
+                    ) : (
+                      <span className="badge badge-plain">
+                        Not scanned in
+                      </span>
+                    )
+                  ) : left ? (
                     <span className="badge badge-plain">
                       Left{" "}
                       {new Date(
@@ -240,7 +367,7 @@ export function CollegeRoster({
                     </button>
                   )}
 
-                  {entered && !left && (
+                  {canAdmitEvents && entered && !left && (
                     <span className="badge badge-success">
                       <CheckIcon size={12} /> In since{" "}
                       {new Date(

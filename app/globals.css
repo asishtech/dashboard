@@ -2052,6 +2052,40 @@ fieldset.role-picker:disabled .role-chip {
   cursor: not-allowed;
 }
 
+/* What one volunteer may scan. Indented under their row rather than
+   inside it: the list is ninety events long and would otherwise push
+   the roles off the side of the card. */
+.scope-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.scope-editor {
+  padding: var(--space-4);
+  margin: 0 var(--space-2) var(--space-3);
+
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Capped and scrolling: ninety chips would bury every other row on
+   the page. */
+.scope-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  max-height: 260px;
+  overflow-y: auto;
+}
+
 /* Sits in a header row beside the buttons, so it matches their
    height rather than the taller form-field size. */
 .role-switcher {

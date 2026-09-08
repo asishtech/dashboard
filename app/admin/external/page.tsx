@@ -56,6 +56,36 @@ export default function ExternalPage() {
   /* Which college is open, and who is in it. */
   const [open, setOpen] = useState<string | null>(null);
   const [people, setPeople] = useState<CollegePerson[] | null>(null);
+
+  /*
+   * Only an admin admits anyone to an individual event from here.
+   *
+   * This screen is the front gate: the registrations desk lets a
+   * visitor onto the site, and the volunteer at each event's door
+   * scans them into that event. An admin keeps the per-event controls
+   * because they are correcting a mistake rather than working a
+   * queue.
+   */
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/auth/role", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.success) return;
+        setIsAdmin(data.activeRole === "admin");
+      })
+      .catch(() => {
+        /* The gate controls work either way; only the per-event ones
+           are withheld, and withholding them is the safe default. */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [peopleBusy, setPeopleBusy] = useState(false);
 
   async function toggle(key: string, reload = false) {
@@ -226,6 +256,7 @@ export default function ExternalPage() {
                   <ExternalDeskCard
                     person={person}
                     refresh={refresh}
+                    canAdmitEvents={isAdmin}
                   />
                 )}
               </DeskSearch>
@@ -438,6 +469,7 @@ export default function ExternalPage() {
                                       people as unknown as RosterPerson[]
                                     }
                                     collegeName={college.name}
+                                    canAdmitEvents={isAdmin}
                                     onChanged={() =>
                                       void toggle(college.key, true)
                                     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import type { Role } from "@/lib/roles";
@@ -14,6 +14,13 @@ import {
 import type { Role as StaffRole } from "@/lib/roles";
 
 type Filter = StaffRole | "ALL" | "DISABLED";
+
+type ScopeEvent = {
+  event_id: string;
+  name: string;
+  day: string | null;
+  isMerch: boolean;
+};
 
 type StaffUser = {
   id: number;
@@ -86,6 +93,99 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
 
+  /*
+   * Which events each volunteer may scan.
+   *
+   * Kept beside the roles rather than on a screen of its own: "is a
+   * volunteer" and "of what" are one decision, and separating them is
+   * how somebody ends up with the role and no scope, or a scope and
+   * no role.
+   */
+  const [scopes, setScopes] = useState<Record<string, string[]>>({});
+  const [scopeEvents, setScopeEvents] = useState<ScopeEvent[]>([]);
+  const [scopeReady, setScopeReady] = useState(true);
+  const [scopeReason, setScopeReason] = useState("");
+  const [scopeOpen, setScopeOpen] = useState<string | null>(null);
+  const [scopeQuery, setScopeQuery] = useState("");
+  const [scopeBusy, setScopeBusy] = useState(false);
+
+  async function loadScopes() {
+    try {
+      const response = await fetch("/api/admin/volunteers", {
+        cache: "no-store",
+      });
+
+      const data = await response.json();
+
+      if (response.status === 409) {
+        setScopeReady(false);
+        setScopeReason(data.error ?? "");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to read scopes");
+      }
+
+      setScopeReady(true);
+
+      setScopes(
+        Object.fromEntries(
+          (data.scopes ?? []).map(
+            (row: { email: string; eventIds: string[] }) => [
+              row.email,
+              row.eventIds,
+            ]
+          )
+        )
+      );
+
+      setScopeEvents(data.events ?? []);
+    } catch {
+      /* The roles on this page still work without it. */
+      setScopeReady(false);
+    }
+  }
+
+  async function saveScope(email: string, eventIds: string[]) {
+    if (scopeBusy) return;
+
+    setScopeBusy(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/admin/volunteers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, eventIds }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to save that scope");
+      }
+
+      setScopes((current) => ({ ...current, [email]: eventIds }));
+
+      setMessage(
+        eventIds.length === 0
+          ? `${email} can scan every event again.`
+          : `${email} can scan ${eventIds.length} event${
+              eventIds.length === 1 ? "" : "s"
+            }.`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save that scope"
+      );
+    } finally {
+      setScopeBusy(false);
+    }
+  }
+
   async function loadUsers() {
     try {
       setLoading(true);
@@ -121,6 +221,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       loadUsers();
+      void loadScopes();
     }, 0);
 
     return () => {
@@ -554,8 +655,16 @@ export default function AdminUsersPage() {
             </div>
           ) : (
             <div className="panel-body-flush">
-              {filtered.map((user) => (
-                <div className="row-card" key={user.id}>
+              {filtered.map((user) => {
+                const isVolunteer =
+                  rolesOf(user).includes("volunteer");
+
+                const scope = scopes[user.email.toLowerCase()] ?? [];
+                const open = scopeOpen === user.email;
+
+                return (
+                <Fragment key={user.id}>
+                <div className="row-card">
                   <label className="access-toggle">
                     <input
                       type="checkbox"
@@ -621,8 +730,141 @@ export default function AdminUsersPage() {
                     })}
                   </fieldset>
                 </div>
-              ))}
+
+                {/*
+                  What this volunteer may scan.
+                  ----------------------------
+                  No rows means no restriction, which is what every
+                  volunteer was before scopes existed. Said in words
+                  because an empty list and "everything" look the same
+                  as a blank cell and are opposites at a door.
+                */}
+                {isVolunteer && user.active && scopeReady && (
+                  <div className="scope-row">
+                    <span className="row-meta">
+                      {scope.length === 0 ? (
+                        "Scans every event and the merchandise counter"
+                      ) : (
+                        <>
+                          Scans{" "}
+                          {scope
+                            .map(
+                              (id) =>
+                                scopeEvents.find(
+                                  (e) => e.event_id === id
+                                )?.name ?? id
+                            )
+                            .join(", ")}
+                        </>
+                      )}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        setScopeQuery("");
+                        setScopeOpen(open ? null : user.email);
+                      }}
+                    >
+                      {open ? "Done" : "Limit to events"}
+                    </button>
+                  </div>
+                )}
+
+                {isVolunteer && open && (
+                  <div className="scope-editor">
+                    <div className="search mb-3">
+                      <span className="search-icon">
+                        <SearchIcon size={14} />
+                      </span>
+
+                      <label
+                        className="sr-only"
+                        htmlFor={`scope-search-${user.id}`}
+                      >
+                        Find an event
+                      </label>
+
+                      <input
+                        id={`scope-search-${user.id}`}
+                        type="search"
+                        className="input"
+                        placeholder="Find an event"
+                        value={scopeQuery}
+                        onChange={(event) =>
+                          setScopeQuery(event.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="scope-list">
+                      {scopeEvents
+                        .filter((event) =>
+                          scopeQuery.trim()
+                            ? event.name
+                                .toLowerCase()
+                                .includes(
+                                  scopeQuery.trim().toLowerCase()
+                                )
+                            : true
+                        )
+                        .map((event) => {
+                          const on = scope.includes(event.event_id);
+
+                          return (
+                            <label
+                              key={event.event_id}
+                              className={`role-chip${
+                                on ? " is-on" : ""
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                disabled={scopeBusy}
+                                onChange={() =>
+                                  void saveScope(
+                                    user.email.toLowerCase(),
+                                    on
+                                      ? scope.filter(
+                                          (id) =>
+                                            id !== event.event_id
+                                        )
+                                      : [...scope, event.event_id]
+                                  )
+                                }
+                              />
+                              {event.isMerch
+                                ? "Merchandise counter"
+                                : event.name}
+                            </label>
+                          );
+                        })}
+                    </div>
+
+                    {scope.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm mt-3"
+                        disabled={scopeBusy}
+                        onClick={() =>
+                          void saveScope(user.email.toLowerCase(), [])
+                        }
+                      >
+                        Remove the limit
+                      </button>
+                    )}
+                  </div>
+                )}
+                </Fragment>
+                );
+              })}
             </div>
+          )}
+
+          {!scopeReady && scopeReason && (
+            <p className="help">{scopeReason}</p>
           )}
 
           <div className="panel-footer">

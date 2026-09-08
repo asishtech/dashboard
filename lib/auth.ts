@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { supabaseAnonKey, supabaseUrl } from "./env";
 import { supabaseAdmin } from "./supabase";
+import { merchandiseEventIds } from "./events";
 import { primaryRole, type Role } from "./roles";
 
 export { primaryRole };
@@ -285,6 +286,40 @@ export async function allowedEventIds(
     return [];
   }
 
+  /*
+   * Volunteers are scoped by their own table, not by
+   * event_coordinators -- a volunteer is not a coordinator, and
+   * putting them in that table would list a first-year student as the
+   * person responsible for an event.
+   *
+   * No rows means no restriction, which is the opposite of the rule
+   * for coordinators above. A coordinator with no assignments has
+   * been given nothing to look at; a volunteer with no assignments is
+   * every volunteer who was scanning before this table existed, and
+   * an empty list would have stopped all of them the moment it was
+   * created.
+   */
+  if (session.activeRole === "volunteer") {
+    const { data, error } = await supabaseAdmin()
+      .from("event_volunteers")
+      .select("event_id")
+      .eq("email", email);
+
+    /* 42P01: supabase/volunteer-scope.sql has not been run. Nothing
+       is scoped yet, so nothing is restricted. */
+    if (error) {
+      if (error.code === "42P01" || error.code === "PGRST205") {
+        return null;
+      }
+
+      throw error;
+    }
+
+    const scope = (data ?? []).map((row) => String(row.event_id));
+
+    return scope.length > 0 ? scope : null;
+  }
+
   const { data, error } = await supabaseAdmin()
     .from("event_coordinators")
     .select("event_id")
@@ -307,4 +342,31 @@ export async function canReadEvent(
   const allowed = await allowedEventIds(session);
 
   return allowed === null || allowed.includes(eventId);
+}
+
+/*
+ * Whether this person may hand merchandise over the counter.
+ *
+ * Only volunteers are tested. An admin is unrestricted, and a
+ * coordinator's scope lists the events they run rather than anything
+ * about the merchandise counter -- testing them here would take the
+ * counter away from staff who have been using it, to fix a problem
+ * nobody reported.
+ *
+ * A volunteer with no scope is unrestricted, as everywhere else. A
+ * scoped one needs the merchandise row itself, which is what makes
+ * "merch volunteer" a scope rather than a fourth role.
+ */
+export async function canHandOutMerch(
+  session: Session
+): Promise<boolean> {
+  if (session.activeRole !== "volunteer") return true;
+
+  const allowed = await allowedEventIds(session);
+
+  if (allowed === null) return true;
+
+  const merch = await merchandiseEventIds();
+
+  return allowed.some((eventId) => merch.has(eventId));
 }

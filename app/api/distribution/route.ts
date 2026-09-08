@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { canHandOutMerch, requireRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -152,6 +152,17 @@ export async function POST(request: Request) {
 
   if (auth instanceof NextResponse) {
     return auth;
+  }
+
+  /* The counter, not the door. See canHandOutMerch(). */
+  if (!(await canHandOutMerch(auth))) {
+    return NextResponse.json(
+      {
+        error:
+          "You are assigned to events, not the merchandise counter.",
+      },
+      { status: 403 }
+    );
   }
 
   try {

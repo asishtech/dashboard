@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { canHandOutMerch, requireRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,18 @@ export async function GET(
 
   if (auth instanceof NextResponse) {
     return auth;
+  }
+
+  /* A volunteer scoped to events cannot work the merchandise
+     counter, and a merchandise volunteer is one scoped to it. */
+  if (!(await canHandOutMerch(auth))) {
+    return NextResponse.json(
+      {
+        error:
+          "You are assigned to events, not the merchandise counter.",
+      },
+      { status: 403 }
+    );
   }
 
   const { token } = await params;

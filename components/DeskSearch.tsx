@@ -25,6 +25,11 @@ export type Person = {
   college: string | null;
   id_checked: boolean;
   id_checked_at: string | null;
+  /*
+   * When their current visit started, or null if they are not inside
+   * the venue. Absent until supabase/gate-log.sql runs.
+   */
+  gate_entered_at?: string | null;
   passes: number;
   admitted: number;
   passes_detail: Pass[];

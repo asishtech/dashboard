@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { canReadEvent, requireRole } from "@/lib/auth";
+import {
+  allowedEventIds,
+  canReadEvent,
+  requireRole,
+} from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +22,15 @@ export type CheckinPass = {
 };
 
 /*
- * A coordinator may admit their own event's attendees and no others.
+ * A coordinator may admit their own event's attendees and no others,
+ * and so may a volunteer who has been scoped to particular events --
+ * including the merchandise-only volunteer, whose one event is the
+ * merchandise row.
+ *
+ * A volunteer with no scope at all is unrestricted, which is what
+ * every volunteer was before supabase/volunteer-scope.sql existed;
+ * allowedEventIds() returns null for them.
+ *
  * An event whose ticket matched nothing has no owner, so only staff
  * with unrestricted scope can admit it.
  */
@@ -28,9 +40,18 @@ async function mayAdmit(
 ) {
   if (session instanceof NextResponse) return false;
 
-  if (session.activeRole !== "faculty") return true;
+  if (
+    session.activeRole !== "faculty" &&
+    session.activeRole !== "volunteer"
+  ) {
+    return true;
+  }
 
-  if (!pass.event_id) return false;
+  if (!pass.event_id) {
+    /* Unscoped staff may still admit an unmatched ticket; a scoped
+       one cannot, because there is no event to check it against. */
+    return (await allowedEventIds(session)) === null;
+  }
 
   return canReadEvent(session, pass.event_id);
 }
@@ -119,7 +140,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           error:
-            "This pass belongs to an event you do not coordinate.",
+            "This pass is for an event you are not assigned to.",
         },
         { status: 403 }
       );
@@ -242,7 +263,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "This pass belongs to an event you do not coordinate.",
+            "This pass is for an event you are not assigned to.",
         },
         { status: 403 }
       );

@@ -17,9 +17,22 @@ import { LivePhotoCapture } from "@/components/LivePhotoCapture";
 export function ExternalDeskCard({
   person,
   refresh,
+  canAdmitEvents = false,
 }: {
   person: Person;
   refresh: () => void;
+  /*
+   * Whether this desk may also admit people to individual events.
+   *
+   * Off for the registrations desk, which is the front gate: it lets
+   * a visitor onto the site, and the volunteer at each event's door
+   * scans them into that event. Pressing "Mark entry" on a pass here
+   * credited the event with an attendee who might never walk to it,
+   * and that count is what its coordinator reports.
+   *
+   * On for an admin, who is correcting rather than working a queue.
+   */
+  canAdmitEvents?: boolean;
 }) {
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState("");
@@ -38,6 +51,14 @@ export function ExternalDeskCard({
   /* Any pass will do as the key for the card: it belongs to the
      person, and the desk photographs one card, not one per event. */
   const anchor = person.passes_detail[0];
+
+  /*
+   * Absent is not "outside". Until supabase/gate-log.sql runs the
+   * field does not exist, and showing "Gate entry" against a table
+   * that cannot record it would lose every press silently.
+   */
+  const gateKnown = person.gate_entered_at !== undefined;
+  const inside = Boolean(person.gate_entered_at);
 
   async function uploadCard(file: File) {
     if (busy) return;
@@ -68,6 +89,54 @@ export function ExternalDeskCard({
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  /* Through the front gate, or back out of it. */
+  async function gateVisit(action: "enter" | "exit") {
+    if (busy) return;
+
+    setBusy("gate");
+    setError("");
+    setNote("");
+
+    try {
+      const response = await fetch("/api/gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          email: person.email,
+          name: person.name,
+          college: person.college,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.alreadyInside
+            ? `Already inside since ${new Date(
+                data.enteredAt
+              ).toLocaleTimeString("en-IN")}`
+            : data.error || "Could not record that"
+        );
+      }
+
+      setNote(
+        action === "exit"
+          ? "Marked out at the gate."
+          : "Let in at the gate."
+      );
+
+      refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not record that"
+      );
     } finally {
       setBusy("");
     }
@@ -267,7 +336,48 @@ export function ExternalDeskCard({
         </div>
         )}
 
-        {/* 2. The passes ----------------------------------------- */}
+        {/* 2. The gate ------------------------------------------- */}
+        {gateKnown && (
+          <div className="resend-search mt-4">
+            {inside ? (
+              <>
+                <span className="badge badge-success">
+                  <CheckIcon size={12} /> Inside since{" "}
+                  {new Date(
+                    person.gate_entered_at as string
+                  ).toLocaleTimeString("en-IN")}
+                </span>
+
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void gateVisit("exit")}
+                  disabled={busy !== ""}
+                >
+                  {busy === "gate" && <span className="btn-spinner" />}
+                  Gate exit
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void gateVisit("enter")}
+                disabled={busy !== "" || !person.id_checked}
+                title={
+                  person.id_checked
+                    ? undefined
+                    : "Photograph their college ID first"
+                }
+              >
+                {busy === "gate" && <span className="btn-spinner" />}
+                Gate entry
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 3. The passes ----------------------------------------- */}
         <div className="stack mt-4">
           {person.passes_detail.map((pass) => (
             <div className="resend-row" key={pass.id}>
@@ -288,7 +398,32 @@ export function ExternalDeskCard({
               </div>
 
               <div className="resend-actions">
-                {pass.exited_at ? (
+                {!canAdmitEvents ? (
+                  /*
+                   * Status only. This desk does not admit anyone to an
+                   * event; it says whether the event's own volunteer
+                   * has.
+                   */
+                  pass.exited_at ? (
+                    <span className="badge badge-plain">
+                      Left{" "}
+                      {new Date(pass.exited_at).toLocaleTimeString(
+                        "en-IN"
+                      )}
+                    </span>
+                  ) : pass.entered_at ? (
+                    <span className="badge badge-success">
+                      <CheckIcon size={12} /> In at{" "}
+                      {new Date(pass.entered_at).toLocaleTimeString(
+                        "en-IN"
+                      )}
+                    </span>
+                  ) : (
+                    <span className="badge badge-plain">
+                      Not scanned in
+                    </span>
+                  )
+                ) : pass.exited_at ? (
                   /* Came and went. Distinct from never arrived, which
                      a single tick would have made identical. */
                   <span className="badge badge-plain">
@@ -346,6 +481,20 @@ export function ExternalDeskCard({
             Entry is disabled until the college ID has been
             photographed — that check is the reason a visitor comes to
             this desk rather than walking to the gate.
+          </p>
+        )}
+
+        {!gateKnown && (
+          <p className="help mt-3">
+            Run supabase/gate-log.sql to record gate entry and exit
+            here.
+          </p>
+        )}
+
+        {!canAdmitEvents && person.id_checked && gateKnown && (
+          <p className="help mt-3">
+            Events are scanned at their own doors. This desk lets a
+            visitor onto the site and marks them back out.
           </p>
         )}
 
