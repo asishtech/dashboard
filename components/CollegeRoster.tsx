@@ -22,6 +22,13 @@ export type RosterPerson = {
   passes: number;
   admitted: number;
   inside: number;
+  /*
+   * Whether their college ID has been photographed at the desk.
+   * Absent until supabase/desk-gate.sql runs, which is different from
+   * false and is treated as such below.
+   */
+  id_checked?: boolean;
+  id_checked_at?: string | null;
   passes_detail: RosterPass[];
 };
 
@@ -103,6 +110,19 @@ export function CollegeRoster({
     0
   );
 
+  /*
+   * Whether the roster knows about the ID check at all.
+   *
+   * Undefined is not false. Before supabase/desk-gate.sql runs the
+   * field is simply absent, and refusing every entry on the strength
+   * of a missing field would shut the door on a desk that has no way
+   * to tell why. So: absent means carry on as before, and the note
+   * below names the migration.
+   */
+  const gateKnown = people.some(
+    (person) => person.id_checked !== undefined
+  );
+
   return (
     <div className="stack">
       <p className="help">
@@ -122,7 +142,25 @@ export function CollegeRoster({
         </p>
       )}
 
-      {people.map((person) => (
+      {!gateKnown && (
+        <p className="help">
+          Run supabase/desk-gate.sql to hold entry here until the
+          college ID has been seen at the desk.
+        </p>
+      )}
+
+      {people.map((person) => {
+        /*
+         * Admitting from this screen skips the desk entirely, which
+         * is the one thing the desk exists for. Entry waits for the
+         * card; exit never does -- somebody already inside is leaving
+         * whether or not the paperwork was done, and refusing to
+         * record that would only lose the count of who is still in
+         * the building.
+         */
+        const blocked = person.id_checked === false;
+
+        return (
         <div className="resend-row" key={person.email_key}>
           <div>
             <div className="row-title">
@@ -142,6 +180,14 @@ export function CollegeRoster({
                   typed &ldquo;{person.college_as_typed}&rdquo;
                 </div>
               )}
+
+            {blocked && (
+              <div className="row-meta">
+                <span className="badge badge-warning">
+                  ID not checked
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="stack stack-tight roster-passes">
@@ -180,7 +226,12 @@ export function CollegeRoster({
                       type="button"
                       className="btn btn-primary btn-sm"
                       onClick={() => void act(pass, "enter")}
-                      disabled={busy !== null}
+                      disabled={busy !== null || blocked}
+                      title={
+                        blocked
+                          ? "Their college ID has not been photographed. Find them on the External desk first."
+                          : undefined
+                      }
                     >
                       {busy === pass.id && (
                         <span className="btn-spinner" />
@@ -202,7 +253,8 @@ export function CollegeRoster({
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

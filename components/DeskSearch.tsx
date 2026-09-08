@@ -13,6 +13,8 @@ export type Pass = {
   is_merch: boolean;
   /* Null until they have been admitted to that event. */
   entered_at: string | null;
+  /* Null until they have been marked back out of it. */
+  exited_at?: string | null;
 };
 
 export type Person = {

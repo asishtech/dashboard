@@ -73,7 +73,16 @@ export function ExternalDeskCard({
     }
   }
 
-  async function admit(pass: Pass) {
+  /*
+   * The gate, both ways.
+   *
+   * Exit is here and not only in the college list because this is the
+   * screen the desk has open: a visitor leaving comes back to the
+   * same person they were checked in by, and making them findable
+   * twice -- once to admit, once through a college -- is how the
+   * count of who is still inside goes wrong.
+   */
+  async function gate(pass: Pass, action: "enter" | "exit") {
     if (busy) return;
 
     setBusy(`pass-${pass.id}`);
@@ -84,7 +93,11 @@ export function ExternalDeskCard({
       const response = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ registrationId: pass.id }),
+        body: JSON.stringify(
+          action === "exit"
+            ? { action: "exit", registrationId: pass.id }
+            : { registrationId: pass.id }
+        ),
       });
 
       const data = await response.json();
@@ -95,18 +108,27 @@ export function ExternalDeskCard({
             ? `Already admitted at ${new Date(
                 data.enteredAt
               ).toLocaleTimeString("en-IN")}`
-            : data.error || "Could not mark entry"
+            : data.error ||
+              `Could not mark ${action === "exit" ? "exit" : "entry"}`
         );
       }
 
       setNote(
-        `Admitted to ${pass.event_name ?? "the event"}.`
+        action === "exit"
+          ? data.alreadyExited
+            ? `Already marked out at ${new Date(
+                data.exitedAt
+              ).toLocaleTimeString("en-IN")}`
+            : `Marked out of ${pass.event_name ?? "the event"}.`
+          : `Admitted to ${pass.event_name ?? "the event"}.`
       );
 
       refresh();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Could not mark entry"
+        err instanceof Error
+          ? err.message
+          : `Could not mark ${action === "exit" ? "exit" : "entry"}`
       );
     } finally {
       setBusy("");
@@ -190,7 +212,18 @@ export function ExternalDeskCard({
           />
         )}
 
-        {/* The person, not the document ------------------------- */}
+        {/*
+          The person, not the document.
+
+          Only after the card has been seen. The desk works one
+          visitor at a time with a queue behind it, and two camera
+          buttons side by side before either has been used invites
+          taking the selfie first -- which proves somebody is standing
+          there and nothing about who they are. The card is the check;
+          the live photo is the record of who presented it, and is
+          meaningless before it.
+        */}
+        {person.id_checked && (
         <div className="resend-search mt-4">
           {capturing ? (
             <LivePhotoCapture
@@ -232,6 +265,7 @@ export function ExternalDeskCard({
             </>
           )}
         </div>
+        )}
 
         {/* 2. The passes ----------------------------------------- */}
         <div className="stack mt-4">
@@ -254,18 +288,41 @@ export function ExternalDeskCard({
               </div>
 
               <div className="resend-actions">
-                {pass.entered_at ? (
-                  <span className="badge badge-success">
-                    <CheckIcon size={12} /> In at{" "}
-                    {new Date(pass.entered_at).toLocaleTimeString(
+                {pass.exited_at ? (
+                  /* Came and went. Distinct from never arrived, which
+                     a single tick would have made identical. */
+                  <span className="badge badge-plain">
+                    Left{" "}
+                    {new Date(pass.exited_at).toLocaleTimeString(
                       "en-IN"
                     )}
                   </span>
+                ) : pass.entered_at ? (
+                  <>
+                    <span className="badge badge-success">
+                      <CheckIcon size={12} /> In at{" "}
+                      {new Date(pass.entered_at).toLocaleTimeString(
+                        "en-IN"
+                      )}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => void gate(pass, "exit")}
+                      disabled={busy !== ""}
+                    >
+                      {busy === `pass-${pass.id}` && (
+                        <span className="btn-spinner" />
+                      )}
+                      Mark exit
+                    </button>
+                  </>
                 ) : (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
-                    onClick={() => void admit(pass)}
+                    onClick={() => void gate(pass, "enter")}
                     disabled={busy !== "" || !person.id_checked}
                     title={
                       person.id_checked
