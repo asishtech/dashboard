@@ -2715,3 +2715,16 @@ fieldset.role-picker:disabled .role-chip {
   }
 }
 
+
+/* The press that mails everyone. Its own line under the batch
+   controls, so it cannot be mistaken for one more of them. */
+.send-all {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.send-all .help {
+  margin: 0;
+}

@@ -971,10 +971,23 @@ export default function NotificationsPage() {
                     Send next {nextBatch}
                   </button>
 
+                </div>
+
+                {/*
+                  The whole queue, on its own line.
+                  ---------------------------------
+                  It was the fourth small button in a row of four and
+                  read as one more variation on "send a few". This is
+                  the press that mails eighteen hundred people, so it
+                  gets its own line, full height, and says what it is
+                  going to do before it is pressed rather than only in
+                  the confirm box.
+                */}
+                <div className="send-all mt-4">
                   {running ? (
                     <button
                       type="button"
-                      className="btn btn-danger btn-sm"
+                      className="btn btn-danger"
                       onClick={() => {
                         stopRef.current = true;
                       }}
@@ -985,21 +998,46 @@ export default function NotificationsPage() {
                   ) : (
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-primary"
                       disabled={busy || waiting === 0}
                       onClick={() => {
                         if (
                           window.confirm(
-                            `Start sending to all ${waiting} people? It keeps going until the queue is empty, the daily cap is reached, or you stop it. This cannot be undone.`
+                            `Send to all ${waiting} people now?\n\nIt keeps going until the queue is empty, the daily cap is reached, or you press Stop. Leave this tab open until it finishes. This cannot be undone.`
                           )
                         ) {
                           void drain();
                         }
                       }}
                     >
-                      Send all {waiting}
+                      Send all {waiting} now
                     </button>
                   )}
+
+                  <span className="help">
+                    {running
+                      ? "Sending. Leave this tab open — closing it stops the run."
+                      : waiting === 0
+                        ? "Nothing waiting."
+                        : `${waiting} ${
+                            waiting === 1 ? "person" : "people"
+                          }, ${
+                            queue.concurrency && queue.concurrency > 1
+                              ? `${queue.concurrency} at a time`
+                              : "one at a time"
+                          }${
+                            /* Only once a real rate has been measured.
+                               A guess here would be a promise. */
+                            progress?.rate
+                              ? ` · about ${Math.max(
+                                  1,
+                                  Math.ceil(
+                                    (waiting * progress.rate) / 60000
+                                  )
+                                )} min left`
+                              : ""
+                          }. Keep this tab open.`}
+                  </span>
                 </div>
 
                 {progress && (
