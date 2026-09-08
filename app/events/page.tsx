@@ -53,6 +53,14 @@ type EventSummary = {
 
 type PricingCounts = Record<Pricing, number>;
 
+type Spelling = {
+  ticket: string;
+  registrations: number;
+  event_id: string | null;
+  event_name: string | null;
+  matched_by: string;
+};
+
 const LIVE_TABLES = ["registrations", "qr_scans", "events", "sync_log"];
 
 /*
@@ -124,6 +132,53 @@ export default function EventsPage() {
   const [unmatchedTickets, setUnmatchedTickets] = useState<
     { ticket: string; count: number }[]
   >([]);
+
+  /*
+   * Every name the portal has sold a ticket under.
+   *
+   * Loaded only when asked for: it is one row per spelling rather
+   * than per event, and it answers a question ("is this event here
+   * twice under two names?") that nobody has on most visits.
+   */
+  const [spellings, setSpellings] = useState<Spelling[] | null>(null);
+  const [sharedEvents, setSharedEvents] = useState<string[]>([]);
+  const [spellingsBusy, setSpellingsBusy] = useState(false);
+  const [spellingsError, setSpellingsError] = useState("");
+
+  async function loadSpellings() {
+    if (spellingsBusy) return;
+
+    if (spellings) {
+      setSpellings(null);
+      return;
+    }
+
+    setSpellingsBusy(true);
+    setSpellingsError("");
+
+    try {
+      const response = await fetch("/api/events/tickets", {
+        cache: "no-store",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to read spellings");
+      }
+
+      setSpellings(data.spellings ?? []);
+      setSharedEvents(data.sharedEventIds ?? []);
+    } catch (err) {
+      setSpellingsError(
+        err instanceof Error
+          ? err.message
+          : "Unable to read spellings"
+      );
+    } finally {
+      setSpellingsBusy(false);
+    }
+  }
 
   const [originAvailable, setOriginAvailable] = useState(false);
   const [capacityAvailable, setCapacityAvailable] = useState(false);
@@ -573,6 +628,131 @@ export default function EventsPage() {
             </span>
           </div>
         )}
+
+        {/*
+          Every name the portal has sold under.
+
+          One row per spelling, not per event. Two spellings landing
+          on one event is either a variation somebody has already
+          aliased or a duplicate nobody has merged yet -- and until
+          this list existed the only way to find the second kind was
+          to already suspect it.
+        */}
+        <section className="panel mb-6">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Ticket spellings</h2>
+
+              <p className="panel-subtitle">
+                What the portal calls each event, and how many
+                registrations came in under each name.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => void loadSpellings()}
+              disabled={spellingsBusy}
+            >
+              {spellingsBusy && <span className="btn-spinner" />}
+              {spellings ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {spellingsError && (
+            <div className="panel-body">
+              <p className="banner banner-danger" role="alert">
+                {spellingsError}
+              </p>
+            </div>
+          )}
+
+          {spellings && (
+            <div className="table-wrap">
+              <table className="table">
+                <caption className="sr-only">
+                  Ticket names and their registration counts
+                </caption>
+
+                <thead>
+                  <tr>
+                    <th scope="col">Ticket name on the portal</th>
+                    <th scope="col" className="table-num">
+                      Registrations
+                    </th>
+                    <th scope="col">Counts towards</th>
+                    <th scope="col">Matched by</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {spellings.map((row) => {
+                    /* Two names reaching one event: worth a look, and
+                       the reason this table exists. */
+                    const doubled =
+                      row.event_id !== null &&
+                      sharedEvents.includes(row.event_id);
+
+                    return (
+                      <tr
+                        key={`${row.ticket}-${row.event_id ?? "none"}`}
+                        className={
+                          row.matched_by === "none"
+                            ? "row-over"
+                            : doubled
+                              ? "row-near"
+                              : undefined
+                        }
+                      >
+                        <td>
+                          <div className="row-title">{row.ticket}</div>
+                        </td>
+
+                        <td className="table-num">
+                          {row.registrations}
+                        </td>
+
+                        <td>
+                          {row.event_name ?? (
+                            <span className="seats-over">No event</span>
+                          )}
+
+                          {doubled && (
+                            <div className="row-meta">
+                              also reached by another name
+                            </div>
+                          )}
+                        </td>
+
+                        <td>
+                          <span
+                            className={`badge ${
+                              row.matched_by === "none"
+                                ? "badge-warning"
+                                : row.matched_by === "nearly"
+                                  ? "badge-accent"
+                                  : "badge-plain"
+                            }`}
+                            title={
+                              row.matched_by === "nearly"
+                                ? "The name is not exact; it is the only event it could be."
+                                : row.matched_by === "alias"
+                                  ? "Mapped by hand in event_aliases."
+                                  : undefined
+                            }
+                          >
+                            {row.matched_by}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         <section className="panel">
           <div className="panel-header">
