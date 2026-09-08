@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
   /*
    * Guarded: this calls the upstream V-TAPP API and rewrites
    * registration data, so it must not be reachable anonymously.
@@ -17,7 +17,17 @@ export async function POST() {
   }
 
   try {
-    const result = await syncVtapp();
+    /*
+     * `resume` works from the payload the previous pass stored rather
+     * than fetching 2.5 MB again. The upstream call is 7 to 17
+     * seconds and the gateway allows thirty, so a run with real work
+     * in it cannot fit in one request -- it takes as many as it
+     * takes, and the browser presses again while `remaining` is
+     * above zero.
+     */
+    const body = await request.json().catch(() => ({}));
+
+    const result = await syncVtapp({ resume: body?.resume === true });
 
     /*
      * Signal every open page that the sync is fully complete.

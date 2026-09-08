@@ -728,9 +728,18 @@ async function recordSyncState(
   });
 }
 
-export async function syncVtapp() {
+export async function syncVtapp(options?: { resume?: boolean }) {
   try {
-    return await runSync();
+    /*
+     * A resumed pass works from the payload the first pass stored,
+     * which is what keeps it inside the gateway's window: the fetch
+     * is the slow part and it has already happened.
+     */
+    const supplied = options?.resume
+      ? ((await storedPayload()) ?? undefined)
+      : undefined;
+
+    return await runSync(supplied);
   } catch (error) {
     /*
      * Record the failure before rethrowing. Previously
@@ -803,10 +812,25 @@ function stopwatch() {
   };
 }
 
-async function runSync() {
-  const clock = stopwatch();
-  const startedAt = Date.now();
+/*
+ * How long a pass may spend writing before it stops and reports.
+ *
+ * The gateway kills the function at thirty seconds. Eighteen leaves
+ * room for the payload read, the comparison and the response, and a
+ * pass that stops early is not a failure -- it returns how many rows
+ * are left and the browser presses again.
+ */
+const WRITE_BUDGET_MS = 18_000;
 
+/*
+ * Fetch the feed and put it where a later pass can find it.
+ *
+ * Separate from the writing because it is the part that cannot be
+ * made shorter: the portal ignores every pagination parameter and
+ * answers with all 2.5 MB, in anything from 7 to 17 seconds.
+ */
+export async function fetchUpstream() {
+  const clock = stopwatch();
   const { url, key } = vtappApi();
 
   const payload = await clock.time("upstreamApi", async () => {
@@ -851,6 +875,69 @@ async function runSync() {
       : [];
 
   /*
+   * Held in the database rather than in memory: the next pass is a
+   * different invocation of the function, and may be a different
+   * container entirely.
+   *
+   * A missing table means supabase/sync-resume.sql has not run. That
+   * is not fatal -- the caller falls back to doing everything in one
+   * pass, which is what it did before -- so the payload is returned
+   * either way.
+   */
+  const { error } = await supabaseAdmin()
+    .from("sync_payload")
+    .upsert({
+      id: 1,
+      payload: records,
+      records: records.length,
+      fetched_at: new Date().toISOString(),
+    });
+
+  if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) {
+    throw error;
+  }
+
+  return {
+    records,
+    stored: !error,
+    timings: clock.timings,
+  };
+}
+
+/*
+ * The feed as it was last fetched, or null if nothing is stored.
+ */
+async function storedPayload(): Promise<Registration[] | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("sync_payload")
+    .select("payload,fetched_at")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  /*
+   * Stale after ten minutes. A resumed pass should finish the run it
+   * started, not carry on from a picture of the festival taken during
+   * a previous one.
+   */
+  const age = Date.now() - new Date(data.fetched_at).getTime();
+
+  if (age > 10 * 60_000) return null;
+
+  return Array.isArray(data.payload)
+    ? (data.payload as Registration[])
+    : null;
+}
+
+async function runSync(supplied?: Registration[]) {
+  const clock = stopwatch();
+  const startedAt = Date.now();
+
+  const records: Registration[] =
+    supplied ?? (await fetchUpstream()).records;
+
+  /*
    * Later records win, matching the previous behaviour of
    * upserting duplicates one after another.
    */
@@ -873,6 +960,8 @@ async function runSync() {
       fetched: records.length,
       created: 0,
       updated: 0,
+      unchanged: 0,
+      remaining: 0,
       itemsRewritten: 0,
       durationMs: Date.now() - startedAt,
       timings: clock.timings,
@@ -941,7 +1030,28 @@ async function runSync() {
     changed.push(entry);
   }
 
+  /*
+   * As many as fit. `changed` is ordered as the feed gave it, so a
+   * pass that stops early leaves the rest for the next one and the
+   * same rows are not reconsidered -- the comparison above will find
+   * them already stored.
+   */
+  let remaining = 0;
+  let written = 0;
+
   for (const batch of chunk(changed)) {
+    if (Date.now() - startedAt > WRITE_BUDGET_MS) {
+      /*
+       * Counted from what this pass wrote, not from the size of
+       * idByRegistrationId -- that map also holds every unchanged
+       * row, so using it here reported far less work left than
+       * there was, and the browser would stop pressing while rows
+       * were still unwritten.
+       */
+      remaining = changed.length - written;
+      break;
+    }
+
     const data = await clock.time("upsertRegistrations", async () => {
       const { data, error } = await db
         .from("registrations")
@@ -964,6 +1074,8 @@ async function runSync() {
         row.id
       );
     }
+
+    written += batch.length;
   }
 
   /*
@@ -1180,6 +1292,9 @@ async function runSync() {
     /* Rows the feed sent back exactly as they are stored. On a quiet
        minute this is all of them, and the sync writes nothing. */
     unchanged,
+    /* Greater than zero when the pass stopped for time. The caller
+       presses again; nothing was lost. */
+    remaining,
     itemsRewritten: itemsToInsert.length,
     mailed,
     durationMs: Date.now() - startedAt,

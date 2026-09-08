@@ -94,6 +94,10 @@ type SyncResult = {
   fetched?: number;
   created?: number;
   updated?: number;
+  /* Rows the feed resent exactly as stored. */
+  unchanged?: number;
+  /* Rows a pass ran out of time to write. */
+  remaining?: number;
   durationMs?: number;
   timings?: Record<string, number>;
 };
@@ -111,6 +115,19 @@ function describeSync(result: SyncResult) {
   const parts = [
     `Synced ${result.fetched ?? 0} records`,
   ];
+
+  /*
+   * Say when the sync wrote nothing, rather than reporting a
+   * duration and letting it read as a slow no-op. Almost every run
+   * during the fest is this: the feed resends every registration it
+   * has and none of them have moved.
+   */
+  if (
+    result.unchanged !== undefined &&
+    result.unchanged === result.fetched
+  ) {
+    parts.push("— nothing had changed");
+  }
 
   if (result.durationMs) {
     parts.push(`in ${seconds(result.durationMs)}`);
@@ -502,25 +519,65 @@ export default function AdminPage() {
     );
 
     try {
-      const response =
-        await fetch(
-          "/api/sync",
-          {
-            method: "POST",
-            cache: "no-store",
+      /*
+       * As many passes as it takes.
+       *
+       * The events portal answers with all 2.5 MB however it is
+       * asked, in 7 to 17 seconds, and the gateway allows thirty --
+       * so a sync with real work in it cannot fit in one request.
+       * Each pass writes what it can and reports how much is left,
+       * and a resumed pass reuses the payload the first one stored
+       * rather than fetching it again.
+       *
+       * Bounded, because a bug that always reported work remaining
+       * would otherwise loop until the tab was closed.
+       */
+      let result: Record<string, unknown> = {};
+
+      for (let pass = 0; pass < 12; pass++) {
+        const response = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ resume: pass > 0 }),
+        });
+
+        const body = await response.text();
+
+        if (!response.ok) {
+          /*
+           * 504 is the gateway giving up, not the work being lost:
+           * every row the pass managed to write is written. Carry on
+           * rather than starting again.
+           */
+          if (response.status === 504 && pass < 11) {
+            setSyncMessage(
+              `Still working (pass ${pass + 2})...`
+            );
+            continue;
           }
-        );
 
-      const result =
-        await response.json();
+          throw new Error(
+            body
+              ? ((JSON.parse(body) as { error?: string }).error ??
+                "Synchronization failed")
+              : `The sync timed out (${response.status}).`
+          );
+        }
 
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.error ||
-            "Synchronization failed"
+        result = JSON.parse(body) as Record<string, unknown>;
+
+        if (!result.success) {
+          throw new Error(
+            (result.error as string) ||
+              "Synchronization failed"
+          );
+        }
+
+        if (Number(result.remaining ?? 0) === 0) break;
+
+        setSyncMessage(
+          `${result.remaining} registrations left to write...`
         );
       }
 
