@@ -1326,7 +1326,16 @@ async function runSync(supplied?: Registration[]) {
    */
   await clock.time("syncState", () => recordSyncState(true, null));
 
-  const mailed = await clock.time("autoMail", autoMail);
+  /*
+   * Whatever is left of the thirty seconds. Sending is a second a
+   * message and happens inside this request, so a sync that has
+   * already spent its budget writing must not start a mail run it
+   * cannot finish -- anyone skipped is picked up by the next sync
+   * five minutes later.
+   */
+  const mailed = await clock.time("autoMail", () =>
+    autoMail(WRITE_BUDGET_MS + 6_000 - (Date.now() - startedAt))
+  );
 
   return {
     fetched: records.length,
@@ -1359,8 +1368,14 @@ async function runSync(supplied?: Registration[]) {
  */
 const AUTO_MAIL_BATCH = 15;
 
-async function autoMail(): Promise<number> {
+async function autoMail(budgetMs: number): Promise<number> {
   try {
+    /* No time left in this request. Not a failure: the next sync
+       finds exactly the same people waiting. */
+    if (budgetMs < 2_000) return 0;
+
+    const startedAt = Date.now();
+
     const setting = await readAutoSend();
 
     if (!setting.enabled || !setting.enabledAt) return 0;
@@ -1408,8 +1423,11 @@ async function autoMail(): Promise<number> {
 
     let sent = 0;
 
-    /* Sequential: Gmail throttles parallel SMTP from one account. */
+    /* Sequential: Gmail throttles parallel SMTP from one account,
+       and this runs inside a request that is already partly spent. */
     for (const person of pending) {
+      if (Date.now() - startedAt > budgetMs) break;
+
       const result = await sendPersonPasses({
         email: person.email,
         name: person.name,

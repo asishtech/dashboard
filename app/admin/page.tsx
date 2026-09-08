@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import NavBar from "@/components/NavBar";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useLiveRefresh } from "@/lib/use-realtime";
@@ -611,6 +616,38 @@ export default function AdminPage() {
     }
   }
 
+  /*
+   * Sync on a timer while this page is open.
+   *
+   * Automatic sending happens at the end of a sync, and a sync only
+   * happened when somebody pressed the button -- so "automatic" meant
+   * "whenever an admin remembers", and a student who bought a ticket
+   * at nine got their pass whenever the next person happened to press
+   * it. During a fest this page is open on the desk all day, which is
+   * a good enough scheduler for a two-day festival and needs nothing
+   * standing behind it.
+   *
+   * Five minutes, and only while the tab is visible: the upstream
+   * call is 2.5 MB every time, and a backgrounded tab syncing for
+   * hours is somebody else's bandwidth.
+   */
+  const syncRef = useRef(forceRefresh);
+
+  /* Written in an effect, not during render: the compiler treats a
+     ref assigned while rendering as a bug, and it is right to. */
+  useEffect(() => {
+    syncRef.current = forceRefresh;
+  });
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+
+      void syncRef.current();
+    }, 5 * 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const formatAmount = (
     amount: number
