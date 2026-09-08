@@ -643,13 +643,40 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    let last = 0;
+
+    const run = () => {
       if (document.visibilityState !== "visible") return;
 
-      void syncRef.current();
-    }, 2 * 60_000);
+      /* Never twice inside the interval, however many things ask.
+         Coming back to the tab and the timer firing are two of
+         them, and they arrive together after a lunch break. */
+      if (Date.now() - last < 2 * 60_000) return;
 
-    return () => window.clearInterval(timer);
+      last = Date.now();
+
+      void syncRef.current();
+    };
+
+    /*
+     * One shortly after the page opens, so somebody who has just
+     * loaded the dashboard sees it working rather than waiting two
+     * minutes to find out whether it does. Twenty seconds, not
+     * immediately: the page has a dashboard to fetch first.
+     */
+    const first = window.setTimeout(run, 20_000);
+
+    const timer = window.setInterval(run, 2 * 60_000);
+
+    /* Coming back to the tab is worth a sync: the interval does not
+       tick while hidden, so the data is as old as the absence. */
+    document.addEventListener("visibilitychange", run);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", run);
+    };
   }, []);
 
   const formatAmount = (
