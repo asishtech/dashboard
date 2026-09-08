@@ -368,6 +368,18 @@ export default function NotificationsPage() {
 
         setProgress({ sent, failed, rate });
 
+        /*
+         * Refresh the queue between batches, not only at the end.
+         *
+         * The counters at the top -- waiting, sent today, how much of
+         * the cap is gone -- came from a single read when the page
+         * loaded, so during a run of two thousand emails every one of
+         * them sat still and the screen looked stuck. Only the
+         * progress line moved, and it is one line among several
+         * numbers that all claim to describe the same thing.
+         */
+        await load();
+
         /* Nothing attempted means the queue is empty. */
         if (Number(data.attempted ?? 0) === 0) break;
 

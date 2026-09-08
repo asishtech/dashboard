@@ -713,19 +713,57 @@ function prepare(
   };
 }
 
+/*
+ * Record how the sync went. Diagnostic only, and never fatal.
+ *
+ * This threw on every single run and stopped the sync at the last
+ * step. `sync_state` in the live database has `last_success_at`, a
+ * timestamp; this wrote `last_success`, a boolean, and PostgREST
+ * answers an unknown column with PGRST204 rather than ignoring it.
+ * Every registration had already been upserted by then, so the data
+ * was right and the request still returned 500 -- and autoMail(),
+ * which runs after this line, never ran once. That is the whole of
+ * "automatic sending is not working".
+ *
+ * Two lessons, both applied here: write whichever shape the table
+ * actually has, and never let bookkeeping decide whether the mail
+ * goes out.
+ */
 async function recordSyncState(
   success: boolean,
   message: string | null
 ) {
   const now = new Date().toISOString();
+  const db = supabaseAdmin();
 
-  await supabaseAdmin().from("sync_state").upsert({
+  /* The shape the live table has. */
+  const first = await db.from("sync_state").upsert({
+    id: 1,
+    last_sync_at: now,
+    ...(success ? { last_success_at: now } : {}),
+    last_error: message,
+    updated_at: now,
+  });
+
+  if (!first.error) return;
+
+  /* PGRST204 / 42703: a database with the older boolean column. */
+  if (!["PGRST204", "42703"].includes(first.error.code ?? "")) {
+    console.error("Unable to record sync state:", first.error);
+    return;
+  }
+
+  const second = await db.from("sync_state").upsert({
     id: 1,
     last_sync_at: now,
     last_success: success,
     last_error: message,
     updated_at: now,
   });
+
+  if (second.error) {
+    console.error("Unable to record sync state:", second.error);
+  }
 }
 
 export async function syncVtapp(options?: { resume?: boolean }) {
@@ -1281,6 +1319,11 @@ async function runSync(supplied?: Registration[]) {
     });
   }
 
+  /*
+   * Ordered deliberately: the mail is the point of the run and the
+   * state row is a note about it. Nothing between here and autoMail
+   * is allowed to throw.
+   */
   await clock.time("syncState", () => recordSyncState(true, null));
 
   const mailed = await clock.time("autoMail", autoMail);
