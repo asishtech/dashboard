@@ -55,6 +55,12 @@ type PricingCounts = Record<Pricing, number>;
 
 const LIVE_TABLES = ["registrations", "qr_scans", "events", "sync_log"];
 
+/*
+ * "Not selling". Matches the default in the export, which accepts
+ * ?below= for the day this number should be 50 instead.
+ */
+const QUIET_PERCENT = 30;
+
 const PRICING_TABS: { key: Pricing | "all"; label: string }[] = [
   { key: "all", label: "All" },
   { key: "paid", label: "Paid" },
@@ -261,6 +267,22 @@ export default function EventsPage() {
 
   const teamCount = useMemo(
     () => events.filter((event) => event.isTeam).length,
+    [events]
+  );
+
+  /*
+   * Under-filled, and countable here so the button says how many
+   * before anyone downloads it. Events with no capacity are not
+   * counted: 0% of nothing is not empty, it is unknown.
+   */
+  const quietCount = useMemo(
+    () =>
+      events.filter(
+        (event) =>
+          event.capacity !== null &&
+          event.capacity !== undefined &&
+          Number(event.fillPercentage ?? 0) < QUIET_PERCENT
+      ).length,
     [events]
   );
 
@@ -703,6 +725,25 @@ export default function EventsPage() {
                 >
                   <DownloadIcon size={13} />
                   Seats left
+                </a>
+              )}
+
+              {/*
+                The events to chase, with somebody to chase them
+                about. Its own download rather than a filter on the
+                list, because it is a different sheet -- one row per
+                event with the faculty coordinator's address on it --
+                and it gets forwarded rather than read here.
+              */}
+              {capacityAvailable && (
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href={`/api/events/export?filter=quiet&below=${QUIET_PERCENT}`}
+                  download
+                  title={`Events less than ${QUIET_PERCENT}% full, with the faculty coordinator for each`}
+                >
+                  <DownloadIcon size={13} />
+                  Under {QUIET_PERCENT}% ({quietCount})
                 </a>
               )}
             </div>

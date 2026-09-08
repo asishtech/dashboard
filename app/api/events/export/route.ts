@@ -83,6 +83,22 @@ export async function GET(request: Request) {
     const teamsOnly = filter === "teams";
     const teamPeople = filter === "team-participants";
 
+    /*
+     * The events nobody is signing up for, with somebody to ring
+     * about it. Thirty percent by default and overridable, because
+     * the number that means "worry" on Wednesday is not the one that
+     * means it on Friday.
+     */
+    const quietOnly = filter === "quiet";
+
+    const belowPercent = (() => {
+      const asked = Number(params.get("below"));
+
+      return Number.isFinite(asked) && asked > 0 && asked <= 100
+        ? asked
+        : 30;
+    })();
+
     const [summaries, merchIds, allowed, teamSizes] =
       await Promise.all([
         supabaseAdmin().rpc("event_summaries"),
@@ -109,6 +125,19 @@ export async function GET(request: Request) {
       )
       .filter((event) =>
         onlyEmpty ? Number(event.registrations ?? 0) === 0 : true
+      )
+      /*
+       * No capacity, no percentage, no judgement. Four events have
+       * none -- the organisers' sheet simply gave no figure -- and
+       * calling them 0% full would put them at the top of a list of
+       * events to worry about on the strength of a missing number.
+       */
+      .filter((event) =>
+        quietOnly
+          ? event.capacity !== null &&
+            event.capacity !== undefined &&
+            Number(event.fillPercentage ?? 0) < belowPercent
+          : true
       )
       /* No capacity means no answer to "how many left". */
       .filter((event) =>
@@ -140,7 +169,9 @@ export async function GET(request: Request) {
     const sheet = book.addWorksheet(
       seatsOnly
         ? "Seats left"
-        : teamPeople
+        : quietOnly
+          ? `Under ${belowPercent}%`
+          : teamPeople
           ? "Team participants"
           : teamsOnly
             ? "Team events"
@@ -189,6 +220,145 @@ export async function GET(request: Request) {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": `attachment; filename="vtapp-seats-left-${new Date()
+            .toISOString()
+            .slice(0, 10)}.xlsx"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    /*
+     * The quiet events, and who to ring about each one.
+     *
+     * A list of under-filled events is a report; the same list with a
+     * coordinator's address against each row is something somebody
+     * can act on before the doors open, which is the only reason to
+     * ask two days out.
+     */
+    if (quietOnly) {
+      const { data: coordinators, error: coordError } =
+        await supabaseAdmin()
+          .from("event_coordinators")
+          .select("event_id,name,email,kind");
+
+      if (coordError) throw coordError;
+
+      /*
+       * Faculty by address, not by label.
+       *
+       * `kind` is typed in and disagrees with reality: 5 coordinators
+       * marked "student" hold @vitap.ac.in staff addresses -- among
+       * them "Dr. Bileesh P Babu" and "P. Ravikumar" -- and one
+       * marked "faculty" is on a student address. Trusting the label
+       * would have left five of these events looking as though no
+       * member of staff was attached to them.
+       *
+       * Students are @vitapstudent.ac.in and staff are @vitap.ac.in,
+       * which is a fact about the university's mail rather than about
+       * a spreadsheet column, so it is the sounder test. The label is
+       * still honoured where the address says nothing.
+       */
+      const facultyByEvent = new Map<
+        string,
+        { name: string | null; email: string }[]
+      >();
+
+      for (const row of (coordinators ?? []) as {
+        event_id: string;
+        name: string | null;
+        email: string;
+        kind: string | null;
+      }[]) {
+        const staff =
+          /@vitap\.ac\.in\s*$/i.test(row.email ?? "") ||
+          /@vitap\.ac\.in\s*,/i.test(row.email ?? "") ||
+          row.kind === "faculty";
+
+        if (!staff) continue;
+
+        const key = String(row.event_id);
+        const list = facultyByEvent.get(key) ?? [];
+
+        list.push({ name: row.name, email: row.email });
+        facultyByEvent.set(key, list);
+      }
+
+      /* The one sheet already created above, named for this filter --
+         adding another would leave an empty "Events" tab beside it. */
+      const quiet = sheet;
+
+      quiet.columns = [
+        { header: "Event", key: "name", width: 52 },
+        { header: "Registrations", key: "registrations", width: 13 },
+        { header: "Capacity", key: "capacity", width: 10 },
+        { header: "Filled %", key: "fill", width: 9 },
+        { header: "Faculty coordinator", key: "coordinator", width: 30 },
+        { header: "Email", key: "email", width: 34 },
+      ];
+
+      const head = quiet.getRow(1);
+      head.font = { bold: true };
+      head.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF3E6DA" },
+      };
+      quiet.views = [{ state: "frozen", ySplit: 1 }];
+
+      /* Emptiest first: this sheet is a worklist, not an index. */
+      for (const event of [...rows].sort(
+        (a, b) =>
+          Number(a.fillPercentage ?? 0) - Number(b.fillPercentage ?? 0)
+      )) {
+        const faculty = facultyByEvent.get(String(event.event_id)) ?? [];
+
+        const row = quiet.addRow({
+          name: event.name,
+          registrations: Number(event.registrations ?? 0),
+          capacity: event.capacity ?? "",
+          fill: Number(event.fillPercentage ?? 0) / 100,
+          /* Said, not left blank. A gap in a column reads as a bug in
+             the export; "None recorded" reads as the job it is. */
+          coordinator:
+            faculty.length > 0
+              ? faculty
+                  .map((person) => person.name ?? "Name not recorded")
+                  .join("; ")
+              : "None recorded",
+          email: faculty.map((person) => person.email).join("; "),
+        });
+
+        if (faculty.length === 0) {
+          row.getCell("coordinator").font = {
+            bold: true,
+            color: { argb: "FFB00020" },
+          };
+        }
+      }
+
+      quiet.getColumn("fill").numFmt = "0%";
+
+      quiet.addRow({});
+
+      const total = quiet.addRow({
+        name: `${rows.length} event${
+          rows.length === 1 ? "" : "s"
+        } under ${belowPercent}% full`,
+        registrations: rows.reduce(
+          (sum, event) => sum + Number(event.registrations ?? 0),
+          0
+        ),
+      });
+
+      total.font = { bold: true };
+
+      const quietBuffer = await book.xlsx.writeBuffer();
+
+      return new NextResponse(quietBuffer as ArrayBuffer, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="vtapp-under-${belowPercent}-percent-${new Date()
             .toISOString()
             .slice(0, 10)}.xlsx"`,
           "Cache-Control": "no-store",
