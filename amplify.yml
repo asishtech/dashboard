@@ -106,7 +106,7 @@ frontend:
           default_env SMTP_USER emailapikey
           default_env MAIL_FROM tickets@vtapp.co.in
           default_env MAIL_FROM_NAME "TICKETS VTAPP 2026"
-          default_env MAIL_DAILY_CAP 3000
+          default_env MAIL_DAILY_CAP 5000
           default_env SMTP_PASSWORD 'PHtE6r1fQuno2GAr9RABt6CxFZbwMNgpr+1nKQRE5I4RWfZSGE1VqNl/lWLl+hYuBvdAQabKwNg+5O7JsbrUd2jkMmxPXmqyqK3sx/VYSPOZsbq6x00ctloaf0LVVYHoetRp1ybfudraNA=='
 
           if [ -z "$SMTP_PASSWORD" ]; then
