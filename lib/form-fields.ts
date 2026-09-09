@@ -101,3 +101,30 @@ export function phoneFrom(raw: RawRegistration) {
 
   return "";
 }
+
+/*
+ * Port of registration_origin() in supabase/external-registrations.sql
+ * -- same two signals, same order, same "unknown" rather than
+ * "external" when there is nothing to go on. Keep the two in step.
+ */
+export function originFrom(
+  raw: RawRegistration,
+  email: string
+): "internal" | "external" | "unknown" {
+  const address = (email || emailFrom(raw)).trim().toLowerCase();
+
+  if (
+    address.endsWith("@vitapstudent.ac.in") ||
+    address.endsWith("@vitap.ac.in")
+  ) {
+    return "internal";
+  }
+
+  const university = collegeFrom(raw);
+
+  if (!university) return "unknown";
+
+  return /vitap/.test(university.toLowerCase().replace(/[^a-z0-9]+/g, ""))
+    ? "internal"
+    : "external";
+}

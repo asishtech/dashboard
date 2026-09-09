@@ -57,6 +57,11 @@ const NAV: Record<Role, NavItem[]> = {
       icon: ListIcon,
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
+    {
+      href: "/admin/merchandise",
+      label: "Merchandise",
+      icon: BoxIcon,
+    },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
     { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
@@ -99,6 +104,11 @@ const NAV: Record<Role, NavItem[]> = {
       icon: ListIcon,
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
+    {
+      href: "/admin/merchandise",
+      label: "Merchandise",
+      icon: BoxIcon,
+    },
     { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
     { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },

@@ -24,6 +24,12 @@ commit;
 -- checkin_lookup also returns exited_at, block and room now, so the
 -- scanner can show whether someone has already left and what was
 -- recorded for them -- not just whether they were ever admitted.
+--
+-- Based on the version in supabase/resolve-once.sql, which reads the
+-- stored resolved_event_id column instead of recomputing
+-- resolve_event()'s regex match per row -- that migration cut this
+-- exact query from seconds to milliseconds at fest scale, and an
+-- earlier draft of this file had quietly reintroduced the slow path.
 create or replace function public.checkin_lookup(p_token text)
 returns json
 language sql
@@ -34,7 +40,7 @@ select json_build_object(
   'registration_id', r.registration_id,
   'name',            r.name,
   'email',           r.email,
-  'event_id',        slug.event_id,
+  'event_id',        r.resolved_event_id,
   'event_name',      coalesce(e.name, nullif(btrim(r.ticket), ''), 'V-TAPP event'),
   'event_day',       e.day,
   'event_venue',     e.venue,
@@ -45,10 +51,7 @@ select json_build_object(
   'room',            q.room
 )
 from public.registrations r
-cross join lateral (
-  select public.resolve_event(r.event_id::text, r.product_meta) as event_id
-) slug
-left join public.events e on e.event_id = slug.event_id
+left join public.events e on e.event_id = r.resolved_event_id
 left join public.qr_scans q on q.registration_id = r.id
 where r.qr_token = p_token
 limit 1;

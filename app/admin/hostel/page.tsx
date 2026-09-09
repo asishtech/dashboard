@@ -12,6 +12,12 @@ type Summary = {
   exited: number;
 };
 
+const ORIGIN_LABEL: Record<HostelGuest["origin"], string> = {
+  internal: "Internal",
+  external: "External",
+  unknown: "Unknown",
+};
+
 function status(guest: HostelGuest) {
   if (guest.exited_at) return { label: "Left", className: "" };
   if (guest.entered_at)
@@ -211,6 +217,7 @@ export default function HostelPage() {
                         <th scope="col">Name</th>
                         <th scope="col">Phone</th>
                         <th scope="col">Email</th>
+                        <th scope="col">Origin</th>
                         <th scope="col">Day</th>
                         <th scope="col">Accommodation</th>
                         <th scope="col">Block</th>
@@ -236,6 +243,20 @@ export default function HostelPage() {
                             </td>
 
                             <td>{guest.email ?? "—"}</td>
+
+                            <td>
+                              <span
+                                className={`badge ${
+                                  guest.origin === "internal"
+                                    ? "badge-plain"
+                                    : guest.origin === "external"
+                                      ? "badge-accent"
+                                      : "badge-warning"
+                                }`}
+                              >
+                                {ORIGIN_LABEL[guest.origin]}
+                              </span>
+                            </td>
 
                             <td>
                               {guest.day ?? (

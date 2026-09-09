@@ -16,7 +16,18 @@ type Attendee = {
   registration_id: string;
   name: string | null;
   email: string | null;
+  phone?: string | null;
+  origin?: "internal" | "external" | "unknown";
   scanned: boolean;
+};
+
+const ORIGIN_LABEL: Record<
+  NonNullable<Attendee["origin"]>,
+  string
+> = {
+  internal: "Internal",
+  external: "External",
+  unknown: "Unknown",
 };
 
 type EventDetail = {
@@ -60,6 +71,7 @@ export default function EventDetailPage({
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [canSeeRevenue, setCanSeeRevenue] = useState(false);
+  const [canSeeContact, setCanSeeContact] = useState(false);
   const [canSetCapacity, setCanSetCapacity] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -84,6 +96,7 @@ export default function EventDetailPage({
       setEvent(data.event);
       setAttendees(data.attendees ?? []);
       setCanSeeRevenue(Boolean(data.canSeeRevenue));
+      setCanSeeContact(Boolean(data.canSeeContact));
       /* Same permission the pricing control uses: admins only. */
       setCanSetCapacity(Boolean(data.canSetPricing));
       setError("");
@@ -115,6 +128,7 @@ export default function EventDetailPage({
       return [
         attendee.name,
         attendee.email,
+        attendee.phone,
         attendee.registration_id,
       ].some((value) =>
         String(value ?? "")
@@ -126,13 +140,33 @@ export default function EventDetailPage({
 
   function exportCsv() {
     const rows = [
-      ["Registration ID", "Name", "Email", "Checked in"],
-      ...filtered.map((a) => [
-        a.registration_id,
-        a.name ?? "",
-        a.email ?? "",
-        a.scanned ? "Yes" : "No",
-      ]),
+      canSeeContact
+        ? [
+            "Registration ID",
+            "Name",
+            "Email",
+            "Phone",
+            "Internal / External",
+            "Checked in",
+          ]
+        : ["Registration ID", "Name", "Email", "Checked in"],
+      ...filtered.map((a) =>
+        canSeeContact
+          ? [
+              a.registration_id,
+              a.name ?? "",
+              a.email ?? "",
+              a.phone ?? "",
+              a.origin ? ORIGIN_LABEL[a.origin] : "",
+              a.scanned ? "Yes" : "No",
+            ]
+          : [
+              a.registration_id,
+              a.name ?? "",
+              a.email ?? "",
+              a.scanned ? "Yes" : "No",
+            ]
+      ),
     ];
 
     /* Quote every field so commas in names cannot break a row. */
@@ -470,6 +504,8 @@ export default function EventDetailPage({
                   <tr>
                     <th scope="col">Participant</th>
                     <th scope="col">Registration</th>
+                    {canSeeContact && <th scope="col">Phone</th>}
+                    {canSeeContact && <th scope="col">Origin</th>}
                     <th scope="col">Status</th>
                   </tr>
                 </thead>
@@ -490,6 +526,32 @@ export default function EventDetailPage({
                       <td className="mono dim">
                         #{attendee.registration_id}
                       </td>
+
+                      {canSeeContact && (
+                        <td className="mono">
+                          {attendee.phone || "—"}
+                        </td>
+                      )}
+
+                      {canSeeContact && (
+                        <td>
+                          {attendee.origin ? (
+                            <span
+                              className={`badge ${
+                                attendee.origin === "internal"
+                                  ? "badge-plain"
+                                  : attendee.origin === "external"
+                                    ? "badge-accent"
+                                    : "badge-warning"
+                              }`}
+                            >
+                              {ORIGIN_LABEL[attendee.origin]}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      )}
 
                       <td>
                         <span

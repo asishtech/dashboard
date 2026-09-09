@@ -10,6 +10,9 @@ export type Attendee = {
   registration_id: string;
   name: string | null;
   email: string | null;
+  /* Admin and registrations only; stripped below for anyone else. */
+  phone?: string | null;
+  origin?: "internal" | "external" | "unknown";
   scanned: boolean;
 };
 
@@ -147,9 +150,27 @@ export async function GET(
       }[]
     ).find((row) => String(row.event_id) === event_id);
 
-    const attendees = (attendeesResult.data ?? []) as Attendee[];
+    const rawAttendees = (attendeesResult.data ?? []) as Attendee[];
 
     const isAdmin = auth.activeRole === "admin";
+
+    /*
+     * Phone and origin are omitted from the payload entirely for
+     * anyone but admin and the registrations desk, matching how
+     * revenue is handled below -- a coordinator has no need for a
+     * mobile number, and anything sent to the browser is readable in
+     * devtools regardless of what the UI chooses to show.
+     */
+    const canSeeContact =
+      isAdmin || auth.activeRole === "registrations";
+
+    const attendees: Attendee[] = canSeeContact
+      ? rawAttendees
+      : rawAttendees.map(({ phone: _phone, origin: _origin, ...rest }) => {
+          void _phone;
+          void _origin;
+          return rest;
+        });
 
     return NextResponse.json({
       success: true,
@@ -199,6 +220,7 @@ export async function GET(
 
       canSeeRevenue: isAdmin,
       canSetPricing: isAdmin,
+      canSeeContact,
 
       attendees,
     });

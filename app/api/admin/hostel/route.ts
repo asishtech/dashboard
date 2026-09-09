@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { originFrom } from "@/lib/form-fields";
 import { publicOrigin } from "@/lib/origin";
 import { readAll } from "@/lib/paged";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -12,6 +13,12 @@ export const dynamic = "force-dynamic";
  * registrations already carry this literally, so no lookup is needed.
  */
 const HOSTEL_EVENT_ID = "516";
+
+const ORIGIN_LABEL = {
+  internal: "Internal",
+  external: "External",
+  unknown: "Unknown",
+} as const;
 
 type Field = { field_name?: string; field_value?: string };
 
@@ -40,6 +47,7 @@ export type HostelGuest = {
   name: string;
   phone: string | null;
   email: string | null;
+  origin: "internal" | "external" | "unknown";
   day: string | null;
   accommodation: string | null;
   entered_at: string | null;
@@ -163,6 +171,8 @@ async function loadGuests(): Promise<HostelGuest[]> {
     );
     const scan = scanByRegistration.get(row.id);
 
+    const email = field(fields, "email") || row.email;
+
     return {
       id: row.id,
       registration_id: row.registration_id,
@@ -171,7 +181,8 @@ async function loadGuests(): Promise<HostelGuest[]> {
          the registration's own name is often whoever paid. */
       name: field(fields, "student name") || row.name || "",
       phone: field(fields, "mobile"),
-      email: field(fields, "email") || row.email,
+      email,
+      origin: originFrom(row.raw_data, email ?? ""),
       day,
       accommodation,
       entered_at: scan?.created_at ?? null,
@@ -261,6 +272,7 @@ export async function GET(request: Request) {
       { header: "Name", key: "name", width: 28 },
       { header: "Phone", key: "phone", width: 16 },
       { header: "Email", key: "email", width: 32 },
+      { header: "Internal / External", key: "origin", width: 18 },
       { header: "Day", key: "day", width: 16 },
       { header: "Accommodation", key: "accommodation", width: 22 },
       { header: "Block", key: "block", width: 10 },
@@ -277,6 +289,7 @@ export async function GET(request: Request) {
         name: guest.name,
         phone: guest.phone ?? "",
         email: guest.email ?? "",
+        origin: ORIGIN_LABEL[guest.origin],
         day: guest.day ?? "Not specified",
         accommodation: guest.accommodation ?? "Not specified",
         block: guest.block ?? "",
