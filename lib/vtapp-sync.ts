@@ -357,28 +357,27 @@ function findCombo(
   const normalized =
     normalize(ticket);
 
-  for (
-    const [
-      comboName,
-      items,
-    ]
-    of Object.entries(
-      COMBOS
-    )
-  ) {
+  /*
+   * Extract the combo number and look it up exactly. A prefix scan
+   * over COMBOS in insertion order matched "Combo 1" against
+   * "Combo 10", "Combo 11" ... "Combo 15" -- "combo 1" is a string
+   * prefix of "combo 10" -- so every ticket for combo 10 and up
+   * silently resolved to combo 1's items: a phantom cap for combo 10
+   * (which has none), navy instead of white for combo 11, and so on.
+   */
+  const match =
+    normalized.match(
+      /^combo\s+(\d+)/
+    );
 
-    if (
-      normalized.startsWith(
-        comboName.toLowerCase()
-      )
-    ) {
-
-      return items;
-    }
-
+  if (!match) {
+    return null;
   }
 
-  return null;
+  return (
+    COMBOS[`Combo ${match[1]}`] ??
+    null
+  );
 }
 
 
@@ -1204,14 +1203,19 @@ async function runSync(supplied?: Registration[]) {
    */
   const existingByRegistration = new Map<
     number,
-    { item: string; size: string | null; quantity: number }[]
+    {
+      id: number;
+      item: string;
+      size: string | null;
+      quantity: number;
+    }[]
   >();
 
   for (const batch of chunk(registrationIds)) {
     const data = await clock.time("readItems", async () => {
       const { data, error } = await db
         .from("registration_items")
-        .select("registration_id,item,size,quantity")
+        .select("id,registration_id,item,size,quantity")
         .in("registration_id", batch);
 
       if (error) {
@@ -1226,6 +1230,7 @@ async function runSync(supplied?: Registration[]) {
         existingByRegistration.get(row.registration_id) ?? [];
 
       bucket.push({
+        id: row.id,
         item: row.item,
         size: row.size,
         quantity: Number(row.quantity ?? 1),
@@ -1236,15 +1241,65 @@ async function runSync(supplied?: Registration[]) {
   }
 
   /*
-   * 3. Only rewrite items for registrations whose merchandise
-   *    actually changed.
+   * Which of those existing rows have already been handed over.
    *
-   *    The previous implementation deleted and re-inserted every
-   *    registration's items on every sync. Because `distributions`
-   *    reference `registration_items`, that threw away the record
-   *    of what had already been handed out.
+   * A row a volunteer has scanned is a physical fact, not a cache
+   * entry -- it must never be deleted to make room for a fresh
+   * parse, however wrong the parse it came from turns out to have
+   * been. See the Combo 1 mis-parse below.
    */
-  const staleRegistrationIds: number[] = [];
+  const allExistingIds = [...existingByRegistration.values()]
+    .flat()
+    .map((row) => row.id);
+
+  const givenItemIds = new Set<number>();
+
+  for (const batch of chunk(allExistingIds)) {
+    if (batch.length === 0) continue;
+
+    const data = await clock.time("readDistributions", async () => {
+      const { data, error } = await db
+        .from("distributions")
+        .select("registration_item_id,status")
+        .in("registration_item_id", batch)
+        .eq("status", "GIVEN");
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    });
+
+    for (const row of data ?? []) {
+      givenItemIds.add(row.registration_item_id);
+    }
+  }
+
+  /*
+   * 3. Reconcile items for registrations whose merchandise actually
+   *    changed, without ever discarding a row that has been handed
+   *    over.
+   *
+   *    A blanket delete-and-reinsert here doesn't just cost a round
+   *    trip on a no-op sync (the itemsSignature check above already
+   *    guards that) -- it is unsafe on a genuine change, because
+   *    `distributions` references `registration_items`. A parser bug
+   *    that mis-resolved "Combo 10" through "Combo 15" to "Combo 1"
+   *    (fixed in findCombo() above) had already been handed out
+   *    against seven real registrations by the time it was caught;
+   *    a plain replace here would have taken the record of those
+   *    handovers with it.
+   *
+   *    Instead: rows already GIVEN are left alone and counted toward
+   *    the target; only the remaining shortfall is inserted, and
+   *    only never-given rows are deleted.
+   */
+  function itemKey(item: string, size: string | null) {
+    return `${item} ${size ?? ""}`;
+  }
+
+  const itemsToDelete: number[] = [];
 
   const itemsToInsert: {
     registration_id: number;
@@ -1265,41 +1320,59 @@ async function runSync(supplied?: Registration[]) {
       continue;
     }
 
-    const existing = existingByRegistration.get(registrationId);
+    const existing = existingByRegistration.get(registrationId) ?? [];
 
-    if (existing && existing.length > 0) {
+    if (existing.length > 0) {
       updated++;
     } else {
       created++;
     }
 
-    if (
-      itemsSignature(existing ?? []) ===
-      itemsSignature(entry.items)
-    ) {
+    if (itemsSignature(existing) === itemsSignature(entry.items)) {
       continue;
     }
 
-    if (existing && existing.length > 0) {
-      staleRegistrationIds.push(registrationId);
+    const given = existing.filter((row) => givenItemIds.has(row.id));
+    const notGiven = existing.filter(
+      (row) => !givenItemIds.has(row.id)
+    );
+
+    for (const row of notGiven) {
+      itemsToDelete.push(row.id);
     }
 
-    for (const item of entry.items) {
-      itemsToInsert.push({
-        registration_id: registrationId,
-        item: item.item,
-        size: item.size,
-        quantity: item.quantity,
-      });
+    /* How much of the target each already-given row covers. */
+    const covered = new Map<string, number>();
+
+    for (const row of given) {
+      const key = itemKey(row.item, row.size);
+      covered.set(key, (covered.get(key) ?? 0) + row.quantity);
+    }
+
+    for (const target of entry.items) {
+      const key = itemKey(target.item, target.size);
+      const have = covered.get(key) ?? 0;
+      const need = target.quantity - have;
+
+      if (need > 0) {
+        itemsToInsert.push({
+          registration_id: registrationId,
+          item: target.item,
+          size: target.size,
+          quantity: need,
+        });
+      }
+
+      covered.set(key, Math.max(0, have - target.quantity));
     }
   }
 
-  for (const batch of chunk(staleRegistrationIds)) {
+  for (const batch of chunk(itemsToDelete)) {
     await clock.time("deleteItems", async () => {
       const { error } = await db
         .from("registration_items")
         .delete()
-        .in("registration_id", batch);
+        .in("id", batch);
 
       if (error) {
         throw error;
