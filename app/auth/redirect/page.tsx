@@ -10,10 +10,40 @@ export default function AuthRedirect() {
       const supabase =
         createSupabaseBrowser();
 
-      const {
-        data: { user },
-      } =
-        await supabase.auth.getUser();
+      /*
+       * This page loads right after /auth/callback has just minted a
+       * brand-new session. getUser() can trigger a token refresh to
+       * validate it -- and proxy.ts is, at the very same moment,
+       * independently refreshing that identical session on its own
+       * middleware pass for this same navigation. Refresh tokens are
+       * single-use, so whichever of the two loses that race gets back
+       * a 400 from Supabase, and getUser() here resolves with
+       * `user: null` rather than throwing -- indistinguishable from
+       * "never signed in" without a retry. A moment later the cookie
+       * holds the winner's rotated token and the same call succeeds,
+       * so retry a couple of times before concluding the session is
+       * really gone.
+       */
+      let user: Awaited<
+        ReturnType<typeof supabase.auth.getUser>
+      >["data"]["user"] = null;
+
+      for (
+        let attempt = 0;
+        !user && attempt < 3;
+        attempt++
+      ) {
+        if (attempt > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 400)
+          );
+        }
+
+        const result =
+          await supabase.auth.getUser();
+
+        user = result.data.user;
+      }
 
       if (!user) {
         window.location.href = "/login";
