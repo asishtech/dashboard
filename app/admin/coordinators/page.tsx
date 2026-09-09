@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { useStepUp } from "@/lib/use-step-up";
 import {
   AlertIcon,
   CheckIcon,
@@ -55,6 +56,8 @@ export default function CoordinatorsPage() {
 
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"PEOPLE" | "GAPS">("PEOPLE");
+
+  const { ensure: ensureStepUp, modal: stepUpModal } = useStepUp();
 
   const [directory, setDirectory] = useState<DirectoryEntry[]>([]);
   const [detailsAvailable, setDetailsAvailable] = useState(false);
@@ -239,6 +242,8 @@ export default function CoordinatorsPage() {
       return;
     }
 
+    if (!(await ensureStepUp())) return;
+
     try {
       setSaving(true);
 
@@ -276,6 +281,8 @@ export default function CoordinatorsPage() {
   }
 
   async function revoke(a: Assignment) {
+    if (!(await ensureStepUp())) return;
+
     setError("");
     setMessage("");
     setBusyId(a.id);
@@ -308,6 +315,8 @@ export default function CoordinatorsPage() {
   return (
     <main className="app">
       <NavBar />
+
+      {stepUpModal}
 
       <div className="container">
 

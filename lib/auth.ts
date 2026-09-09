@@ -250,6 +250,50 @@ async function resolveRole(
 }
 
 /*
+ * Require that this session has actually proven a second factor, not
+ * merely that the account has one enrolled.
+ *
+ * Call after requireRole(), never instead of it -- this answers "did
+ * they verify a code this session", not "are they allowed here at
+ * all". getAuthenticatorAssuranceLevel() reads the aal claim off the
+ * session's own JWT, so a request cannot claim AAL2 by sending
+ * anything in the body; it has to have actually completed
+ * supabase.auth.mfa.verify() first; and that verification lives in
+ * the session cookie, not the client.
+ *
+ * `nextLevel` distinguishes two different client experiences: 'aal2'
+ * means a factor is enrolled and this request just needs a fresh
+ * code, while staying at 'aal1' means nobody has enrolled one yet.
+ * lib/use-step-up.ts branches on `enrolled` to show the right modal.
+ */
+export async function requireAal2(): Promise<NextResponse | null> {
+  const supabase = await createSupabaseServer();
+
+  const { data, error } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+  if (error) {
+    throw error;
+  }
+
+  if (data.currentLevel === "aal2") {
+    return null;
+  }
+
+  return NextResponse.json(
+    {
+      error:
+        data.nextLevel === "aal2"
+          ? "This action requires a two-factor code."
+          : "This action requires two-factor authentication to be set up first.",
+      requiresStepUp: true,
+      enrolled: data.nextLevel === "aal2",
+    },
+    { status: 403 }
+  );
+}
+
+/*
  * Events a coordinator is allowed to see.
  *
  * Admins are not restricted; everyone else is limited to their

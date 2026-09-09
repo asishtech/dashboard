@@ -2728,3 +2728,89 @@ fieldset.role-picker:disabled .role-chip {
 .send-all .help {
   margin: 0;
 }
+
+/* Modal: a step-up two-factor prompt today, generic enough for
+   whatever needs a focused overlay next. --z-modal sits above
+   --z-overlay (the nav's own dropdown) on purpose -- a step-up prompt
+   has to win over anything else open on the page. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 26rem;
+  padding: var(--space-8);
+
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+
+.modal-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+
+.modal-body {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  margin: 0 0 var(--space-6);
+}
+
+.modal-qr {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+
+  background: #fff;
+  border-radius: var(--radius);
+}
+
+.modal-qr img {
+  width: 180px;
+  height: 180px;
+}
+
+.modal-secret {
+  display: block;
+  padding: var(--space-3);
+  margin-bottom: var(--space-6);
+
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm);
+  text-align: center;
+  word-break: break-all;
+
+  background: var(--surface-inset);
+  border-radius: var(--radius-sm);
+}
+
+.modal-code-input {
+  width: 100%;
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+
+  font-size: var(--text-xl);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}

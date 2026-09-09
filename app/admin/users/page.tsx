@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
+import { useStepUp } from "@/lib/use-step-up";
 import type { Role } from "@/lib/roles";
 import {
   AlertIcon,
@@ -89,6 +90,8 @@ export default function AdminUsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const { ensure: ensureStepUp, modal: stepUpModal } = useStepUp();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -261,6 +264,10 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (newRoles.includes("admin") && !(await ensureStepUp())) {
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -310,6 +317,20 @@ export default function AdminUsersPage() {
     user: StaffUser,
     patch: { active?: boolean; roles?: StaffRole[] }
   ) {
+    /*
+     * Any change that touches admin access, in either direction,
+     * mirrors the same condition the server enforces in
+     * app/api/admin/users/route.ts -- so a plain volunteer edit never
+     * shows a prompt the server was never going to ask for.
+     */
+    const touchesAdmin =
+      rolesOf(user).includes("admin") ||
+      Boolean(patch.roles?.includes("admin"));
+
+    if (touchesAdmin && !(await ensureStepUp())) {
+      return;
+    }
+
     setError("");
     setMessage("");
     setSavingId(user.id);
@@ -412,6 +433,8 @@ export default function AdminUsersPage() {
   return (
     <main className="app">
       <NavBar />
+
+      {stepUpModal}
 
       <div className="container">
 
