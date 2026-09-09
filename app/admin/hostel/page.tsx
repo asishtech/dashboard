@@ -2,11 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { SearchIcon } from "@/components/icons";
+import { DownloadIcon, SearchIcon } from "@/components/icons";
 import type { HostelGuest } from "@/app/api/admin/hostel/route";
+
+type Summary = {
+  total: number;
+  checkedIn: number;
+  inside: number;
+  exited: number;
+};
+
+function status(guest: HostelGuest) {
+  if (guest.exited_at) return { label: "Left", className: "" };
+  if (guest.entered_at)
+    return { label: "Inside", className: "badge-success" };
+  return { label: "Not arrived", className: "badge-warning" };
+}
 
 export default function HostelPage() {
   const [guests, setGuests] = useState<HostelGuest[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -24,7 +39,10 @@ export default function HostelPage() {
           );
         }
 
-        if (!cancelled) setGuests(data.guests ?? []);
+        if (!cancelled) {
+          setGuests(data.guests ?? []);
+          setSummary(data.summary ?? null);
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -48,11 +66,17 @@ export default function HostelPage() {
     if (!query) return guests;
 
     return guests.filter((guest) =>
-      [guest.name, guest.email, guest.phone]
+      [guest.name, guest.email, guest.phone, guest.block, guest.room]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query))
     );
   }, [guests, search]);
+
+  const formatTime = (value: string) =>
+    new Date(value).toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
   return (
     <main className="app">
@@ -70,6 +94,26 @@ export default function HostelPage() {
               they chose
             </p>
           </div>
+
+          <div className="header-actions">
+            <a
+              className="btn btn-ghost btn-sm"
+              href="/api/admin/hostel?pdf=1"
+              download
+            >
+              <DownloadIcon size={13} />
+              QR passes (PDF)
+            </a>
+
+            <a
+              className="btn btn-ghost btn-sm"
+              href="/api/admin/hostel?xlsx=1"
+              download
+            >
+              <DownloadIcon size={13} />
+              Download as Excel
+            </a>
+          </div>
         </header>
 
         {error && (
@@ -84,91 +128,164 @@ export default function HostelPage() {
             </div>
           </section>
         ) : (
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Guests</h2>
+          <>
+            {summary && (
+              <section className="stat-grid mb-6">
+                <div className="stat stat-feature">
+                  <span className="stat-label">Registrations</span>
+                  <strong className="stat-value">
+                    {summary.total}
+                  </strong>
+                </div>
 
-                <p className="panel-subtitle">
-                  {guests.length} registration
-                  {guests.length === 1 ? "" : "s"}
-                </p>
-              </div>
+                <div className="stat">
+                  <span className="stat-label">Checked in</span>
+                  <strong className="stat-value">
+                    {summary.checkedIn}
+                  </strong>
+                  <span className="stat-meta">
+                    of {summary.total}
+                  </span>
+                </div>
 
-              <div className="search" style={{ flex: "0 1 240px" }}>
-                <span className="search-icon">
-                  <SearchIcon size={14} />
-                </span>
+                <div className="stat">
+                  <span className="stat-label">Inside now</span>
+                  <strong className="stat-value">
+                    {summary.inside}
+                  </strong>
+                </div>
 
-                <input
-                  className="input"
-                  placeholder="Name, email or phone number"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-            </div>
-
-            {filtered.length === 0 ? (
-              <div className="empty">
-                <p className="empty-title">Nothing here</p>
-
-                <p className="empty-body">
-                  {search
-                    ? "No guest matches that."
-                    : "No hostel registrations yet."}
-                </p>
-              </div>
-            ) : (
-              <div className="table-wrap">
-                <table className="table">
-                  <caption className="sr-only">
-                    Hostel registrations
-                  </caption>
-
-                  <thead>
-                    <tr>
-                      <th scope="col">Name</th>
-                      <th scope="col">Phone</th>
-                      <th scope="col">Email</th>
-                      <th scope="col">Day</th>
-                      <th scope="col">Accommodation</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {filtered.map((guest) => (
-                      <tr key={guest.id}>
-                        <td>
-                          <div className="row-title">{guest.name}</div>
-                        </td>
-
-                        <td className="mono">{guest.phone ?? "—"}</td>
-
-                        <td>{guest.email ?? "—"}</td>
-
-                        <td>
-                          {guest.day ?? (
-                            <span className="help">Not specified</span>
-                          )}
-                        </td>
-
-                        <td>
-                          {guest.accommodation ?? (
-                            <span className="help">Not specified</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                <div className="stat">
+                  <span className="stat-label">Left</span>
+                  <strong className="stat-value">
+                    {summary.exited}
+                  </strong>
+                </div>
+              </section>
             )}
 
-            <div className="panel-footer">
-              Showing {filtered.length} of {guests.length}
-            </div>
-          </section>
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">Guests</h2>
+
+                  <p className="panel-subtitle">
+                    {guests.length} registration
+                    {guests.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+
+                <div className="search" style={{ flex: "0 1 240px" }}>
+                  <span className="search-icon">
+                    <SearchIcon size={14} />
+                  </span>
+
+                  <input
+                    className="input"
+                    placeholder="Name, email, phone, block or room"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+              </div>
+
+              {filtered.length === 0 ? (
+                <div className="empty">
+                  <p className="empty-title">Nothing here</p>
+
+                  <p className="empty-body">
+                    {search
+                      ? "No guest matches that."
+                      : "No hostel registrations yet."}
+                  </p>
+                </div>
+              ) : (
+                <div className="table-wrap">
+                  <table className="table">
+                    <caption className="sr-only">
+                      Hostel registrations
+                    </caption>
+
+                    <thead>
+                      <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Phone</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Day</th>
+                        <th scope="col">Accommodation</th>
+                        <th scope="col">Block</th>
+                        <th scope="col">Room</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filtered.map((guest) => {
+                        const st = status(guest);
+
+                        return (
+                          <tr key={guest.id}>
+                            <td>
+                              <div className="row-title">
+                                {guest.name}
+                              </div>
+                            </td>
+
+                            <td className="mono">
+                              {guest.phone ?? "—"}
+                            </td>
+
+                            <td>{guest.email ?? "—"}</td>
+
+                            <td>
+                              {guest.day ?? (
+                                <span className="help">
+                                  Not specified
+                                </span>
+                              )}
+                            </td>
+
+                            <td>
+                              {guest.accommodation ?? (
+                                <span className="help">
+                                  Not specified
+                                </span>
+                              )}
+                            </td>
+
+                            <td>{guest.block ?? "—"}</td>
+
+                            <td>{guest.room ?? "—"}</td>
+
+                            <td>
+                              <span
+                                className={`badge ${st.className}`}
+                                title={
+                                  guest.entered_at
+                                    ? `Checked in ${formatTime(guest.entered_at)}${
+                                        guest.exited_at
+                                          ? ` · Left ${formatTime(guest.exited_at)}`
+                                          : ""
+                                      }`
+                                    : undefined
+                                }
+                              >
+                                {st.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="panel-footer">
+                Showing {filtered.length} of {guests.length}
+              </div>
+            </section>
+          </>
         )}
       </div>
     </main>

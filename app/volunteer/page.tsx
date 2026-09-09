@@ -34,7 +34,18 @@ type Pass = {
   event_venue: string | null;
   is_merch: boolean;
   entered_at: string | null;
+  exited_at: string | null;
+  block: string | null;
+  room: string | null;
 };
+
+/*
+ * Upstream event id for food-and-accommodation. The only reason the
+ * scanner knows this one id: block and room are collected at the door
+ * for this event and nowhere else, the same way is_merch is the only
+ * other event id the scanner branches on.
+ */
+const HOSTEL_EVENT_ID = "516";
 
 /* Minimal surface of Html5Qrcode, so the import stays lazy. */
 type Scanner = {
@@ -82,6 +93,10 @@ export default function VolunteerPage() {
 
   /* True when this pass was resolved from the on-device list. */
   const [offline, setOffline] = useState(false);
+
+  /* Hostel desk only: where the guest is being put. */
+  const [block, setBlock] = useState("");
+  const [room, setRoom] = useState("");
 
   const scannerRef = useRef<Scanner | null>(null);
   const handlingRef = useRef(false);
@@ -404,6 +419,8 @@ export default function VolunteerPage() {
     setCanUndo(false);
     setOffline(false);
     setResolving(false);
+    setBlock("");
+    setRoom("");
     handlingRef.current = false;
     void startScanner();
   }
@@ -416,6 +433,14 @@ export default function VolunteerPage() {
   async function markEntry() {
     if (busy || !scanToken) return;
 
+    const isHostel = pass?.event_id === HOSTEL_EVENT_ID;
+
+    if (isHostel && (!block.trim() || !room.trim())) return;
+
+    const hostelFields = isHostel
+      ? { block: block.trim(), room: room.trim() }
+      : {};
+
     setBusy(true);
     setError("");
     setNotice("");
@@ -426,11 +451,15 @@ export default function VolunteerPage() {
        * person is standing there; the network is not their problem.
        */
       if (offline || !navigator.onLine) {
-        queueEntry(scanToken);
+        queueEntry(scanToken, hostelFields);
 
         setPass((current) =>
           current
-            ? { ...current, entered_at: new Date().toISOString() }
+            ? {
+                ...current,
+                entered_at: new Date().toISOString(),
+                ...hostelFields,
+              }
             : current
         );
 
@@ -444,7 +473,7 @@ export default function VolunteerPage() {
       const response = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: scanToken }),
+        body: JSON.stringify({ token: scanToken, ...hostelFields }),
       });
 
       const data = await response.json();
@@ -470,11 +499,15 @@ export default function VolunteerPage() {
        * offline, and must not lose the admission.
        */
       if (!navigator.onLine || err instanceof TypeError) {
-        queueEntry(scanToken);
+        queueEntry(scanToken, hostelFields);
 
         setPass((current) =>
           current
-            ? { ...current, entered_at: new Date().toISOString() }
+            ? {
+                ...current,
+                entered_at: new Date().toISOString(),
+                ...hostelFields,
+              }
             : current
         );
 
@@ -487,6 +520,55 @@ export default function VolunteerPage() {
 
       setError(
         err instanceof Error ? err.message : "Could not record entry"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /*
+   * Leaving, as distinct from never having arrived -- same rule as the
+   * external desk's gate exit. Works for any event; the hostel is not
+   * special-cased here because whether a hall needs to know who has
+   * left is not particular to accommodation.
+   */
+  async function markExitScan() {
+    if (busy || !pass) return;
+
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "exit",
+          registrationId: pass.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not record exit");
+      }
+
+      setPass((current) =>
+        current
+          ? { ...current, exited_at: data.exitedAt ?? new Date().toISOString() }
+          : current
+      );
+
+      setNotice(
+        data.alreadyExited
+          ? "Already marked as left."
+          : "Exit recorded."
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not record exit"
       );
     } finally {
       setBusy(false);
@@ -731,15 +813,39 @@ export default function VolunteerPage() {
                     <CheckIcon size={22} />
                   </div>
 
-                  <p className="empty-title">Already checked in</p>
-
-                  <p className="empty-body">
-                    Admitted {formatTime(pass.entered_at)}. Each pass
-                    admits one person, once.
+                  <p className="empty-title">
+                    {pass.exited_at ? "Already left" : "Already checked in"}
                   </p>
 
-                  {canUndo && !isQueued(scanToken) && (
-                    <div className="actions-centred mt-8">
+                  <p className="empty-body">
+                    Admitted {formatTime(pass.entered_at)}
+                    {pass.exited_at &&
+                      ` · Left ${formatTime(pass.exited_at)}`}
+                    . Each pass admits one person, once.
+                  </p>
+
+                  {(pass.block || pass.room) && (
+                    <p className="empty-body">
+                      {pass.block && `Block ${pass.block}`}
+                      {pass.block && pass.room && " · "}
+                      {pass.room && `Room ${pass.room}`}
+                    </p>
+                  )}
+
+                  <div className="actions-centred mt-8">
+                    {!pass.exited_at && !isQueued(scanToken) && (
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={busy}
+                        onClick={markExitScan}
+                      >
+                        {busy && <span className="btn-spinner" />}
+                        {busy ? "Recording exit..." : "Mark exit"}
+                      </button>
+                    )}
+
+                    {canUndo && !isQueued(scanToken) && (
                       <button
                         type="button"
                         className="btn btn-danger"
@@ -749,19 +855,43 @@ export default function VolunteerPage() {
                         {busy && <span className="btn-spinner" />}
                         {busy ? "Undoing..." : "Undo entry"}
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-block"
-                  disabled={busy}
-                  onClick={markEntry}
-                >
-                  {busy && <span className="btn-spinner" />}
-                  {busy ? "Recording entry..." : "Mark entry"}
-                </button>
+                <>
+                  {pass.event_id === HOSTEL_EVENT_ID && (
+                    <div className="stack-tight stack">
+                      <input
+                        className="input"
+                        placeholder="Block (e.g. A)"
+                        value={block}
+                        onChange={(event) => setBlock(event.target.value)}
+                      />
+
+                      <input
+                        className="input"
+                        placeholder="Room number"
+                        value={room}
+                        onChange={(event) => setRoom(event.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block"
+                    disabled={
+                      busy ||
+                      (pass.event_id === HOSTEL_EVENT_ID &&
+                        (!block.trim() || !room.trim()))
+                    }
+                    onClick={markEntry}
+                  >
+                    {busy && <span className="btn-spinner" />}
+                    {busy ? "Recording entry..." : "Mark entry"}
+                  </button>
+                </>
               )}
             </div>
 

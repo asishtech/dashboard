@@ -19,6 +19,9 @@ export type CheckinPass = {
   event_venue: string | null;
   is_merch: boolean;
   entered_at: string | null;
+  exited_at: string | null;
+  block: string | null;
+  room: string | null;
 };
 
 /*
@@ -282,7 +285,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error } = await supabaseAdmin().from("qr_scans").insert({
+    /*
+     * Block and room, for the hostel desk. Optional and generic --
+     * nothing here checks the event id, the same way is_merch is the
+     * only thing that branches on it elsewhere. Blank strings are
+     * treated as "not given" rather than saved as empty text.
+     */
+    const block =
+      typeof body.block === "string" && body.block.trim()
+        ? body.block.trim()
+        : null;
+
+    const room =
+      typeof body.room === "string" && body.room.trim()
+        ? body.room.trim()
+        : null;
+
+    const scan = {
       registration_id: pass.id,
       /* Bigint upstream; the resolved slug lives on the registration. */
       event_id: pass.is_merch ? 513 : 514,
@@ -294,7 +313,28 @@ export async function POST(request: Request) {
       qr_token: token,
       scanned_at: new Date().toISOString(),
       scanned_by: auth.user.id,
-    });
+      block,
+      room,
+    };
+
+    let { error } = await supabaseAdmin()
+      .from("qr_scans")
+      .insert(scan);
+
+    /* 42703: supabase/hostel-checkin.sql has not been run. The entry
+       still matters more than where they were put, so record it
+       without block and room rather than failing the whole scan. */
+    if (error?.code === "42703") {
+      const { block: _block, room: _room, ...withoutHostelFields } =
+        scan;
+
+      void _block;
+      void _room;
+
+      ({ error } = await supabaseAdmin()
+        .from("qr_scans")
+        .insert(withoutHostelFields));
+    }
 
     if (error) {
       /* 23505: someone admitted them between the read and the write. */
@@ -328,7 +368,12 @@ export async function POST(request: Request) {
       success: true,
       enteredAt: new Date().toISOString(),
       canUndo: auth.activeRole === "admin",
-      pass: { ...pass, entered_at: new Date().toISOString() },
+      pass: {
+        ...pass,
+        entered_at: new Date().toISOString(),
+        block,
+        room,
+      },
     });
   } catch (error) {
     console.error("Check-in POST error:", error);

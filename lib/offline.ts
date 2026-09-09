@@ -33,6 +33,9 @@ export type QueuedEntry = {
   token: string;
   /* When the volunteer actually admitted them, not when it synced. */
   at: string;
+  /* Hostel desk only; harmless and unread everywhere else. */
+  block?: string | null;
+  room?: string | null;
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -87,13 +90,24 @@ export function queuedEntries(): QueuedEntry[] {
   return read<QueuedEntry[]>(QUEUE_KEY, []);
 }
 
-export function queueEntry(token: string) {
+export function queueEntry(
+  token: string,
+  extra?: { block?: string | null; room?: string | null }
+) {
   const queue = queuedEntries();
 
   /* One entry per pass here too, or a double tap sends two. */
   if (queue.some((entry) => entry.token === token)) return queue;
 
-  const next = [...queue, { token, at: new Date().toISOString() }];
+  const next = [
+    ...queue,
+    {
+      token,
+      at: new Date().toISOString(),
+      block: extra?.block ?? null,
+      room: extra?.room ?? null,
+    },
+  ];
 
   write(QUEUE_KEY, next);
 
@@ -146,7 +160,12 @@ export async function flushQueue(): Promise<{
       const response = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: entry.token, at: entry.at }),
+        body: JSON.stringify({
+          token: entry.token,
+          at: entry.at,
+          block: entry.block,
+          room: entry.room,
+        }),
       });
 
       if (response.ok || response.status === 409) {
