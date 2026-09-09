@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import {
+  BedIcon,
   BoxIcon,
   InboxIcon,
   ListIcon,
@@ -58,6 +59,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
     { href: "/admin/external", label: "External", icon: UsersIcon },
+    { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
     { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/notifications", label: "Mail", icon: InboxIcon },
     { href: "/admin/users", label: "Staff", icon: UsersIcon },
@@ -98,6 +100,7 @@ const NAV: Record<Role, NavItem[]> = {
     },
     { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
     { href: "/admin/external", label: "External", icon: UsersIcon },
+    { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
     { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
     MINE,

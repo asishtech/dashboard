@@ -170,6 +170,18 @@ export function InboxIcon(props: IconProps) {
   );
 }
 
+export function BedIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      {props.title && <title>{props.title}</title>}
+      <path d="M3 18v-7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7" />
+      <path d="M3 18v2M21 18v2" />
+      <path d="M3 13h18" />
+      <path d="M6 13V9a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v4" />
+    </svg>
+  );
+}
+
 export function DownloadIcon(props: IconProps) {
   return (
     <svg {...base(props)}>

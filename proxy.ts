@@ -47,6 +47,7 @@ function readOnlyAdminPath(path: string) {
     path.startsWith("/admin/registrations/") ||
     path === "/admin/inventory" ||
     path === "/admin/external" ||
+    path === "/admin/hostel" ||
     path === "/admin/whereabouts"
   );
 }
