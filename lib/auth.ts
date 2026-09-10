@@ -396,12 +396,11 @@ export async function allowedEventIds(
    * putting them in that table would list a first-year student as the
    * person responsible for an event.
    *
-   * No rows means no restriction, which is the opposite of the rule
-   * for coordinators above. A coordinator with no assignments has
-   * been given nothing to look at; a volunteer with no assignments is
-   * every volunteer who was scanning before this table existed, and
-   * an empty list would have stopped all of them the moment it was
-   * created.
+   * No rows means merchandise only, not no restriction. An admin who
+   * has not yet limited a new volunteer to a particular event should
+   * not have quietly handed them every event's door; merchandise is
+   * the one thing safe to leave open by default, since handing over a
+   * hoodie carries none of the risk an event's entry does.
    */
   if (session.activeRole === "volunteer") {
     const { data, error } = await supabaseAdmin()
@@ -421,7 +420,9 @@ export async function allowedEventIds(
 
     const scope = (data ?? []).map((row) => String(row.event_id));
 
-    return scope.length > 0 ? scope : null;
+    if (scope.length > 0) return scope;
+
+    return [...(await merchandiseEventIds())];
   }
 
   const { data, error } = await supabaseAdmin()
@@ -457,9 +458,10 @@ export async function canReadEvent(
  * counter away from staff who have been using it, to fix a problem
  * nobody reported.
  *
- * A volunteer with no scope is unrestricted, as everywhere else. A
- * scoped one needs the merchandise row itself, which is what makes
- * "merch volunteer" a scope rather than a fourth role.
+ * A volunteer with no scope defaults to merchandise (allowedEventIds()
+ * puts it there), so this is almost always true for them too. A
+ * volunteer scoped to particular events and not merchandise is the
+ * one case this actually excludes.
  */
 export async function canHandOutMerch(
   session: Session

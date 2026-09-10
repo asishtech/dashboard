@@ -23,10 +23,10 @@ function notMigrated() {
  *
  * Every volunteer's scope, and the events there are to choose from.
  *
- * An address with no rows is unrestricted -- it scans anything. That
- * is not the same as an empty scope, and the screen says which,
- * because "scans everything" and "scans nothing" look identical as a
- * blank cell and are opposites at a door.
+ * An address with no rows defaults to merchandise only, not
+ * unrestricted -- see allowedEventIds() in lib/auth.ts. The screen
+ * says so explicitly, because a default and a chosen scope of one
+ * look identical as a blank cell.
  */
 export async function GET() {
   const auth = await requireRole("admin");
@@ -105,9 +105,9 @@ export async function GET() {
  * PUT /api/admin/volunteers  { email, eventIds }
  *
  * Replace one volunteer's scope. An empty list removes the scope
- * entirely, which returns them to scanning everything -- said plainly
- * in the response so the screen can say it too rather than showing an
- * empty list that looks like a lockout.
+ * entirely, which returns them to the merchandise-only default -- said
+ * plainly in the response (merchOnly) so the screen can say it too
+ * rather than showing an empty list that looks like a lockout.
  */
 export async function PUT(request: Request) {
   const auth = await requireRole("admin");
@@ -233,7 +233,7 @@ export async function PUT(request: Request) {
       success: true,
       email,
       eventIds,
-      unrestricted: eventIds.length === 0,
+      merchOnly: eventIds.length === 0,
     });
   } catch (error) {
     console.error("Volunteer scope PUT error:", error);

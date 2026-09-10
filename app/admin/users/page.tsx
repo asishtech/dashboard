@@ -180,7 +180,7 @@ export default function AdminUsersPage() {
 
       setMessage(
         eventIds.length === 0
-          ? `${email} can scan every event again.`
+          ? `${email} is back to merchandise only.`
           : `${email} can scan ${eventIds.length} event${
               eventIds.length === 1 ? "" : "s"
             }.`
@@ -768,16 +768,17 @@ export default function AdminUsersPage() {
                 {/*
                   What this volunteer may scan.
                   ----------------------------
-                  No rows means no restriction, which is what every
-                  volunteer was before scopes existed. Said in words
-                  because an empty list and "everything" look the same
-                  as a blank cell and are opposites at a door.
+                  No rows means merchandise only, not no restriction --
+                  an admin who has not yet limited a new volunteer to
+                  an event should not have quietly handed them every
+                  event's door. Said in words because a default and a
+                  chosen scope of one look the same as a blank cell.
                 */}
                 {isVolunteer && user.active && scopeReady && (
                   <div className="scope-row">
                     <span className="row-meta">
                       {scope.length === 0 ? (
-                        "Scans every event and the merchandise counter"
+                        "Scans the merchandise counter only (default)"
                       ) : (
                         <>
                           Scans{" "}
@@ -885,7 +886,7 @@ export default function AdminUsersPage() {
                           void saveScope(user.email.toLowerCase(), [])
                         }
                       >
-                        Remove the limit
+                        Reset to merchandise only
                       </button>
                     )}
                   </div>

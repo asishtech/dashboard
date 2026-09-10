@@ -30,12 +30,16 @@ export type CheckinPass = {
  * including the merchandise-only volunteer, whose one event is the
  * merchandise row.
  *
- * A volunteer with no scope at all is unrestricted, which is what
- * every volunteer was before supabase/volunteer-scope.sql existed;
- * allowedEventIds() returns null for them.
+ * A volunteer with no scope at all defaults to merchandise only, not
+ * unrestricted -- allowedEventIds() returns just the merchandise id
+ * for them, so canReadEvent() below already handles this case without
+ * anything special here.
  *
- * An event whose ticket matched nothing has no owner, so only staff
- * with unrestricted scope can admit it.
+ * An event whose ticket matched nothing has no owner, so only truly
+ * unrestricted staff -- admin and registrations, the two roles
+ * allowedEventIds() returns null for -- can admit it. A volunteer,
+ * scoped or not, cannot; nor can a coordinator, who is always scoped
+ * to their own assignments.
  */
 async function mayAdmit(
   session: Awaited<ReturnType<typeof requireRole>>,

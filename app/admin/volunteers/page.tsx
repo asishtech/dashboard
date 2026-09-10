@@ -135,8 +135,8 @@ export default function VolunteersPage() {
       }
 
       setNotice(
-        data.unrestricted
-          ? `${normalized} can now scan anything.`
+        data.merchOnly
+          ? `${normalized} is back to merchandise only.`
           : `${normalized} scoped to ${selected.size} event${
               selected.size === 1 ? "" : "s"
             }.`
@@ -156,7 +156,7 @@ export default function VolunteersPage() {
   async function removeAll(scope: Scope) {
     if (
       !window.confirm(
-        `Remove ${scope.email}'s scope? They will be able to scan any event again.`
+        `Remove ${scope.email}'s scope? They will be limited to the merchandise counter until scoped again.`
       )
     ) {
       return;
@@ -179,7 +179,7 @@ export default function VolunteersPage() {
         throw new Error(data.error || "Unable to remove that scope");
       }
 
-      setNotice(`${scope.email} can now scan anything.`);
+      setNotice(`${scope.email} is back to merchandise only.`);
       await load();
     } catch (err) {
       setError(
@@ -213,8 +213,7 @@ export default function VolunteersPage() {
 
             <p className="page-subtitle">
               Which events a volunteer may scan. Nobody selected means
-              they can scan anything, including hostel check-in and
-              exit or the merchandise counter.
+              they default to the merchandise counter only.
             </p>
           </div>
         </header>
@@ -356,8 +355,8 @@ export default function VolunteersPage() {
 
                 <p className="panel-subtitle">
                   {scopes.length} scoped
-                  {scopes.length === 1 ? "" : "s"}. Everyone else may
-                  scan anything.
+                  {scopes.length === 1 ? "" : "s"}. Everyone else is
+                  limited to the merchandise counter.
                 </p>
               </div>
 
@@ -394,7 +393,7 @@ export default function VolunteersPage() {
 
                 <p className="empty-body">
                   {scopes.length === 0
-                    ? "Every volunteer can scan anything until you scope one above."
+                    ? "Every volunteer is limited to the merchandise counter until you scope one above."
                     : "Try a different search."}
                 </p>
               </div>
