@@ -7,21 +7,30 @@ import {
   originFrom,
   parseRaw,
   phoneFrom,
+  type RawRegistration,
 } from "@/lib/form-fields";
+import { isTeamEvent } from "@/lib/team-events";
 import { readAll } from "@/lib/paged";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 const HOSTEL_EVENT_ID = "516";
+const MERCH_EVENT_ID = "513";
 
 type Registration = {
   id: number;
   event_id: string | number | null;
+  resolved_event_id: string | null;
   name: string | null;
   email: string | null;
   product_meta: string | null;
   raw_data: unknown;
+};
+
+type EventInfo = {
+  name: string;
+  team_size: string | null;
 };
 
 type Scan = {
@@ -32,17 +41,26 @@ type Scan = {
   room: string | null;
 };
 
+/*
+ * One row per event a person is registered for -- the same person
+ * repeats across rows if they entered more than one, with everything
+ * that is true of *them* (contact details, hostel status) carried on
+ * every one of their rows rather than only the first.
+ */
 export type ExternalReportRow = {
   name: string;
   email: string;
-  college: string;
   phone: string | null;
+  teamOrIndividual: "Team" | "Individual" | null;
+  eventName: string | null;
+  college: string;
+  /* The state their hostel form named, if they have one -- the only
+     form that asks. Null for someone with no hostel registration to
+     read it from. */
+  location: string | null;
   hostelEnrolled: boolean;
-  /* Null while enrolled but nobody has recorded a block yet -- the
-     page shows "Not updated" for that case, "-" for not enrolled at
-     all. Kept as two different nulls' worth of meaning rather than
-     one string, so a spreadsheet and a page can each word it their
-     own way. */
+  /* Null while enrolled but nobody has recorded a block yet -- shown
+     as "Not updated", distinct from "-" for not enrolled at all. */
   block: string | null;
   room: string | null;
   enteredAt: string | null;
@@ -57,10 +75,9 @@ function getTicket(productMeta: string | null) {
   );
 }
 
-/* Same day-parsing as lib for the Hostel tab (app/api/admin/hostel) --
+/* Same day-parsing as the Hostel tab (app/api/admin/hostel) --
    duplicated rather than imported because that route's version is
-   colocated with its own combo-shaped types; this is the one other
-   place that needs "which day" out of a ticket string. */
+   colocated with its own combo-shaped types. */
 function parseHostelDay(ticket: string): string | null {
   const text = ticket.toLowerCase();
 
@@ -74,15 +91,43 @@ function parseHostelDay(ticket: string): string | null {
   return null;
 }
 
+/*
+ * The state named on the hostel form. Only that form asks -- a
+ * regular event registration has no equivalent field at all, so
+ * "location" only ever comes from someone's own hostel booking.
+ */
+function locationFrom(raw: RawRegistration): string | null {
+  const field = raw?.field_values?.find((f) =>
+    /state/i.test(f.field_name ?? "")
+  );
+
+  return field?.field_value?.trim() || null;
+}
+
 async function buildReport(): Promise<ExternalReportRow[]> {
   const db = supabaseAdmin();
 
-  const { rows } = await readAll<Registration>((from, to) =>
-    db
-      .from("registrations")
-      .select("id,event_id,name,email,product_meta,raw_data")
-      .order("id", { ascending: true })
-      .range(from, to)
+  const [{ rows }, eventsResult] = await Promise.all([
+    readAll<Registration>((from, to) =>
+      db
+        .from("registrations")
+        .select(
+          "id,event_id,resolved_event_id,name,email,product_meta,raw_data"
+        )
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
+
+    db.from("events").select("event_id,name,team_size"),
+  ]);
+
+  if (eventsResult.error) throw eventsResult.error;
+
+  const eventsById = new Map<string, EventInfo>(
+    (eventsResult.data ?? []).map((row) => [
+      String(row.event_id),
+      { name: row.name, team_size: row.team_size },
+    ])
   );
 
   type Person = {
@@ -92,6 +137,8 @@ async function buildReport(): Promise<ExternalReportRow[]> {
     phone: string | null;
     hostelRegistrationId: number | null;
     hostelTicket: string;
+    location: string | null;
+    events: { name: string; isTeam: boolean }[];
   };
 
   const people = new Map<string, Person>();
@@ -106,35 +153,69 @@ async function buildReport(): Promise<ExternalReportRow[]> {
 
     const college = collegeFrom(raw);
     const phone = phoneFrom(raw);
-    const isHostel = String(row.event_id ?? "") === HOSTEL_EVENT_ID;
+
+    const rawEventId = String(row.event_id ?? "");
+    const isHostel = rawEventId === HOSTEL_EVENT_ID;
+    const isMerch = rawEventId === MERCH_EVENT_ID;
 
     const existing = people.get(email);
 
-    if (!existing) {
-      people.set(email, {
-        name: row.name || "",
-        email,
-        college,
-        phone: phone || null,
-        hostelRegistrationId: isHostel ? row.id : null,
-        hostelTicket: isHostel ? getTicket(row.product_meta) : "",
-      });
+    const person: Person =
+      existing ??
+      (() => {
+        const created: Person = {
+          name: row.name || "",
+          email,
+          college,
+          phone: phone || null,
+          hostelRegistrationId: null,
+          hostelTicket: "",
+          location: null,
+          events: [],
+        };
+
+        people.set(email, created);
+
+        return created;
+      })();
+
+    /* Later registrations only fill in what an earlier one left
+       blank -- the first non-empty answer wins, rather than a later
+       row silently overwriting a college someone already typed
+       correctly. */
+    if (!person.name && row.name) person.name = row.name;
+    if (!person.college && college) person.college = college;
+    if (!person.phone && phone) person.phone = phone;
+
+    if (isHostel) {
+      if (person.hostelRegistrationId === null) {
+        person.hostelRegistrationId = row.id;
+        person.hostelTicket = getTicket(row.product_meta);
+      }
+
+      if (!person.location) {
+        person.location = locationFrom(raw);
+      }
 
       continue;
     }
 
-    /* Later registrations only fill in what an earlier one left
-       blank -- the first non-empty answer for each field wins,
-       rather than the last registration silently overwriting a
-       college someone already typed correctly. */
-    if (!existing.name && row.name) existing.name = row.name;
-    if (!existing.college && college) existing.college = college;
-    if (!existing.phone && phone) existing.phone = phone;
+    /* Merchandise is not an event in the team/individual sense, so it
+       gets no row of its own here -- same reasoning the events list
+       already uses to keep it off /events. */
+    if (isMerch) continue;
 
-    if (isHostel && existing.hostelRegistrationId === null) {
-      existing.hostelRegistrationId = row.id;
-      existing.hostelTicket = getTicket(row.product_meta);
-    }
+    const eventInfo = row.resolved_event_id
+      ? eventsById.get(row.resolved_event_id)
+      : undefined;
+
+    const name =
+      eventInfo?.name || getTicket(row.product_meta) || "Unmapped ticket";
+
+    person.events.push({
+      name,
+      isTeam: isTeamEvent(eventInfo?.team_size),
+    });
   }
 
   const hostelRegistrationIds = [...people.values()]
@@ -171,47 +252,70 @@ async function buildReport(): Promise<ExternalReportRow[]> {
     }
   }
 
-  const report: ExternalReportRow[] = [...people.values()].map(
-    (person) => {
-      const scan =
+  const report: ExternalReportRow[] = [];
+
+  for (const person of people.values()) {
+    const scan =
+      person.hostelRegistrationId !== null
+        ? scanByRegistration.get(person.hostelRegistrationId)
+        : undefined;
+
+    const shared = {
+      name: person.name || "Unnamed",
+      email: person.email,
+      phone: person.phone,
+      college: person.college || "Not specified",
+      location: person.location,
+      hostelEnrolled: person.hostelRegistrationId !== null,
+      block: scan?.block ?? null,
+      room: scan?.room ?? null,
+      enteredAt: scan?.created_at ?? null,
+      exitedAt: scan?.exited_at ?? null,
+      daysRegistered:
         person.hostelRegistrationId !== null
-          ? scanByRegistration.get(person.hostelRegistrationId)
-          : undefined;
+          ? parseHostelDay(person.hostelTicket)
+          : null,
+    };
 
-      return {
-        name: person.name || "Unnamed",
-        email: person.email,
-        college: person.college || "Not specified",
-        phone: person.phone,
-        hostelEnrolled: person.hostelRegistrationId !== null,
-        block: scan?.block ?? null,
-        room: scan?.room ?? null,
-        enteredAt: scan?.created_at ?? null,
-        exitedAt: scan?.exited_at ?? null,
-        daysRegistered:
-          person.hostelRegistrationId !== null
-            ? parseHostelDay(person.hostelTicket)
-            : null,
-      };
+    if (person.events.length === 0) {
+      report.push({
+        ...shared,
+        teamOrIndividual: null,
+        eventName: null,
+      });
+
+      continue;
     }
-  );
 
-  report.sort((a, b) => a.name.localeCompare(b.name));
+    for (const event of person.events) {
+      report.push({
+        ...shared,
+        teamOrIndividual: event.isTeam ? "Team" : "Individual",
+        eventName: event.name,
+      });
+    }
+  }
+
+  report.sort(
+    (a, b) =>
+      a.name.localeCompare(b.name) ||
+      (a.eventName ?? "").localeCompare(b.eventName ?? "")
+  );
 
   return report;
 }
 
 /*
- * GET /api/admin/external-report        -- every external participant
+ * GET /api/admin/external-report        -- every external registration
  * GET /api/admin/external-report?xlsx=1 -- the same, as a spreadsheet
  *
- * "External" here means the same thing it means on /admin/external:
- * an email domain that is not @vitap.ac.in / @vitapstudent.ac.in, or a
- * university named on the form that does not resolve to VIT-AP --
- * across every registration they hold, not only a hostel booking.
- * Someone who only ever booked accommodation is still on this list;
- * someone who registered for an event and never touched the hostel
- * shows up with hostelEnrolled: false.
+ * "External" means the same thing it means on /admin/external: an
+ * email domain that is not @vitap.ac.in / @vitapstudent.ac.in, or a
+ * university named on the form that does not resolve to VIT-AP.
+ * One row per event a person entered, not per person -- someone in
+ * three events appears three times, each with the same contact and
+ * hostel details repeated, since those are true of them regardless of
+ * which row is showing.
  */
 export async function GET(request: Request) {
   const auth = await requireRole("admin", "registrations");
@@ -237,8 +341,11 @@ export async function GET(request: Request) {
     sheet.columns = [
       { header: "Name", key: "name", width: 28 },
       { header: "Email", key: "email", width: 32 },
-      { header: "College", key: "college", width: 32 },
       { header: "Phone", key: "phone", width: 16 },
+      { header: "Team / Individual", key: "teamOrIndividual", width: 16 },
+      { header: "Event", key: "eventName", width: 32 },
+      { header: "College", key: "college", width: 32 },
+      { header: "Location", key: "location", width: 18 },
       { header: "Enrolled in hostel", key: "hostelEnrolled", width: 18 },
       { header: "Block", key: "block", width: 14 },
       { header: "Room", key: "room", width: 10 },
@@ -254,19 +361,18 @@ export async function GET(request: Request) {
       sheet.addRow({
         name: row.name,
         email: row.email,
-        college: row.college,
         phone: row.phone ?? "",
+        teamOrIndividual: row.teamOrIndividual ?? "",
+        eventName: row.eventName ?? "",
+        college: row.college,
+        location: row.location ?? "",
         hostelEnrolled: row.hostelEnrolled ? "Yes" : "No",
-        block: row.hostelEnrolled
-          ? (row.block ?? "Not updated")
-          : "",
+        block: row.hostelEnrolled ? (row.block ?? "Not updated") : "",
         room: row.hostelEnrolled ? (row.room ?? "") : "",
         enteredAt: row.enteredAt
           ? formatDateTimeIst(row.enteredAt)
           : "",
-        exitedAt: row.exitedAt
-          ? formatDateTimeIst(row.exitedAt)
-          : "",
+        exitedAt: row.exitedAt ? formatDateTimeIst(row.exitedAt) : "",
         daysRegistered: row.daysRegistered ?? "",
       });
     }
