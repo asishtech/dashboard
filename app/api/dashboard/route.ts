@@ -467,6 +467,84 @@ async function readPeople(
   }
 }
 
+export type ExtrasSummary = {
+  hostel: {
+    registrations: number;
+    checkedIn: number;
+    inside: number;
+  };
+  external: {
+    people: number;
+  };
+};
+
+/*
+ * Hostel and external-participant counts.
+ *
+ * Kept separate from viaRpc/viaScan for the same reason readPeople()
+ * is: this answers a different question from the money and
+ * merchandise totals, and a problem here must never take those down
+ * with it -- every read degrades to zero rather than failing the
+ * request.
+ */
+const HOSTEL_EVENT_ID = "516";
+
+async function readExtras(
+  db: ReturnType<typeof supabaseAdmin>
+): Promise<ExtrasSummary> {
+  const empty: ExtrasSummary = {
+    hostel: { registrations: 0, checkedIn: 0, inside: 0 },
+    external: { people: 0 },
+  };
+
+  try {
+    const [hostelRegs, external] = await Promise.all([
+      db
+        .from("registrations")
+        .select("id")
+        .eq("event_id", HOSTEL_EVENT_ID),
+
+      /* 42883 / PGRST202: supabase/external-colleges.sql has not
+         been run. Zero is the honest answer until then. */
+      db.rpc("external_colleges"),
+    ]);
+
+    const hostelIds = (hostelRegs.data ?? []).map((row) => row.id);
+
+    let checkedIn = 0;
+    let inside = 0;
+
+    if (hostelIds.length > 0) {
+      const { data: scans } = await db
+        .from("qr_scans")
+        .select("exited_at")
+        .in("registration_id", hostelIds);
+
+      checkedIn = scans?.length ?? 0;
+      inside = (scans ?? []).filter((s) => !s.exited_at).length;
+    }
+
+    const externalPeople = external.error
+      ? 0
+      : Number(
+          (external.data as { totals?: { externalPeople?: number } })
+            ?.totals?.externalPeople ?? 0
+        );
+
+    return {
+      hostel: {
+        registrations: hostelIds.length,
+        checkedIn,
+        inside,
+      },
+      external: { people: externalPeople },
+    };
+  } catch (error) {
+    console.error("Extras summary failed:", error);
+    return empty;
+  }
+}
+
 export async function GET() {
   /* Read-only: the registrations desk sees these totals, and every
      route that changes them still requires "admin". */
@@ -481,9 +559,10 @@ export async function GET() {
   try {
     const db = supabaseAdmin();
 
-    const [summary, people] = await Promise.all([
+    const [summary, people, extras] = await Promise.all([
       (async () => (await viaRpc(db)) ?? (await viaScan(db)))(),
       readPeople(db),
+      readExtras(db),
     ]);
 
     return NextResponse.json(
@@ -491,6 +570,7 @@ export async function GET() {
         success: true,
         ...summary,
         ...people,
+        ...extras,
         responseTimeMs: Date.now() - started,
       },
       {

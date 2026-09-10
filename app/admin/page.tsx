@@ -91,6 +91,16 @@ type DashboardData = {
     byRole: Record<string, number>;
   };
 
+  hostel?: {
+    registrations: number;
+    checkedIn: number;
+    inside: number;
+  };
+
+  external?: {
+    people: number;
+  };
+
   responseTimeMs?: number;
 
 };
@@ -160,6 +170,9 @@ const LIVE_TABLES = [
   "registration_items",
   "distributions",
   "inventory",
+  /* Hostel check-in and exit -- otherwise the new Hostel section
+     would only ever move on the next poll or the next sync. */
+  "qr_scans",
   /*
    * Fires once after the V-TAPP sync fully completes, so this page
    * refreshes with the complete dataset rather than mid-sync data.
@@ -254,6 +267,14 @@ export default function AdminPage() {
     inactive: number;
     byRole: Record<string, number>;
   }>({ total: 0, active: 0, inactive: 0, byRole: {} });
+
+  const [hostel, setHostel] = useState({
+    registrations: 0,
+    checkedIn: 0,
+    inside: 0,
+  });
+
+  const [externalPeople, setExternalPeople] = useState(0);
 
   const [
     distribution,
@@ -354,6 +375,16 @@ export default function AdminPage() {
             byRole: {},
           }
         );
+
+        setHostel(
+          data.hostel ?? {
+            registrations: 0,
+            checkedIn: 0,
+            inside: 0,
+          }
+        );
+
+        setExternalPeople(Number(data.external?.people ?? 0));
 
         setDashboardTotalAmount(
           Number(
@@ -1256,6 +1287,80 @@ export default function AdminPage() {
             may add up to more than {staff.total}.
           </p>
         )}
+
+        {/* 5. Hostel --------------------------------------------- */}
+        <section className="section-header mt-8">
+          <h2 className="page-title" style={{ fontSize: "var(--text-xl)" }}>
+            Hostel
+          </h2>
+
+          <Link href="/admin/hostel" className="btn btn-ghost btn-sm">
+            Guests
+            <ArrowRightIcon size={13} />
+          </Link>
+        </section>
+
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">Registrations</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : hostel.registrations}
+            </strong>
+
+            <span className="stat-meta">Food &amp; accommodation</span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Checked in</span>
+
+            <strong className="stat-value stat-success">
+              {loading ? "—" : hostel.checkedIn}
+            </strong>
+
+            <span className="stat-meta">
+              {loading || hostel.registrations === 0
+                ? "No registrations yet"
+                : `${Math.round(
+                    (hostel.checkedIn / hostel.registrations) * 100
+                  )}% of registrations`}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Inside now</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : hostel.inside}
+            </strong>
+
+            <span className="stat-meta">Entered, not yet exited</span>
+          </div>
+        </section>
+
+        {/* 6. External participants ------------------------------ */}
+        <section className="section-header mt-8">
+          <h2 className="page-title" style={{ fontSize: "var(--text-xl)" }}>
+            External participants
+          </h2>
+
+          <Link href="/admin/external" className="btn btn-ghost btn-sm">
+            Colleges
+            <ArrowRightIcon size={13} />
+          </Link>
+        </section>
+
+        <section className="stat-grid">
+          <div className="stat stat-feature">
+            <span className="stat-label">People</span>
+
+            <strong className="stat-value">
+              {loading ? "—" : externalPeople}
+            </strong>
+
+            <span className="stat-meta">From outside VIT-AP</span>
+          </div>
+        </section>
 
       </div>
     </main>
