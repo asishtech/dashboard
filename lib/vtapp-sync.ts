@@ -1,4 +1,5 @@
 import { vtappApi } from "./env";
+import { MERCH_SOURCE_ID } from "./events";
 import { readAutoSend } from "./mail-settings";
 import {
   DAILY_CAP,
@@ -708,7 +709,22 @@ function prepare(
       raw_data: record,
     },
 
-    items: parseItems(ticket, size),
+    /*
+     * Only ever parsed for an actual merchandise order. parseItems()
+     * matches on substrings of the ticket text -- "cap", "hoodie",
+     * "polo" -- because that is what a merchandise ticket looks like,
+     * and nothing stops an *event* from being named in a way that
+     * happens to contain one of those substrings. "Escape Room" and
+     * "Tech Escape Quest" both contain "cap" inside "escape", and
+     * every one of their 205 registrations picked up a phantom Cap
+     * this way before this check existed -- inflating Cap's sold
+     * count on /admin/inventory by more than 4x, and appearing as an
+     * uncollectable "pending" item on every one of those bookings.
+     */
+    items:
+      String(record.event_id ?? "") === MERCH_SOURCE_ID
+        ? parseItems(ticket, size)
+        : [],
   };
 }
 
