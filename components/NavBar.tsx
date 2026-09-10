@@ -10,6 +10,7 @@ import {
   BoxIcon,
   InboxIcon,
   ListIcon,
+  LockIcon,
   PulseIcon,
   ScanIcon,
   SearchIcon,
@@ -73,6 +74,7 @@ const NAV: Record<Role, NavItem[]> = {
       label: "Coordinators",
       icon: UsersIcon,
     },
+    { href: "/admin/security", label: "Security", icon: LockIcon },
     MINE,
   ],
 

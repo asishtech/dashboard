@@ -204,6 +204,22 @@ export default function ExternalPage() {
               <DownloadIcon size={13} />
               Download as Excel
             </a>
+
+            {/*
+              A different sheet, not a filter on this one: one row per
+              person rather than per college, with contact details and
+              hostel status -- name, email, college, phone, whether
+              they are enrolled in the hostel and their block, room,
+              entry and exit time if so.
+            */}
+            <a
+              className="btn btn-ghost btn-sm"
+              href="/api/admin/external-report?xlsx=1"
+              download
+            >
+              <DownloadIcon size={13} />
+              Download full report
+            </a>
           </div>
         </header>
 
