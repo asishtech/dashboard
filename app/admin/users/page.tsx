@@ -76,11 +76,6 @@ const ROLES: { value: StaffRole; label: string; help: string }[] = [
     help: "Sees every event, order and collection. Changes nothing.",
   },
   {
-    value: "registrations",
-    label: "Registrations",
-    help: "Sees every event, order and collection. Changes nothing.",
-  },
-  {
     value: "buyer",
     label: "Buyer",
     help: "Only their own registrations.",
