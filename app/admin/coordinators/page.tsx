@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { useStepUp } from "@/lib/use-step-up";
+import { useSuperAdmin } from "@/lib/use-super-admin";
 import {
   AlertIcon,
   CheckIcon,
@@ -58,6 +59,7 @@ export default function CoordinatorsPage() {
   const [view, setView] = useState<"PEOPLE" | "GAPS">("PEOPLE");
 
   const { ensure: ensureStepUp, modal: stepUpModal } = useStepUp();
+  const { isSuperAdmin } = useSuperAdmin();
 
   const [directory, setDirectory] = useState<DirectoryEntry[]>([]);
   const [detailsAvailable, setDetailsAvailable] = useState(false);
@@ -242,7 +244,7 @@ export default function CoordinatorsPage() {
       return;
     }
 
-    if (!(await ensureStepUp())) return;
+    if (isSuperAdmin && !(await ensureStepUp())) return;
 
     try {
       setSaving(true);
@@ -281,7 +283,7 @@ export default function CoordinatorsPage() {
   }
 
   async function revoke(a: Assignment) {
-    if (!(await ensureStepUp())) return;
+    if (isSuperAdmin && !(await ensureStepUp())) return;
 
     setError("");
     setMessage("");

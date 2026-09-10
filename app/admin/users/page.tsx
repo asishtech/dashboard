@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import { useStepUp } from "@/lib/use-step-up";
+import { useSuperAdmin } from "@/lib/use-super-admin";
 import type { Role } from "@/lib/roles";
 import {
   AlertIcon,
@@ -92,6 +93,7 @@ export default function AdminUsersPage() {
   const [message, setMessage] = useState("");
 
   const { ensure: ensureStepUp, modal: stepUpModal } = useStepUp();
+  const { isSuperAdmin } = useSuperAdmin();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -264,7 +266,11 @@ export default function AdminUsersPage() {
       return;
     }
 
-    if (newRoles.includes("admin") && !(await ensureStepUp())) {
+    if (
+      newRoles.includes("admin") &&
+      isSuperAdmin &&
+      !(await ensureStepUp())
+    ) {
       return;
     }
 
@@ -327,7 +333,7 @@ export default function AdminUsersPage() {
       rolesOf(user).includes("admin") ||
       Boolean(patch.roles?.includes("admin"));
 
-    if (touchesAdmin && !(await ensureStepUp())) {
+    if (touchesAdmin && isSuperAdmin && !(await ensureStepUp())) {
       return;
     }
 
