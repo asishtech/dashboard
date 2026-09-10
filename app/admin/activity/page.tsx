@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { formatTimeIst } from "@/lib/format-time";
 import { AlertIcon, PulseIcon } from "@/components/icons";
 
 type Counts = {
@@ -132,7 +133,7 @@ export default function ActivityPage() {
 
             <p className="page-subtitle">
               {pulse
-                ? `Updated ${new Date(pulse.now).toLocaleTimeString("en-IN")}`
+                ? `Updated ${formatTimeIst(pulse.now)}`
                 : "What the site is doing right now"}
             </p>
           </div>
@@ -269,9 +270,7 @@ export default function ActivityPage() {
                           (point.n / peak) * 100
                         )}%`,
                       }}
-                      title={`${new Date(point.t).toLocaleTimeString(
-                        "en-IN"
-                      )} — ${point.n}`}
+                      title={`${formatTimeIst(point.t)} — ${point.n}`}
                     />
                   ))}
                 </div>

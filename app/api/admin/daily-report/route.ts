@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -318,7 +319,7 @@ export async function GET(request: Request) {
           item: row.item,
           size: row.size ?? "",
           quantity: row.quantity,
-          given_at: new Date(row.given_at).toLocaleString("en-IN"),
+          given_at: formatDateTimeIst(row.given_at),
         });
       }
 
@@ -399,9 +400,9 @@ export async function GET(request: Request) {
         phone: row.phone ?? "",
         block: row.block ?? "Not updated",
         room: row.room ?? "",
-        entered_at: new Date(row.entered_at).toLocaleString("en-IN"),
+        entered_at: formatDateTimeIst(row.entered_at),
         exited_at: row.exited_at
-          ? new Date(row.exited_at).toLocaleString("en-IN")
+          ? formatDateTimeIst(row.exited_at)
           : "",
       });
     }

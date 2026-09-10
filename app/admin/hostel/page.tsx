@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { DownloadIcon, SearchIcon } from "@/components/icons";
 import type { HostelGuest } from "@/app/api/admin/hostel/route";
 
@@ -79,7 +80,7 @@ export default function HostelPage() {
   }, [guests, search]);
 
   const formatTime = (value: string) =>
-    new Date(value).toLocaleString("en-IN", {
+    formatDateTimeIst(value, {
       dateStyle: "medium",
       timeStyle: "short",
     });

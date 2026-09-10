@@ -1,6 +1,7 @@
 "use client";
 
 import NavBar from "@/components/NavBar";
+import { formatDateTimeIst, formatTimeIst } from "@/lib/format-time";
 import { DeskSearch, type Person } from "@/components/DeskSearch";
 import { CheckIcon, SearchIcon } from "@/components/icons";
 
@@ -95,9 +96,7 @@ function Whereabouts({ person }: { person: Person }) {
                 .filter(Boolean)
                 .join(" · ")}
               {current.entered_at &&
-                ` — admitted ${new Date(
-                  current.entered_at
-                ).toLocaleString("en-IN")}`}
+                ` — admitted ${formatDateTimeIst(current.entered_at)}`}
             </span>
           </div>
         ) : (
@@ -156,9 +155,7 @@ function Whereabouts({ person }: { person: Person }) {
                     {pass.entered_at ? (
                       <span className="badge badge-success">
                         <CheckIcon size={12} />{" "}
-                        {new Date(
-                          pass.entered_at
-                        ).toLocaleTimeString("en-IN")}
+                        {formatTimeIst(pass.entered_at)}
                       </span>
                     ) : (
                       <span className="badge badge-plain">

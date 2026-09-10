@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import NavBar from "@/components/NavBar";
+import { formatTimeIst } from "@/lib/format-time";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
@@ -730,14 +731,11 @@ export default function AdminPage() {
       return "Not available";
     }
 
-    return date.toLocaleTimeString(
-      "en-IN",
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }
-    );
+    return formatTimeIst(date, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   };
 
 

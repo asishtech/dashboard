@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { useLiveRefresh } from "@/lib/use-realtime";
 import {
   AlertIcon,
@@ -278,7 +279,7 @@ export default function RegistrationsPage() {
   }, [filtered]);
 
   const formatTime = (value: string) =>
-    new Date(value).toLocaleString("en-IN", {
+    formatDateTimeIst(value, {
       dateStyle: "medium",
       timeStyle: "short",
     });

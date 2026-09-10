@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { formatDateTimeIst, formatTimeIst } from "@/lib/format-time";
 import type { Pass, Person } from "@/components/DeskSearch";
 import { CheckIcon } from "@/components/icons";
 import { LivePhotoCapture } from "@/components/LivePhotoCapture";
@@ -119,9 +120,7 @@ export function ExternalDeskCard({
       if (!response.ok) {
         throw new Error(
           data.alreadyInside
-            ? `Already inside since ${new Date(
-                data.enteredAt
-              ).toLocaleTimeString("en-IN")}`
+            ? `Already inside since ${formatTimeIst(data.enteredAt)}`
             : data.error || "Could not record that"
         );
       }
@@ -174,9 +173,7 @@ export function ExternalDeskCard({
       if (!response.ok) {
         throw new Error(
           data.alreadyEntered
-            ? `Already admitted at ${new Date(
-                data.enteredAt
-              ).toLocaleTimeString("en-IN")}`
+            ? `Already admitted at ${formatTimeIst(data.enteredAt)}`
             : data.error ||
               `Could not mark ${action === "exit" ? "exit" : "entry"}`
         );
@@ -185,9 +182,7 @@ export function ExternalDeskCard({
       setNote(
         action === "exit"
           ? data.alreadyExited
-            ? `Already marked out at ${new Date(
-                data.exitedAt
-              ).toLocaleTimeString("en-IN")}`
+            ? `Already marked out at ${formatTimeIst(data.exitedAt)}`
             : `Marked out of ${pass.event_name ?? "the event"}.`
           : `Admitted to ${pass.event_name ?? "the event"}.`
       );
@@ -267,7 +262,7 @@ export function ExternalDeskCard({
           {person.id_checked && person.id_checked_at && (
             <span className="row-meta">
               Seen{" "}
-              {new Date(person.id_checked_at).toLocaleString("en-IN")}
+              {formatDateTimeIst(person.id_checked_at)}
             </span>
           )}
         </div>
@@ -343,9 +338,7 @@ export function ExternalDeskCard({
               <>
                 <span className="badge badge-success">
                   <CheckIcon size={12} /> Inside since{" "}
-                  {new Date(
-                    person.gate_entered_at as string
-                  ).toLocaleTimeString("en-IN")}
+                  {formatTimeIst(person.gate_entered_at as string)}
                 </span>
 
                 <button
@@ -407,16 +400,12 @@ export function ExternalDeskCard({
                   pass.exited_at ? (
                     <span className="badge badge-plain">
                       Left{" "}
-                      {new Date(pass.exited_at).toLocaleTimeString(
-                        "en-IN"
-                      )}
+                      {formatTimeIst(pass.exited_at)}
                     </span>
                   ) : pass.entered_at ? (
                     <span className="badge badge-success">
                       <CheckIcon size={12} /> In at{" "}
-                      {new Date(pass.entered_at).toLocaleTimeString(
-                        "en-IN"
-                      )}
+                      {formatTimeIst(pass.entered_at)}
                     </span>
                   ) : (
                     <span className="badge badge-plain">
@@ -428,17 +417,13 @@ export function ExternalDeskCard({
                      a single tick would have made identical. */
                   <span className="badge badge-plain">
                     Left{" "}
-                    {new Date(pass.exited_at).toLocaleTimeString(
-                      "en-IN"
-                    )}
+                    {formatTimeIst(pass.exited_at)}
                   </span>
                 ) : pass.entered_at ? (
                   <>
                     <span className="badge badge-success">
                       <CheckIcon size={12} /> In at{" "}
-                      {new Date(pass.entered_at).toLocaleTimeString(
-                        "en-IN"
-                      )}
+                      {formatTimeIst(pass.entered_at)}
                     </span>
 
                     <button

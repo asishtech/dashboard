@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { formatDateTimeIst } from "@/lib/format-time";
 import {
   collegeFrom,
   emailFrom,
@@ -261,10 +262,10 @@ export async function GET(request: Request) {
           : "",
         room: row.hostelEnrolled ? (row.room ?? "") : "",
         enteredAt: row.enteredAt
-          ? new Date(row.enteredAt).toLocaleString("en-IN")
+          ? formatDateTimeIst(row.enteredAt)
           : "",
         exitedAt: row.exitedAt
-          ? new Date(row.exitedAt).toLocaleString("en-IN")
+          ? formatDateTimeIst(row.exitedAt)
           : "",
         daysRegistered: row.daysRegistered ?? "",
       });

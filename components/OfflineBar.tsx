@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatDateTimeIst } from "@/lib/format-time";
 import {
   flushQueue,
   loadPasses,
@@ -180,7 +181,7 @@ export default function OfflineBar() {
       {!online && cachedAt && (
         <span className="dim">
           list from{" "}
-          {new Date(cachedAt).toLocaleString("en-IN", {
+          {formatDateTimeIst(cachedAt, {
             dateStyle: "short",
             timeStyle: "short",
           })}

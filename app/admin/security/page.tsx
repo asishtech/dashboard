@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { formatDateIst } from "@/lib/format-time";
 import { useStepUp } from "@/lib/use-step-up";
 import {
   AlertIcon,
@@ -254,10 +255,9 @@ export default function SecurityPage() {
 
                         <div className="scan-item-meta">
                           Added{" "}
-                          {new Date(row.added_at).toLocaleDateString(
-                            "en-IN",
-                            { dateStyle: "medium" }
-                          )}
+                          {formatDateIst(row.added_at, {
+                            dateStyle: "medium",
+                          })}
                           {row.added_by ? ` by ${row.added_by}` : ""}
                         </div>
                       </div>
@@ -412,9 +412,7 @@ export default function SecurityPage() {
 
                       <td>
                         {person.enrolledAt
-                          ? new Date(
-                              person.enrolledAt
-                            ).toLocaleDateString("en-IN", {
+                          ? formatDateIst(person.enrolledAt, {
                               dateStyle: "medium",
                             })
                           : "—"}

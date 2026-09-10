@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import type SMTPPool from "nodemailer/lib/smtp-pool";
 import { mailConfig } from "./env";
+import { formatDateTimeIst } from "./format-time";
 import { escape, shell } from "./mail-templates";
 import { supabaseAdmin } from "./supabase";
 import { buildPassPdf, type Pass } from "./pass-pdf";
@@ -476,7 +477,7 @@ export async function sendTest(to: string): Promise<SendResult> {
     return { status: "skipped", reason: "Mail is not configured" };
   }
 
-  const now = new Date().toLocaleString("en-IN", {
+  const now = formatDateTimeIst(new Date(), {
     dateStyle: "medium",
     timeStyle: "short",
   });

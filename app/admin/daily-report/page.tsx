@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { formatDateIst } from "@/lib/format-time";
 import { AlertIcon, DownloadIcon } from "@/components/icons";
 
 type Domain = "merch" | "hostel";
@@ -166,10 +167,9 @@ export default function DailyReportPage() {
                 <p className="mb-4">
                   <strong>{preview.count}</strong> item
                   {preview.count === 1 ? "" : "s"} collected on{" "}
-                  {new Date(`${date}T00:00:00`).toLocaleDateString(
-                    "en-IN",
-                    { dateStyle: "full" }
-                  )}
+                  {formatDateIst(`${date}T00:00:00+05:30`, {
+                    dateStyle: "full",
+                  })}
                   .
                 </p>
 
@@ -213,10 +213,9 @@ export default function DailyReportPage() {
               <p>
                 <strong>{preview.total}</strong> check-in
                 {preview.total === 1 ? "" : "s"} on{" "}
-                {new Date(`${date}T00:00:00`).toLocaleDateString(
-                  "en-IN",
-                  { dateStyle: "full" }
-                )}
+                {formatDateIst(`${date}T00:00:00+05:30`, {
+                  dateStyle: "full",
+                })}
                 .
               </p>
             ) : null}

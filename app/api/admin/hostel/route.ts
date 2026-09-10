@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { originFrom } from "@/lib/form-fields";
 import { publicOrigin } from "@/lib/origin";
 import { readAll } from "@/lib/paged";
@@ -295,10 +296,10 @@ export async function GET(request: Request) {
         block: guest.block ?? "",
         room: guest.room ?? "",
         entered_at: guest.entered_at
-          ? new Date(guest.entered_at).toLocaleString("en-IN")
+          ? formatDateTimeIst(guest.entered_at)
           : "",
         exited_at: guest.exited_at
-          ? new Date(guest.exited_at).toLocaleString("en-IN")
+          ? formatDateTimeIst(guest.exited_at)
           : "",
       });
     }

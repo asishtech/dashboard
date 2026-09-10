@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatTimeIst } from "@/lib/format-time";
 import { CheckIcon } from "@/components/icons";
 
 export type RosterPass = {
@@ -93,9 +94,7 @@ export function CollegeRoster({
       if (!response.ok) {
         throw new Error(
           data.alreadyInside
-            ? `Already inside since ${new Date(
-                data.enteredAt
-              ).toLocaleTimeString("en-IN")}`
+            ? `Already inside since ${formatTimeIst(data.enteredAt)}`
             : data.error || "That did not work"
         );
       }
@@ -139,9 +138,7 @@ export function CollegeRoster({
       if (!response.ok) {
         throw new Error(
           data.alreadyEntered
-            ? `Already admitted at ${new Date(
-                data.enteredAt
-              ).toLocaleTimeString("en-IN")}`
+            ? `Already admitted at ${formatTimeIst(data.enteredAt)}`
             : data.error || "That did not work"
         );
       }
@@ -149,9 +146,7 @@ export function CollegeRoster({
       setNote(
         action === "exit"
           ? data.alreadyExited
-            ? `Already marked out at ${new Date(
-                data.exitedAt
-              ).toLocaleTimeString("en-IN")}`
+            ? `Already marked out at ${formatTimeIst(data.exitedAt)}`
             : `Marked out of ${pass.event_name ?? "the event"}`
           : `Admitted to ${pass.event_name ?? "the event"}`
       );
@@ -264,9 +259,7 @@ export function CollegeRoster({
                     <>
                       <span className="badge badge-success">
                         <CheckIcon size={12} /> Inside since{" "}
-                        {new Date(
-                          person.gate_entered_at
-                        ).toLocaleTimeString("en-IN")}
+                        {formatTimeIst(person.gate_entered_at)}
                       </span>
 
                       <button
@@ -313,16 +306,12 @@ export function CollegeRoster({
                     left ? (
                       <span className="badge badge-plain">
                         Left{" "}
-                        {new Date(
-                          pass.exited_at as string
-                        ).toLocaleTimeString("en-IN")}
+                        {formatTimeIst(pass.exited_at as string)}
                       </span>
                     ) : entered ? (
                       <span className="badge badge-success">
                         <CheckIcon size={12} /> In at{" "}
-                        {new Date(
-                          pass.entered_at as string
-                        ).toLocaleTimeString("en-IN")}
+                        {formatTimeIst(pass.entered_at as string)}
                       </span>
                     ) : (
                       <span className="badge badge-plain">
@@ -332,9 +321,7 @@ export function CollegeRoster({
                   ) : left ? (
                     <span className="badge badge-plain">
                       Left{" "}
-                      {new Date(
-                        pass.exited_at as string
-                      ).toLocaleTimeString("en-IN")}
+                      {formatTimeIst(pass.exited_at as string)}
                     </span>
                   ) : entered ? (
                     <button
@@ -370,9 +357,7 @@ export function CollegeRoster({
                   {canAdmitEvents && entered && !left && (
                     <span className="badge badge-success">
                       <CheckIcon size={12} /> In since{" "}
-                      {new Date(
-                        pass.entered_at as string
-                      ).toLocaleTimeString("en-IN")}
+                      {formatTimeIst(pass.entered_at as string)}
                     </span>
                   )}
                 </div>

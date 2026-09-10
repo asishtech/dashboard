@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { allowedEventIds, requireRole } from "@/lib/auth";
 import { classifyPricing, type Pricing } from "@/lib/event-pricing";
 import { merchandiseEventIds } from "@/lib/events";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { supabaseAdmin } from "@/lib/supabase";
 import { isTeamEvent, maxTeamSize } from "@/lib/team-events";
 import {
@@ -595,11 +596,9 @@ export async function GET(request: Request) {
           college: collegeFrom(raw),
           registration_id: person.registration_id ?? "",
           registered: person.created_at
-            ? new Date(person.created_at).toLocaleString("en-IN")
+            ? formatDateTimeIst(person.created_at)
             : "",
-          checkedIn: entered
-            ? new Date(entered).toLocaleString("en-IN")
-            : "",
+          checkedIn: entered ? formatDateTimeIst(entered) : "",
         };
       });
 

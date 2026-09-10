@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NavBar from "@/components/NavBar";
 import OfflineBar from "@/components/OfflineBar";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { findPass, isQueued, queueEntry } from "@/lib/offline";
 import { AlertIcon, CheckIcon, ScanIcon } from "@/components/icons";
 
@@ -619,7 +620,7 @@ export default function VolunteerPage() {
   }
 
   const formatTime = (value: string) =>
-    new Date(value).toLocaleString("en-IN", {
+    formatDateTimeIst(value, {
       dateStyle: "medium",
       timeStyle: "short",
     });

@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import NavBar from "@/components/NavBar";
+import { formatDateTimeIst } from "@/lib/format-time";
 import { AlertIcon } from "@/components/icons";
 
 type Queue = {
@@ -723,9 +724,7 @@ export default function NotificationsPage() {
 
                 <span className="stat-meta">
                   {queue.lastSentAt
-                    ? `Last ${new Date(
-                        queue.lastSentAt
-                      ).toLocaleString("en-IN")}`
+                    ? `Last ${formatDateTimeIst(queue.lastSentAt)}`
                     : "None yet"}
                 </span>
               </div>
@@ -881,9 +880,7 @@ export default function NotificationsPage() {
 
                           <div className="row-meta">
                             {person.lastSentAt
-                              ? `Last sent ${new Date(
-                                  person.lastSentAt
-                                ).toLocaleString("en-IN")}`
+                              ? `Last sent ${formatDateTimeIst(person.lastSentAt)}`
                               : "Never sent"}
                           </div>
                         </div>
@@ -1207,9 +1204,7 @@ export default function NotificationsPage() {
                     <>
                       On since{" "}
                       {queue.autoSend.enabledAt
-                        ? new Date(
-                            queue.autoSend.enabledAt
-                          ).toLocaleString("en-IN")
+                        ? formatDateTimeIst(queue.autoSend.enabledAt)
                         : "just now"}
                       . Only registrations created after that moment
                       are sent automatically, up to 15 per sync. The{" "}
