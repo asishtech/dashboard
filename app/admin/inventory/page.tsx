@@ -53,6 +53,13 @@ export default function InventoryPage() {
   const [message, setMessage] = useState("");
   const [sizeMessage, setSizeMessage] = useState("");
 
+  /* A size nobody has bought yet, being capped before the first
+     order rather than edited after it. */
+  const [newSizeItem, setNewSizeItem] = useState("");
+  const [newSizeSize, setNewSizeSize] = useState("");
+  const [newSizeStock, setNewSizeStock] = useState("");
+  const [addingSize, setAddingSize] = useState(false);
+
   const { ensure: ensureStepUp, modal: stepUpModal } = useStepUp();
   const { isSuperAdmin } = useSuperAdmin();
 
@@ -339,6 +346,65 @@ export default function InventoryPage() {
       );
     } finally {
       setSizeSaving(false);
+    }
+  }
+
+  /*
+   * Cap a size before the first order against it. saveSizeStock()
+   * above only ever edits a row already in `sizes`, which -- until
+   * merchandise_by_size() started including inventory_sizes rows with
+   * nothing sold -- meant a combination with zero sales had no row to
+   * edit at all. This sends the same PUT shape as a batch of one.
+   */
+  async function addNewSize(event: React.FormEvent) {
+    event.preventDefault();
+
+    const item = newSizeItem.trim();
+    const size = newSizeSize.trim().toUpperCase();
+    const stock = Number(newSizeStock);
+
+    if (!item || !size) {
+      setSizeMessage("Pick an item and type a size.");
+      return;
+    }
+
+    if (!Number.isFinite(stock) || stock < 0) {
+      setSizeMessage("Stock must be zero or a positive number.");
+      return;
+    }
+
+    if (isSuperAdmin && !(await ensureStepUp())) return;
+
+    setAddingSize(true);
+    setSizeMessage("");
+
+    try {
+      const response = await fetch("/api/inventory", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sizes: [{ item, size, initial_stock: stock }],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add that size");
+      }
+
+      setSizeMessage(`${item} (${size}) capped at ${stock}.`);
+      setNewSizeItem("");
+      setNewSizeSize("");
+      setNewSizeStock("");
+
+      await loadInventory();
+    } catch (error) {
+      setSizeMessage(
+        error instanceof Error ? error.message : "Failed to add that size"
+      );
+    } finally {
+      setAddingSize(false);
     }
   }
 
@@ -680,6 +746,90 @@ export default function InventoryPage() {
                   )}
                   <span>{sizeMessage}</span>
                 </div>
+              </div>
+            )}
+
+            {canEdit && (
+              <div className="panel-body">
+                <p className="panel-subtitle mb-4">
+                  Cap a size before it has sold anything -- to set a
+                  limit, or to block it at 0.
+                </p>
+
+                <form
+                  onSubmit={(event) => void addNewSize(event)}
+                  style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                >
+                  <label className="sr-only" htmlFor="new-size-item">
+                    Item
+                  </label>
+
+                  <select
+                    id="new-size-item"
+                    className="select"
+                    value={newSizeItem}
+                    onChange={(event) =>
+                      setNewSizeItem(event.target.value)
+                    }
+                    disabled={addingSize}
+                  >
+                    <option value="">Item...</option>
+                    {inventory.map((item) => (
+                      <option key={item.id} value={item.item}>
+                        {item.item}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="sr-only" htmlFor="new-size-size">
+                    Size
+                  </label>
+
+                  <input
+                    id="new-size-size"
+                    className="input"
+                    style={{ maxWidth: 140 }}
+                    placeholder="Size (e.g. M, FREE SIZE)"
+                    value={newSizeSize}
+                    onChange={(event) =>
+                      setNewSizeSize(event.target.value)
+                    }
+                    disabled={addingSize}
+                  />
+
+                  <label className="sr-only" htmlFor="new-size-stock">
+                    Stock
+                  </label>
+
+                  <input
+                    id="new-size-stock"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    className="input input-num"
+                    style={{ maxWidth: 100 }}
+                    placeholder="Stock"
+                    value={newSizeStock}
+                    onChange={(event) =>
+                      setNewSizeStock(event.target.value)
+                    }
+                    disabled={addingSize}
+                  />
+
+                  <button
+                    type="submit"
+                    className="btn btn-sm"
+                    disabled={
+                      addingSize ||
+                      !newSizeItem ||
+                      !newSizeSize.trim() ||
+                      newSizeStock === ""
+                    }
+                  >
+                    {addingSize && <span className="btn-spinner" />}
+                    {addingSize ? "Adding..." : "Add"}
+                  </button>
+                </form>
               </div>
             )}
 
