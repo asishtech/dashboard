@@ -49,6 +49,7 @@ function readOnlyAdminPath(path: string) {
     path === "/admin/merchandise" ||
     path === "/admin/external" ||
     path === "/admin/hostel" ||
+    path === "/admin/daily-report" ||
     path === "/admin/whereabouts"
   );
 }

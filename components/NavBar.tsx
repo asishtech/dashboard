@@ -8,6 +8,7 @@ import RoleSwitcher from "@/components/RoleSwitcher";
 import {
   BedIcon,
   BoxIcon,
+  DownloadIcon,
   InboxIcon,
   ListIcon,
   LockIcon,
@@ -66,6 +67,11 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
     { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
+    {
+      href: "/admin/daily-report",
+      label: "Daily report",
+      icon: DownloadIcon,
+    },
     { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/notifications", label: "Mail", icon: InboxIcon },
     { href: "/admin/users", label: "Staff", icon: UsersIcon },
@@ -118,6 +124,11 @@ const NAV: Record<Role, NavItem[]> = {
     },
     { href: "/admin/external", label: "External", icon: UsersIcon },
     { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
+    {
+      href: "/admin/daily-report",
+      label: "Daily report",
+      icon: DownloadIcon,
+    },
     { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
     { href: "/admin/activity", label: "Live", icon: PulseIcon },
     MINE,
