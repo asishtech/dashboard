@@ -1,9 +1,20 @@
 import { supabaseAdmin } from "@/lib/supabase";
 
 /*
- * Upstream V-TAPP buckets: 513 is merchandise, 514 is events.
+ * Upstream V-TAPP buckets: 513 is merchandise, 514 is events,
+ * 516 is hostel (food & accommodation).
  */
 export const MERCH_SOURCE_ID = "513";
+
+/*
+ * Unlike merchandise, hostel is a real upstream event -- it has its
+ * own row in `events`, synced like any other -- so resolve_event()
+ * (supabase/hostel-resolve.sql) maps it to itself rather than to a
+ * synthetic slug. That row belongs to the Hostel screen, not the
+ * general events list, for the same reason merchandise's does: it has
+ * its own screen already.
+ */
+export const HOSTEL_SOURCE_ID = "516";
 
 /* Slug the seed gives the merchandise row, used only as a fallback. */
 const MERCH_SLUG = "merchandise";

@@ -5,7 +5,7 @@ import {
   isMixed,
   type Pricing,
 } from "@/lib/event-pricing";
-import { merchandiseEventIds } from "@/lib/events";
+import { HOSTEL_SOURCE_ID, merchandiseEventIds } from "@/lib/events";
 import { isTeamEvent } from "@/lib/team-events";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -111,9 +111,16 @@ export async function GET(request: Request) {
      * something to browse alongside Art Attack. It has its own screens
      * (Registrations, Inventory), so it is dropped here -- which also
      * keeps the revenue total on this page to actual event revenue.
+     *
+     * Hostel is a real upstream event, not plumbing, but it gets the
+     * same treatment: it has its own screen (Hostel), and counting
+     * food-and-accommodation payments as "event revenue" here would
+     * double against that screen's own totals.
      */
     const all = ((summaries.data ?? []) as EventSummary[]).filter(
-      (event) => !merchIds.has(String(event.event_id))
+      (event) =>
+        !merchIds.has(String(event.event_id)) &&
+        String(event.event_id) !== HOSTEL_SOURCE_ID
     );
 
     const events =

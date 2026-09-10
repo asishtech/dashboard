@@ -22,7 +22,17 @@ type ScopeEvent = {
   name: string;
   day: string | null;
   isMerch: boolean;
+  isHostel: boolean;
 };
+
+/* The upstream name is long and internal ("V-TAPP 2026 External
+   Student Participation food and accommodation"); the screen it has
+   is just called Hostel, so the scope picker calls it that too. */
+function scopeLabel(event: ScopeEvent) {
+  if (event.isMerch) return "Merchandise counter";
+  if (event.isHostel) return "Hostel";
+  return event.name;
+}
 
 type StaffUser = {
   id: number;
@@ -777,12 +787,13 @@ export default function AdminUsersPage() {
                         <>
                           Scans{" "}
                           {scope
-                            .map(
-                              (id) =>
-                                scopeEvents.find(
-                                  (e) => e.event_id === id
-                                )?.name ?? id
-                            )
+                            .map((id) => {
+                              const event = scopeEvents.find(
+                                (e) => e.event_id === id
+                              );
+
+                              return event ? scopeLabel(event) : id;
+                            })
                             .join(", ")}
                         </>
                       )}
@@ -831,7 +842,7 @@ export default function AdminUsersPage() {
                       {scopeEvents
                         .filter((event) =>
                           scopeQuery.trim()
-                            ? event.name
+                            ? scopeLabel(event)
                                 .toLowerCase()
                                 .includes(
                                   scopeQuery.trim().toLowerCase()
@@ -864,9 +875,7 @@ export default function AdminUsersPage() {
                                   )
                                 }
                               />
-                              {event.isMerch
-                                ? "Merchandise counter"
-                                : event.name}
+                              {scopeLabel(event)}
                             </label>
                           );
                         })}

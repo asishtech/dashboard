@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
-import { merchandiseEventIds } from "@/lib/events";
+import { HOSTEL_SOURCE_ID, merchandiseEventIds } from "@/lib/events";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -76,13 +76,14 @@ export async function GET() {
         email,
         eventIds,
       })),
-      /* Merchandise is listed like any other event, because that is
-         exactly what it is here: a scope of one. */
+      /* Merchandise and Hostel are listed like any other event,
+         because that is exactly what they are here: a scope of one. */
       events: (events.data ?? []).map((event) => ({
         event_id: String(event.event_id),
         name: String(event.name),
         day: event.day ?? null,
         isMerch: merch.has(String(event.event_id)),
+        isHostel: String(event.event_id) === HOSTEL_SOURCE_ID,
       })),
     });
   } catch (error) {
