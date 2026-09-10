@@ -3,14 +3,32 @@
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { useStepUp } from "@/lib/use-step-up";
-import { AlertIcon, CheckIcon, LockIcon } from "@/components/icons";
+import {
+  AlertIcon,
+  CheckIcon,
+  LockIcon,
+} from "@/components/icons";
 import type { StaffTwoFactor } from "@/app/api/admin/security/route";
+
+type SuperAdminRow = {
+  email: string;
+  added_at: string;
+  added_by: string | null;
+};
 
 export default function SecurityPage() {
   const [staff, setStaff] = useState<StaffTwoFactor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  const [superAdmins, setSuperAdmins] = useState<SuperAdminRow[]>([]);
+  const [canManage, setCanManage] = useState(false);
+  const [allowlistLoading, setAllowlistLoading] = useState(true);
+  const [allowlistError, setAllowlistError] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [allowlistBusy, setAllowlistBusy] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const { ensure: ensureStepUp, modal: stepUpModal } = useStepUp();
 
@@ -41,8 +59,38 @@ export default function SecurityPage() {
     }
   }
 
+  async function loadAllowlist() {
+    setAllowlistLoading(true);
+    setAllowlistError("");
+
+    try {
+      const response = await fetch("/api/admin/super-admins", {
+        cache: "no-store",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to read the allowlist");
+      }
+
+      setSuperAdmins(data.superAdmins ?? []);
+      setCanManage(Boolean(data.canManage));
+    } catch (err) {
+      setAllowlistError(
+        err instanceof Error ? err.message : "Unable to read this"
+      );
+    } finally {
+      setAllowlistLoading(false);
+    }
+  }
+
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
+    const timer = window.setTimeout(() => {
+      void load();
+      void loadAllowlist();
+    }, 0);
+
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -57,6 +105,80 @@ export default function SecurityPage() {
       );
 
       await load();
+    }
+  }
+
+  async function addToAllowlist(event: React.FormEvent) {
+    event.preventDefault();
+
+    const email = newEmail.trim().toLowerCase();
+
+    if (!email) return;
+
+    if (!(await ensureStepUp())) return;
+
+    setAllowlistBusy(true);
+    setAllowlistError("");
+
+    try {
+      const response = await fetch("/api/admin/super-admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to add that email");
+      }
+
+      setNewEmail("");
+      await loadAllowlist();
+    } catch (err) {
+      setAllowlistError(
+        err instanceof Error ? err.message : "Unable to add that email"
+      );
+    } finally {
+      setAllowlistBusy(false);
+    }
+  }
+
+  async function removeFromAllowlist(email: string) {
+    if (
+      !window.confirm(
+        `Remove ${email} from this list? They will keep the admin role, but will no longer be able to change inventory or grant admin/coordinator access.`
+      )
+    ) {
+      return;
+    }
+
+    if (!(await ensureStepUp())) return;
+
+    setRemoving(email);
+    setAllowlistError("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/super-admins?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to remove that email");
+      }
+
+      await loadAllowlist();
+    } catch (err) {
+      setAllowlistError(
+        err instanceof Error
+          ? err.message
+          : "Unable to remove that email"
+      );
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -76,8 +198,9 @@ export default function SecurityPage() {
             <h1 className="page-title">Two-factor authentication</h1>
 
             <p className="page-subtitle">
-              Required for inventory changes and for granting or
-              editing admin and coordinator access
+              Two-factor is required for inventory changes and for
+              granting or editing admin and coordinator access; those
+              same actions are also restricted to the list below
             </p>
           </div>
         </header>
@@ -88,6 +211,114 @@ export default function SecurityPage() {
             <span>{error}</span>
           </div>
         )}
+
+        <section className="panel mb-6">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Restricted actions</h2>
+
+              <p className="panel-subtitle">
+                Only these accounts may change inventory or grant and
+                edit admin/coordinator access, whether or not they
+                also hold the admin role
+              </p>
+            </div>
+          </div>
+
+          {allowlistError && (
+            <div className="panel-body">
+              <div className="banner banner-danger" role="alert">
+                <AlertIcon size={18} />
+                <span>{allowlistError}</span>
+              </div>
+            </div>
+          )}
+
+          {allowlistLoading ? (
+            <div className="panel-body stack">
+              <div className="skeleton skeleton-line" />
+              <div className="skeleton skeleton-line" />
+            </div>
+          ) : (
+            <>
+              <div className="panel-body stack-tight stack">
+                {superAdmins.length === 0 ? (
+                  <p className="help">Nobody is on this list yet.</p>
+                ) : (
+                  superAdmins.map((row) => (
+                    <div key={row.email} className="scan-item">
+                      <div>
+                        <div className="scan-item-name">
+                          {row.email}
+                        </div>
+
+                        <div className="scan-item-meta">
+                          Added{" "}
+                          {new Date(row.added_at).toLocaleDateString(
+                            "en-IN",
+                            { dateStyle: "medium" }
+                          )}
+                          {row.added_by ? ` by ${row.added_by}` : ""}
+                        </div>
+                      </div>
+
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          disabled={removing === row.email}
+                          onClick={() =>
+                            void removeFromAllowlist(row.email)
+                          }
+                        >
+                          {removing === row.email
+                            ? "Removing..."
+                            : "Remove"}
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {canManage ? (
+                <form
+                  className="panel-footer"
+                  onSubmit={(event) => void addToAllowlist(event)}
+                  style={{ display: "flex", gap: 8 }}
+                >
+                  <label className="sr-only" htmlFor="new-super-admin">
+                    Email to add
+                  </label>
+
+                  <input
+                    id="new-super-admin"
+                    type="email"
+                    className="input"
+                    placeholder="someone@vitapstudent.ac.in"
+                    value={newEmail}
+                    onChange={(event) => setNewEmail(event.target.value)}
+                    disabled={allowlistBusy}
+                  />
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={allowlistBusy || !newEmail.trim()}
+                  >
+                    {allowlistBusy && <span className="btn-spinner" />}
+                    {allowlistBusy ? "Adding..." : "Add"}
+                  </button>
+                </form>
+              ) : (
+                <p className="help mt-4">
+                  Only accounts already on this list can add or remove
+                  others.
+                </p>
+              )}
+            </>
+          )}
+        </section>
 
         <section className="panel mb-6">
           <div className="panel-header">

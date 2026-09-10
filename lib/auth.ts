@@ -294,6 +294,66 @@ export async function requireAal2(): Promise<NextResponse | null> {
 }
 
 /*
+ * A second, narrower gate on top of requireRole("admin") -- being
+ * admin is not enough on its own for changing inventory or deciding
+ * who else gets to be an admin or a coordinator. supabase/super-admins.sql
+ * is the list; /admin/access and /api/admin/super-admins manage it.
+ *
+ * Checked by email against the service-role table rather than any
+ * role or claim on the session, so the only way onto this gate is a
+ * row an existing super admin put there.
+ */
+export async function requireSuperAdmin(
+  session: Session
+): Promise<NextResponse | null> {
+  const email = session.user.email?.trim().toLowerCase();
+
+  if (!email) {
+    return NextResponse.json(
+      { error: "This account has no email on record." },
+      { status: 403 }
+    );
+  }
+
+  const { data, error } = await supabaseAdmin()
+    .from("super_admins")
+    .select("email")
+    .eq("email", email)
+    .maybeSingle();
+
+  /* 42P01 / PGRST205: supabase/super-admins.sql has not been run.
+     Refuse rather than let everyone through while it is missing --
+     the whole point of this table is that admin alone is not enough,
+     and a request cannot tell the difference between "not on the
+     list" and "the list does not exist yet". */
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code ?? "")) {
+      return NextResponse.json(
+        {
+          error:
+            "Run supabase/super-admins.sql before this action can be used.",
+        },
+        { status: 409 }
+      );
+    }
+
+    throw error;
+  }
+
+  if (!data) {
+    return NextResponse.json(
+      {
+        error:
+          "This action is restricted to a specific list of accounts. Ask one of them to add you from Security.",
+      },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
+
+/*
  * Events a coordinator is allowed to see.
  *
  * Admins are not restricted; everyone else is limited to their

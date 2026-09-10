@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireAal2, requireRole } from "@/lib/auth";
+import {
+  requireAal2,
+  requireRole,
+  requireSuperAdmin,
+} from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +103,12 @@ export async function POST(request: Request) {
 
   if (auth instanceof NextResponse) {
     return auth;
+  }
+
+  const superAdmin = await requireSuperAdmin(auth);
+
+  if (superAdmin) {
+    return superAdmin;
   }
 
   const stepUp = await requireAal2();
@@ -220,6 +230,12 @@ export async function DELETE(request: Request) {
 
   if (auth instanceof NextResponse) {
     return auth;
+  }
+
+  const superAdmin = await requireSuperAdmin(auth);
+
+  if (superAdmin) {
+    return superAdmin;
   }
 
   const stepUp = await requireAal2();

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAal2, requireRole, type Role } from "@/lib/auth";
+import {
+  requireAal2,
+  requireRole,
+  requireSuperAdmin,
+  type Role,
+} from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -126,8 +131,15 @@ export async function POST(request: Request) {
     }
 
     /* Granting admin is the one role change here that needs a second
-       factor; volunteer, buyer and the others do not. */
+       factor and the super-admin allowlist; volunteer, buyer and the
+       others need neither. */
     if (roles.includes("admin")) {
+      const superAdmin = await requireSuperAdmin(auth);
+
+      if (superAdmin) {
+        return superAdmin;
+      }
+
       const stepUp = await requireAal2();
 
       if (stepUp) {
@@ -301,13 +313,20 @@ export async function PATCH(request: Request) {
     /*
      * Any change that touches admin access, in either direction --
      * granting it, revoking it, or deactivating someone who already
-     * holds it -- needs a second factor. A role change that never
-     * involves admin (volunteer to registrations, say) does not.
+     * holds it -- needs the super-admin allowlist and a second
+     * factor. A role change that never involves admin (volunteer to
+     * registrations, say) needs neither.
      */
     if (
       targetIsAdmin ||
       (patch.roles && patch.roles.includes("admin"))
     ) {
+      const superAdmin = await requireSuperAdmin(auth);
+
+      if (superAdmin) {
+        return superAdmin;
+      }
+
       const stepUp = await requireAal2();
 
       if (stepUp) {

@@ -74,6 +74,11 @@ const NAV: Record<Role, NavItem[]> = {
       label: "Coordinators",
       icon: UsersIcon,
     },
+    {
+      href: "/admin/volunteers",
+      label: "Volunteers",
+      icon: ScanIcon,
+    },
     { href: "/admin/security", label: "Security", icon: LockIcon },
     MINE,
   ],

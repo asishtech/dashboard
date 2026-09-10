@@ -142,6 +142,50 @@ export async function PUT(request: Request) {
     const db = supabaseAdmin();
 
     /*
+     * Grant the volunteer role itself, the same way granting a
+     * coordinator's event also grants "faculty" in
+     * app/api/admin/coordinators. Without this, scoping someone here
+     * who was never separately invited from the Staff screen leaves
+     * them with a row in event_volunteers and no way to ever sign in
+     * as a volunteer at all.
+     */
+    const { data: invite, error: inviteError } = await db
+      .from("staff_invites")
+      .select("id,role,roles")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (inviteError) throw inviteError;
+
+    if (!invite) {
+      const { error } = await db.from("staff_invites").insert({
+        email,
+        role: "volunteer",
+        roles: ["volunteer"],
+        active: true,
+      });
+
+      if (error) throw error;
+    } else {
+      const currentRoles = (
+        Array.isArray(invite.roles) && invite.roles.length > 0
+          ? invite.roles
+          : [invite.role]
+      ).filter(Boolean);
+
+      const nextRoles = currentRoles.includes("volunteer")
+        ? currentRoles
+        : [...currentRoles, "volunteer"];
+
+      const { error } = await db
+        .from("staff_invites")
+        .update({ roles: nextRoles, active: true })
+        .eq("id", invite.id);
+
+      if (error) throw error;
+    }
+
+    /*
      * Replace rather than merge: the screen sends the whole scope, so
      * unticking an event has to remove it. Delete first, then insert
      * -- two statements, and between them the volunteer is briefly
