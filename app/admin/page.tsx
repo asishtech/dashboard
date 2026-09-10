@@ -102,6 +102,14 @@ type DashboardData = {
     people: number;
   };
 
+  /* Absent (not zeroed) for anyone whose active role is not "admin" --
+     see readSecurity() in app/api/dashboard. */
+  security?: {
+    admins: number;
+    enrolled: number;
+    superAdmins: number;
+  } | null;
+
   responseTimeMs?: number;
 
 };
@@ -277,6 +285,12 @@ export default function AdminPage() {
 
   const [externalPeople, setExternalPeople] = useState(0);
 
+  const [security, setSecurity] = useState<{
+    admins: number;
+    enrolled: number;
+    superAdmins: number;
+  } | null>(null);
+
   const [
     distribution,
     setDistribution,
@@ -386,6 +400,8 @@ export default function AdminPage() {
         );
 
         setExternalPeople(Number(data.external?.people ?? 0));
+
+        setSecurity(data.security ?? null);
 
         setDashboardTotalAmount(
           Number(
@@ -781,6 +797,10 @@ export default function AdminPage() {
                 {formatTime(lastUpdated)}
               </span>
             )}
+
+            <Link href="/admin/daily-report" className="btn btn-ghost btn-sm">
+              Daily report
+            </Link>
 
             <button
               type="button"
@@ -1359,6 +1379,60 @@ export default function AdminPage() {
             <span className="stat-meta">From outside VIT-AP</span>
           </div>
         </section>
+
+        {/* 7. Security -------------------------------------------
+            Absent (not zeroed) unless the active role is "admin" --
+            see readSecurity() in app/api/dashboard. Hidden rather
+            than shown with fake zeroes for anyone else. */}
+        {security && (
+          <>
+            <section className="section-header mt-8">
+              <h2
+                className="page-title"
+                style={{ fontSize: "var(--text-xl)" }}
+              >
+                Security
+              </h2>
+
+              <Link href="/admin/security" className="btn btn-ghost btn-sm">
+                Manage
+                <ArrowRightIcon size={13} />
+              </Link>
+            </section>
+
+            <section className="stat-grid">
+              <div className="stat stat-feature">
+                <span className="stat-label">2FA enrolled</span>
+
+                <strong
+                  className={`stat-value ${
+                    security.enrolled === security.admins
+                      ? "stat-success"
+                      : "stat-warning"
+                  }`}
+                >
+                  {loading
+                    ? "—"
+                    : `${security.enrolled} / ${security.admins}`}
+                </strong>
+
+                <span className="stat-meta">Admin accounts</span>
+              </div>
+
+              <div className="stat">
+                <span className="stat-label">Restricted actions</span>
+
+                <strong className="stat-value">
+                  {loading ? "—" : security.superAdmins}
+                </strong>
+
+                <span className="stat-meta">
+                  Emails allowed to change inventory or grant access
+                </span>
+              </div>
+            </section>
+          </>
+        )}
 
       </div>
     </main>

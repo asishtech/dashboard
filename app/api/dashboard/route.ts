@@ -545,6 +545,71 @@ async function readExtras(
   }
 }
 
+export type SecuritySummary = {
+  admins: number;
+  enrolled: number;
+  superAdmins: number;
+};
+
+/*
+ * Who has two-factor set up, and how many emails can still reach the
+ * inventory/admin-grant/coordinator-grant routes that require it.
+ *
+ * The registrations desk has no reason to know this, so it is only
+ * ever computed for the "admin" active role -- omitted rather than
+ * zeroed for anyone else, so the client can tell "not an admin" apart
+ * from "zero admins have enrolled".
+ */
+async function readSecurity(
+  db: ReturnType<typeof supabaseAdmin>
+): Promise<SecuritySummary | null> {
+  try {
+    const [profiles, superAdmins] = await Promise.all([
+      db
+        .from("profiles")
+        .select("id,role,roles,active")
+        .eq("active", true),
+
+      /* 42P01 / PGRST205: supabase/super-admins.sql has not been run. */
+      db.from("super_admins").select("email"),
+    ]);
+
+    if (profiles.error) throw profiles.error;
+
+    const admins = (profiles.data ?? []).filter((profile) => {
+      const roles =
+        Array.isArray(profile.roles) && profile.roles.length > 0
+          ? profile.roles
+          : [profile.role];
+
+      return roles.includes("admin");
+    });
+
+    let enrolled = 0;
+
+    await Promise.all(
+      admins.map(async (profile) => {
+        const { data } = await db.auth.admin.mfa.listFactors({
+          userId: profile.id,
+        });
+
+        if ((data?.factors ?? []).some((f) => f.status === "verified")) {
+          enrolled++;
+        }
+      })
+    );
+
+    return {
+      admins: admins.length,
+      enrolled,
+      superAdmins: superAdmins.error ? 0 : (superAdmins.data ?? []).length,
+    };
+  } catch (error) {
+    console.error("Security summary failed:", error);
+    return null;
+  }
+}
+
 export async function GET() {
   /* Read-only: the registrations desk sees these totals, and every
      route that changes them still requires "admin". */
@@ -559,10 +624,11 @@ export async function GET() {
   try {
     const db = supabaseAdmin();
 
-    const [summary, people, extras] = await Promise.all([
+    const [summary, people, extras, security] = await Promise.all([
       (async () => (await viaRpc(db)) ?? (await viaScan(db)))(),
       readPeople(db),
       readExtras(db),
+      auth.activeRole === "admin" ? readSecurity(db) : Promise.resolve(null),
     ]);
 
     return NextResponse.json(
@@ -571,6 +637,7 @@ export async function GET() {
         ...summary,
         ...people,
         ...extras,
+        security,
         responseTimeMs: Date.now() - started,
       },
       {
