@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatTimeIst } from "@/lib/format-time";
+import { FEST_DAY_2_IST, festDaysOf, todayIst } from "@/lib/fest-days";
 import { CheckIcon } from "@/components/icons";
 
 export type RosterPass = {
@@ -216,6 +217,29 @@ export function CollegeRoster({
          */
         const blocked = person.id_checked === false;
 
+        /*
+         * Somebody registered for events on both days is really two
+         * separate visits through this one gate -- an exit that closes
+         * out Day 1, then a fresh entry for Day 2 -- so the button
+         * says which leg it is rather than the same "Gate entry/exit"
+         * everyone else gets. A Day-1-only person is never shown Day 2
+         * at all: dayGate below already refuses their entry once it
+         * arrives.
+         */
+        const personDays = new Set(
+          person.passes_detail.flatMap((pass) => [
+            ...festDaysOf(pass.event_day),
+          ])
+        );
+
+        const isDualDay = personDays.has("D1") && personDays.has("D2");
+        const currentDay = todayIst() >= FEST_DAY_2_IST ? "Day 2" : "Day 1";
+
+        const dayGate =
+          currentDay === "Day 2" && !personDays.has("D2")
+            ? "Day 1 has ended. They are not registered for a Day 2 event, so the gate cannot admit them."
+            : null;
+
         return (
         <div className="resend-row" key={person.email_key}>
           <div>
@@ -268,7 +292,7 @@ export function CollegeRoster({
                         onClick={() => void gate(person, "exit")}
                         disabled={busy !== null}
                       >
-                        Gate exit
+                        {isDualDay ? `${currentDay} exit` : "Gate exit"}
                       </button>
                     </>
                   ) : (
@@ -276,14 +300,14 @@ export function CollegeRoster({
                       type="button"
                       className="btn btn-primary btn-sm"
                       onClick={() => void gate(person, "enter")}
-                      disabled={busy !== null || blocked}
+                      disabled={busy !== null || blocked || Boolean(dayGate)}
                       title={
                         blocked
                           ? "Their college ID has not been photographed. Find them on the External desk first."
-                          : undefined
+                          : (dayGate ?? undefined)
                       }
                     >
-                      Gate entry
+                      {isDualDay ? `${currentDay} entry` : "Gate entry"}
                     </button>
                   )}
                 </div>

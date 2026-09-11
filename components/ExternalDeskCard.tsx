@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { formatDateTimeIst, formatTimeIst } from "@/lib/format-time";
+import { FEST_DAY_2_IST, festDaysOf, todayIst } from "@/lib/fest-days";
 import type { Pass, Person } from "@/components/DeskSearch";
 import { CheckIcon } from "@/components/icons";
 import { LivePhotoCapture } from "@/components/LivePhotoCapture";
@@ -60,6 +61,23 @@ export function ExternalDeskCard({
    */
   const gateKnown = person.gate_entered_at !== undefined;
   const inside = Boolean(person.gate_entered_at);
+
+  /* Same day-aware labelling as CollegeRoster -- see the comment
+     there for why a dual-day person gets "Day 1 exit"/"Day 2 entry"
+     instead of the plain "Gate entry"/"Gate exit" everyone else does. */
+  const personDays = new Set(
+    person.passes_detail.flatMap((pass) => [
+      ...festDaysOf(pass.event_day),
+    ])
+  );
+
+  const isDualDay = personDays.has("D1") && personDays.has("D2");
+  const currentDay = todayIst() >= FEST_DAY_2_IST ? "Day 2" : "Day 1";
+
+  const dayGate =
+    currentDay === "Day 2" && !personDays.has("D2")
+      ? "Day 1 has ended. They are not registered for a Day 2 event, so the gate cannot admit them."
+      : null;
 
   async function uploadCard(file: File) {
     if (busy) return;
@@ -348,7 +366,7 @@ export function ExternalDeskCard({
                   disabled={busy !== ""}
                 >
                   {busy === "gate" && <span className="btn-spinner" />}
-                  Gate exit
+                  {isDualDay ? `${currentDay} exit` : "Gate exit"}
                 </button>
               </>
             ) : (
@@ -356,15 +374,17 @@ export function ExternalDeskCard({
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={() => void gateVisit("enter")}
-                disabled={busy !== "" || !person.id_checked}
+                disabled={
+                  busy !== "" || !person.id_checked || Boolean(dayGate)
+                }
                 title={
-                  person.id_checked
-                    ? undefined
-                    : "Photograph their college ID first"
+                  !person.id_checked
+                    ? "Photograph their college ID first"
+                    : (dayGate ?? undefined)
                 }
               >
                 {busy === "gate" && <span className="btn-spinner" />}
-                Gate entry
+                {isDualDay ? `${currentDay} entry` : "Gate entry"}
               </button>
             )}
           </div>
