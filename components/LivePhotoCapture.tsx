@@ -127,8 +127,14 @@ export function LivePhotoCapture({
 
     async function start() {
       try {
+        /*
+         * Rear camera. This is the desk's device held up to the
+         * visitor, not their own phone held up to themselves -- the
+         * front camera would frame whoever is holding it, not the
+         * person the liveness check is actually about.
+         */
         stream.current = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: 640, height: 480 },
+          video: { facingMode: "environment", width: 640, height: 480 },
           audio: false,
         });
 
