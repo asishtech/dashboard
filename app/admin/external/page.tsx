@@ -220,6 +220,22 @@ export default function ExternalPage() {
               <DownloadIcon size={13} />
               Download full report
             </a>
+
+            {/*
+              A third shape again: one row per person per day they are
+              registered for -- so someone in events on both days gets
+              two rows, one per day -- with the gate visit that
+              actually happened on that date. Blank entry/exit means
+              registered but not through the gate yet that day.
+            */}
+            <a
+              className="btn btn-ghost btn-sm"
+              href="/api/admin/gate-report?xlsx=1"
+              download
+            >
+              <DownloadIcon size={13} />
+              Day 1 / Day 2 list
+            </a>
           </div>
         </header>
 

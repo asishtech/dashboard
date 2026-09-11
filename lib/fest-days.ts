@@ -26,12 +26,22 @@ export function festDaysOf(
   return days;
 }
 
-/* The fest's second calendar day, in IST. Fixed rather than derived
+/* The fest's two calendar dates, in IST. Fixed rather than derived
    from anything: there are exactly two days and they do not move. */
+export const FEST_DAY_1_IST = "2026-09-11";
 export const FEST_DAY_2_IST = "2026-09-12";
 
+const IST_DATE_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+});
+
 export function todayIst(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-  }).format(new Date());
+  return IST_DATE_FORMAT.format(new Date());
+}
+
+/* The IST calendar date a timestamp falls on -- for sorting a gate
+   visit into Day 1 or Day 2 by when it actually happened, rather than
+   by which events the visitor is registered for. */
+export function istDateOf(iso: string): string {
+  return IST_DATE_FORMAT.format(new Date(iso));
 }
