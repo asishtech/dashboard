@@ -665,7 +665,7 @@ function itemsSignature(
   return items
     .map(
       (item) =>
-        `${item.item} ${item.size ?? ""} ${Number(
+        `${item.item}|${item.size ?? ""}|${Number(
           item.quantity ?? 1
         )}`
     )
@@ -1312,7 +1312,7 @@ async function runSync(supplied?: Registration[]) {
    *    only never-given rows are deleted.
    */
   function itemKey(item: string, size: string | null) {
-    return `${item} ${size ?? ""}`;
+    return `${item}|${size ?? ""}`;
   }
 
   const itemsToDelete: number[] = [];
