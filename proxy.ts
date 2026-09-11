@@ -31,27 +31,17 @@ function needsRole(path: string) {
 
 
 /*
- * The two /admin screens the registrations desk may open.
+ * The one /admin screen the registrations desk may open.
  *
- * Listed rather than pattern-matched: /admin/users and
- * /admin/coordinators change who can sign in, and a prefix rule that
- * grew to cover them by accident would not announce itself.
- *
- * The pages themselves hide their write controls for this role, and
- * every write route requires "admin" regardless, so this is the outer
- * of two gates rather than the only one.
+ * Used to be every read-only screen in the fest -- registrations,
+ * inventory, merchandise, hostel, daily report, whereabouts -- but the
+ * desk's job narrowed to just the external gate, so this narrowed
+ * with it. A function rather than a bare comparison at the call site
+ * only because the call site used to need the longer list and might
+ * again.
  */
 function readOnlyAdminPath(path: string) {
-  return (
-    path === "/admin/registrations" ||
-    path.startsWith("/admin/registrations/") ||
-    path === "/admin/inventory" ||
-    path === "/admin/merchandise" ||
-    path === "/admin/external" ||
-    path === "/admin/hostel" ||
-    path === "/admin/daily-report" ||
-    path === "/admin/whereabouts"
-  );
+  return path === "/admin/external";
 }
 
 export async function proxy(request: NextRequest) {
@@ -245,12 +235,15 @@ export async function proxy(request: NextRequest) {
    * Events are shared between admins and club coordinators. The API
    * scopes a coordinator to their own assignments; this only decides
    * who may open the page at all.
+   *
+   * The registrations desk used to see this too, back when its role
+   * meant "read the whole festival". Now it means "work the external
+   * gate", so this page is no longer part of it.
    */
   if (
     path.startsWith("/events") &&
     role !== "admin" &&
-    role !== "faculty" &&
-    role !== "registrations"
+    role !== "faculty"
   ) {
     return redirectPreservingCookies(
       publicUrl(request, landingFor(role)),

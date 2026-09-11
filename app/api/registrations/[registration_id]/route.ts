@@ -27,7 +27,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ registration_id: string }> }
 ) {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

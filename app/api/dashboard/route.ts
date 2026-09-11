@@ -611,9 +611,9 @@ async function readSecurity(
 }
 
 export async function GET() {
-  /* Read-only: the registrations desk sees these totals, and every
-     route that changes them still requires "admin". */
-  const auth = await requireRole("admin", "registrations");
+  /* The registrations desk no longer sees the Overview page -- its
+     role narrowed to just the external gate. */
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

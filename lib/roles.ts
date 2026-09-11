@@ -71,7 +71,9 @@ export function primaryRole(roles: Role[]): Role | null {
 export function landingFor(role: string | null | undefined) {
   if (role === "admin") return "/admin";
   if (role === "volunteer") return "/volunteer";
-  if (role === "faculty" || role === "registrations") return "/events";
+  if (role === "faculty") return "/events";
+  /* The desk's one screen -- see readOnlyAdminPath() in proxy.ts. */
+  if (role === "registrations") return "/admin/external";
 
   return "/buyer";
 }

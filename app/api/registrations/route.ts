@@ -25,7 +25,7 @@ function toArray(distribution: ItemRow["distribution"]) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

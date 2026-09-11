@@ -25,7 +25,7 @@ export type Spelling = {
  * only way to see it was to already suspect it.
  */
 export async function GET() {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

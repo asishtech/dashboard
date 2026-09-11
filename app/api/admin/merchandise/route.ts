@@ -54,10 +54,11 @@ export type MerchOrder = {
  * Everyone who has ordered merchandise, with their items and
  * collection status -- the buyer list that supabase/inventory covers
  * in aggregate (how many of each item) but never names a person.
- * Read-only, so the registrations desk sees it too.
+ * Admin only. The registrations desk's role narrowed to just the
+ * external gate, so it no longer sees this either.
  */
 export async function GET() {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

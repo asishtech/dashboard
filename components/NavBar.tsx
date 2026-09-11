@@ -105,32 +105,13 @@ const NAV: Record<Role, NavItem[]> = {
   ],
 
   /*
-   * The same three screens an admin uses, minus everything that
-   * writes. No Mail, Staff or Coordinators: those change what the
-   * festival does rather than report on it.
+   * One screen, one job -- the external gate, and nothing else. This
+   * role used to see most of what an admin does, read-only; it
+   * narrowed down to just this, matching readOnlyAdminPath() in
+   * proxy.ts.
    */
   registrations: [
-    { href: "/events", label: "Events", icon: TicketIcon },
-    {
-      href: "/admin/registrations",
-      label: "Registrations",
-      icon: ListIcon,
-    },
-    { href: "/admin/inventory", label: "Inventory", icon: BoxIcon },
-    {
-      href: "/admin/merchandise",
-      label: "Merchandise",
-      icon: BoxIcon,
-    },
     { href: "/admin/external", label: "External", icon: UsersIcon },
-    { href: "/admin/hostel", label: "Hostel", icon: BedIcon },
-    {
-      href: "/admin/daily-report",
-      label: "Daily report",
-      icon: DownloadIcon,
-    },
-    { href: "/admin/whereabouts", label: "Find", icon: SearchIcon },
-    { href: "/admin/activity", label: "Live", icon: PulseIcon },
     MINE,
   ],
 

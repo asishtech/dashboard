@@ -16,7 +16,7 @@ const MISSING = ["42883", "PGRST202", "42P01"];
  * watching this page costs two queries a poll and writes nothing.
  */
 export async function GET() {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

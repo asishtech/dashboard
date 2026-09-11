@@ -259,7 +259,7 @@ async function hostelReport(date: string) {
  * the number a counter actually needs at the end of a shift.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;

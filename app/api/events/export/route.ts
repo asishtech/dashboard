@@ -101,7 +101,7 @@ type Participant = {
  * also means the file is identical whoever downloads it.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole("admin", "faculty", "registrations");
+  const auth = await requireRole("admin", "faculty");
 
   if (auth instanceof NextResponse) {
     return auth;

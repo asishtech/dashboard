@@ -36,10 +36,10 @@ export type CheckinPass = {
  * anything special here.
  *
  * An event whose ticket matched nothing has no owner, so only truly
- * unrestricted staff -- admin and registrations, the two roles
- * allowedEventIds() returns null for -- can admit it. A volunteer,
- * scoped or not, cannot; nor can a coordinator, who is always scoped
- * to their own assignments.
+ * unrestricted staff -- admin, the only role this route still admits
+ * that allowedEventIds() returns null for -- can admit it. A
+ * volunteer, scoped or not, cannot; nor can a coordinator, who is
+ * always scoped to their own assignments.
  */
 async function mayAdmit(
   session: Awaited<ReturnType<typeof requireRole>>,
@@ -111,12 +111,7 @@ async function lookup(token: string): Promise<CheckinPass | null> {
  * which is precisely what the old lookup did.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole(
-    "volunteer",
-    "admin",
-    "faculty",
-    "registrations"
-  );
+  const auth = await requireRole("volunteer", "admin", "faculty");
 
   if (auth instanceof NextResponse) {
     return auth;
@@ -185,18 +180,13 @@ export async function GET(request: Request) {
  * "already inside" answer as a late re-scan, which is the truth.
  */
 export async function POST(request: Request) {
-  const auth = await requireRole(
-    "volunteer",
-    "admin",
-    "faculty",
-    /*
-     * The registrations desk admits visitors who have no code to
-     * scan. Everything below is unchanged for them -- same
-     * one-entry-per-pass rule, same coordinator scoping -- so this
-     * widens who may admit, not what admitting means.
-     */
-    "registrations"
-  );
+  /*
+   * Used to include "registrations": the desk admitted visitors with
+   * no code to scan from /admin/registrations. That role narrowed to
+   * just the external gate, and /admin/registrations went with it, so
+   * there is no longer a screen that calls this for that role.
+   */
+  const auth = await requireRole("volunteer", "admin", "faculty");
 
   if (auth instanceof NextResponse) {
     return auth;

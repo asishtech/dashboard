@@ -203,11 +203,11 @@ async function loadGuests(): Promise<HostelGuest[]> {
  * GET /api/admin/hostel?xlsx=1     -- the same thing as a spreadsheet
  * GET /api/admin/hostel?pdf=1      -- one QR pass per guest, printable
  *
- * Read-only, so the registrations desk sees it too -- same as
- * Registrations, Inventory and External.
+ * Admin only. The registrations desk's role narrowed to just the
+ * external gate, so it no longer sees this either.
  */
 export async function GET(request: Request) {
-  const auth = await requireRole("admin", "registrations");
+  const auth = await requireRole("admin");
 
   if (auth instanceof NextResponse) {
     return auth;
