@@ -1,5 +1,5 @@
 import { vtappApi } from "./env";
-import { MERCH_SOURCE_ID } from "./events";
+import { MERCH_PHASE2_SOURCE_ID, MERCH_SOURCE_ID } from "./events";
 import { readAutoSend } from "./mail-settings";
 import {
   DAILY_CAP,
@@ -323,6 +323,61 @@ function getSize(
       .trim() ||
     null
   );
+}
+
+
+/*
+ * ============================================================
+ * MERCH PHASE 2 (event 518)
+ *
+ * A second sales window for the same catalog as 513, added mid-fest
+ * once the portal started asking for it directly. Its ticket text is
+ * only ever a size ("L-SIZE") -- the item comes from a separate
+ * "Selected ITEM AND COLOUR" field instead, which is absent on every
+ * registration placed before that field existed. Absent means []:
+ * those older rows are reconciled once by hand from a portal export,
+ * not guessed at here from price, which is not a reliable signal --
+ * the same size and price recur across different items.
+ * ============================================================
+ */
+
+function getPhase2ItemColour(
+  fields?: Field[]
+) {
+
+  const field =
+    fields?.find(
+      f =>
+        /selected item/i.test(
+          f.field_name ?? ""
+        )
+    );
+
+  return (
+    field?.field_value?.trim() ||
+    null
+  );
+}
+
+function getPhase2Size(
+  ticket: string
+): string | null {
+
+  const text =
+    ticket
+      .replace(/\s+/g, "")
+      .toUpperCase();
+
+  if (text === "FREESIZE") {
+    return "FREE SIZE";
+  }
+
+  const match =
+    text.match(
+      /^(XXL|XL|L|M|S)-SIZE$/
+    );
+
+  return match ? match[1] : null;
 }
 
 
@@ -720,11 +775,21 @@ function prepare(
      * this way before this check existed -- inflating Cap's sold
      * count on /admin/inventory by more than 4x, and appearing as an
      * uncollectable "pending" item on every one of those bookings.
+     *
+     * 518 (Merch Phase 2) reuses the exact same parseItems() -- same
+     * catalog, same combo numbers -- just fed the item name from its
+     * own field and the size from its own ticket text, since those two
+     * signals sit in different places than they do for 513.
      */
     items:
       String(record.event_id ?? "") === MERCH_SOURCE_ID
         ? parseItems(ticket, size)
-        : [],
+        : String(record.event_id ?? "") === MERCH_PHASE2_SOURCE_ID
+          ? parseItems(
+              getPhase2ItemColour(record.field_values) ?? "",
+              getPhase2Size(ticket)
+            )
+          : [],
   };
 }
 

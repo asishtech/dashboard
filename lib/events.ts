@@ -7,6 +7,20 @@ import { supabaseAdmin } from "@/lib/supabase";
 export const MERCH_SOURCE_ID = "513";
 
 /*
+ * A second merchandise sales window, opened mid-fest, selling from the
+ * same catalog as 513 -- same items, same combo numbers, confirmed
+ * against a portal export. Its ticket text carries only a size
+ * ("L-SIZE"), never the item, so lib/vtapp-sync.ts reads the item from
+ * a separate "Selected ITEM AND COLOUR" field instead of the ticket
+ * text the way 513's parser does.
+ *
+ * Not yet folded into merchandiseEventIds() or resolve_event() -- this
+ * only covers item/inventory parsing, not the Events-list exclusion or
+ * revenue split those other 513-only checks do.
+ */
+export const MERCH_PHASE2_SOURCE_ID = "518";
+
+/*
  * Unlike merchandise, hostel is a real upstream event -- it has its
  * own row in `events`, synced like any other -- so resolve_event()
  * (supabase/hostel-resolve.sql) maps it to itself rather than to a
