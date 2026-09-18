@@ -889,6 +889,25 @@ export default function EventsPage() {
               </a>
 
               {/*
+                Everyone, split by event.
+
+                Its own download rather than a column on the events
+                file: that one is a row per event and this is a row
+                per person, and the two get sent to different people.
+                The event page still exports one event on its own,
+                which is the right thing while you are looking at it.
+              */}
+              <a
+                className="btn btn-ghost btn-sm"
+                href="/api/events/export?filter=participants"
+                download
+                title="Every event's participants, one sheet per event, plus a combined sheet"
+              >
+                <DownloadIcon size={13} />
+                Participants by event
+              </a>
+
+              {/*
                 Offered only with the box ticked, so it reads as "the
                 people in these events" rather than a second export
                 that happens to sit next to the first.

@@ -81,6 +81,41 @@ function advanceOn(budget: number | string | null | undefined) {
     : "";
 }
 
+/*
+ * A worksheet name Excel will accept.
+ *
+ * It refuses [ ] : * ? / \ outright, truncates past 31 characters and
+ * will not open a workbook with two sheets of the same name -- and
+ * event names here are long enough that the first 31 characters
+ * collide ("Hands on Workshop on AI and Cyb..." against "Hands on Red
+ * Team & Blue Team Cy..."). So: strip, trim, and disambiguate against
+ * what has been used already.
+ */
+function sheetName(name: string, taken: Set<string>) {
+  const base =
+    name
+      .replace(/[[\]:*?/\\]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 31) || "Event";
+
+  if (!taken.has(base.toLowerCase())) {
+    taken.add(base.toLowerCase());
+    return base;
+  }
+
+  for (let n = 2; ; n++) {
+    const suffix = ` (${n})`;
+    const candidate =
+      base.slice(0, 31 - suffix.length) + suffix;
+
+    if (!taken.has(candidate.toLowerCase())) {
+      taken.add(candidate.toLowerCase());
+      return candidate;
+    }
+  }
+}
+
 type Participant = {
   id: number;
   registration_id: string | null;
@@ -130,6 +165,18 @@ export async function GET(request: Request) {
     /* The events entered as teams, and separately the people in them. */
     const teamsOnly = filter === "teams";
     const teamPeople = filter === "team-participants";
+
+    /*
+     * Every event's participants, a sheet each.
+     *
+     * The event page already exports one event's attendees as CSV,
+     * which is the right thing when you are looking at that event.
+     * This is the other request: all of them at once, separated, so
+     * the whole festival can be handed over or each club sent its own
+     * tab without anybody filtering a seven-thousand-row sheet by
+     * hand.
+     */
+    const perEvent = filter === "participants";
 
     /*
      * The events nobody is signing up for, with somebody to ring
@@ -245,7 +292,9 @@ export async function GET(request: Request) {
         ? "Seats left"
         : quietOnly
           ? `Under ${belowPercent}%`
-          : teamPeople
+          : perEvent
+            ? "All participants"
+            : teamPeople
           ? "Team participants"
           : teamsOnly
             ? "Team events"
@@ -521,6 +570,211 @@ export async function GET(request: Request) {
      * more than one of them. So this is the roster of people entering
      * team events, and who stands with whom is settled at the venue.
      */
+    if (perEvent) {
+      const ids = rows.map((event) => String(event.event_id));
+
+      const db = supabaseAdmin();
+
+      const [people, scans] = await Promise.all([
+        ids.length === 0
+          ? Promise.resolve({ rows: [] as Participant[] })
+          : readAll<Participant>((from, to) =>
+              db
+                .from("registrations")
+                .select(
+                  "id,registration_id,name,email,created_at,resolved_event_id,raw_data"
+                )
+                .in("resolved_event_id", ids)
+                .order("id", { ascending: true })
+                .range(from, to)
+            ),
+
+        /*
+         * Every scan rather than the ones for these registrations:
+         * `in` on seven thousand ids is a URL no proxy will carry,
+         * and the whole table is a few columns.
+         */
+        readAll<{
+          registration_id: number;
+          scanned_at: string | null;
+          exited_at: string | null;
+        }>((from, to) =>
+          db
+            .from("qr_scans")
+            .select("registration_id,scanned_at,exited_at")
+            .order("id", { ascending: true })
+            .range(from, to)
+        ),
+      ]);
+
+      const enteredAt = new Map<number, string>();
+      const exitedAt = new Map<number, string>();
+
+      for (const scan of scans.rows) {
+        const id = Number(scan.registration_id);
+
+        /* First scan in, last stamp out: somebody who came and went
+           twice was inside from the first to the last. */
+        if (scan.scanned_at && !enteredAt.has(id)) {
+          enteredAt.set(id, scan.scanned_at);
+        }
+
+        if (scan.exited_at) {
+          const seen = exitedAt.get(id);
+
+          if (!seen || scan.exited_at > seen) {
+            exitedAt.set(id, scan.exited_at);
+          }
+        }
+      }
+
+      const byEvent = new Map<string, Participant[]>();
+
+      for (const person of people.rows) {
+        const key = String(person.resolved_event_id);
+        const bucket = byEvent.get(key) ?? [];
+
+        bucket.push(person);
+        byEvent.set(key, bucket);
+      }
+
+      const line = (person: Participant) => {
+        const raw = parseRaw(person.raw_data);
+        const entered = enteredAt.get(person.id);
+        const left = exitedAt.get(person.id);
+
+        return {
+          name: person.name?.trim() ?? "",
+          email: person.email?.trim() || emailFrom(raw),
+          phone: phoneFrom(raw),
+          college: collegeFrom(raw),
+          registration_id: person.registration_id ?? "",
+          registered: person.created_at
+            ? formatDateTimeIst(person.created_at)
+            : "",
+          checkedIn: entered ? formatDateTimeIst(entered) : "",
+          left: left ? formatDateTimeIst(left) : "",
+        };
+      };
+
+      const PERSON_COLUMNS = [
+        { header: "Name", key: "name", width: 28 },
+        { header: "Email", key: "email", width: 34 },
+        { header: "Phone", key: "phone", width: 15 },
+        { header: "College", key: "college", width: 32 },
+        { header: "Registration ID", key: "registration_id", width: 16 },
+        { header: "Registered", key: "registered", width: 20 },
+        { header: "Checked in", key: "checkedIn", width: 20 },
+        { header: "Left", key: "left", width: 20 },
+      ];
+
+      const dressHeader = (target: typeof sheet) => {
+        const head = target.getRow(1);
+
+        head.font = { bold: true };
+        head.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF3E6DA" },
+        };
+
+        target.views = [{ state: "frozen", ySplit: 1 }];
+      };
+
+      /*
+       * Sheet one is every participant with their event named, for
+       * anybody who would rather filter than click through tabs. The
+       * tabs after it are the same people, split.
+       */
+      sheet.columns = [
+        { header: "Event", key: "event", width: 40 },
+        { header: "Day", key: "day", width: 10 },
+        { header: "Venue", key: "venue", width: 22 },
+        ...PERSON_COLUMNS,
+      ];
+
+      dressHeader(sheet);
+
+      /*
+       * Real events only.
+       *
+       * `events` also holds the upstream buckets -- 513, 514, 516,
+       * 518, the ids the portal groups its feed under -- and they
+       * carry no day, no venue and nobody at all. A real event's id
+       * is a slug made from its name, so a purely numeric one is
+       * plumbing. Left in, each contributed an empty tab named
+       * "V-TAPP 2026 Events" for a coordinator to wonder about.
+       */
+      const ordered = rows
+        .filter((event) => !/^\d+$/.test(String(event.event_id)))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      for (const event of ordered) {
+        const attendees = (byEvent.get(String(event.event_id)) ?? [])
+          .map(line)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        for (const person of attendees) {
+          sheet.addRow({
+            event: event.name,
+            day: event.event_date ?? "",
+            venue: event.venue ?? "",
+            ...person,
+          });
+        }
+      }
+
+      /*
+       * A tab per event, including the ones nobody entered.
+       *
+       * An empty tab says "this event had no participants"; a missing
+       * one says "the export skipped my event", and the coordinator
+       * reading it cannot tell which without asking.
+       */
+      const taken = new Set<string>(["all participants"]);
+
+      for (const event of ordered) {
+        const tab = book.addWorksheet(sheetName(event.name, taken));
+
+        tab.columns = PERSON_COLUMNS;
+        dressHeader(tab);
+
+        const attendees = (byEvent.get(String(event.event_id)) ?? [])
+          .map(line)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        for (const person of attendees) {
+          tab.addRow(person);
+        }
+
+        tab.addRow({});
+
+        const total = tab.addRow({
+          name: `${attendees.length} participant${
+            attendees.length === 1 ? "" : "s"
+          }`,
+          email: `${
+            attendees.filter((person) => person.checkedIn).length
+          } checked in`,
+        });
+
+        total.font = { bold: true };
+      }
+
+      const participantBuffer = await book.xlsx.writeBuffer();
+
+      return new NextResponse(participantBuffer as ArrayBuffer, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="vtapp-participants-by-event-${new Date()
+            .toISOString()
+            .slice(0, 10)}.xlsx"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     if (teamPeople) {
       const ids = rows.map((event) => String(event.event_id));
 
