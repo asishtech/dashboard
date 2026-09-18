@@ -908,6 +908,23 @@ export default function EventsPage() {
               </a>
 
               {/*
+                Who turned up, as against who bought a ticket. Its own
+                file rather than a column on the one above, because
+                attendance is what gets sent to a coordinator asking
+                how their event went, and a sheet where two thirds of
+                the rows never arrived is not that.
+              */}
+              <a
+                className="btn btn-ghost btn-sm"
+                href="/api/events/export?filter=scanned"
+                download
+                title="Only the people whose QR was scanned, one sheet per event, in arrival order"
+              >
+                <DownloadIcon size={13} />
+                Scanned by event
+              </a>
+
+              {/*
                 Offered only with the box ticked, so it reads as "the
                 people in these events" rather than a second export
                 that happens to sit next to the first.

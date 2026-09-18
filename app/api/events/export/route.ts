@@ -179,6 +179,15 @@ export async function GET(request: Request) {
     const perEvent = filter === "participants";
 
     /*
+     * The same workbook, narrowed to the people a volunteer actually
+     * scanned. Registered and attended are different facts -- 6,913
+     * of the first and rather fewer of the second -- and an
+     * attendance record that includes everyone who bought a ticket is
+     * not an attendance record.
+     */
+    const scannedOnly = filter === "scanned";
+
+    /*
      * The events nobody is signing up for, with somebody to ring
      * about it. Thirty percent by default and overridable, because
      * the number that means "worry" on Wednesday is not the one that
@@ -292,8 +301,10 @@ export async function GET(request: Request) {
         ? "Seats left"
         : quietOnly
           ? `Under ${belowPercent}%`
-          : perEvent
-            ? "All participants"
+          : perEvent || scannedOnly
+            ? scannedOnly
+              ? "All scanned in"
+              : "All participants"
             : teamPeople
           ? "Team participants"
           : teamsOnly
@@ -570,7 +581,7 @@ export async function GET(request: Request) {
      * more than one of them. So this is the roster of people entering
      * team events, and who stands with whom is settled at the venue.
      */
-    if (perEvent) {
+    if (perEvent || scannedOnly) {
       const ids = rows.map((event) => String(event.event_id));
 
       const db = supabaseAdmin();
@@ -637,6 +648,16 @@ export async function GET(request: Request) {
         bucket.push(person);
         byEvent.set(key, bucket);
       }
+
+      /* Attendance is ordered by when people arrived; a registration
+         list is ordered by name, because it gets looked up. */
+      const order = (
+        a: { name: string; checkedIn: string },
+        b: { name: string; checkedIn: string }
+      ) =>
+        scannedOnly
+          ? a.checkedIn.localeCompare(b.checkedIn)
+          : a.name.localeCompare(b.name);
 
       const line = (person: Participant) => {
         const raw = parseRaw(person.raw_data);
@@ -712,7 +733,8 @@ export async function GET(request: Request) {
       for (const event of ordered) {
         const attendees = (byEvent.get(String(event.event_id)) ?? [])
           .map(line)
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .filter((person) => !scannedOnly || person.checkedIn)
+          .sort(order);
 
         for (const person of attendees) {
           sheet.addRow({
@@ -741,7 +763,8 @@ export async function GET(request: Request) {
 
         const attendees = (byEvent.get(String(event.event_id)) ?? [])
           .map(line)
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .filter((person) => !scannedOnly || person.checkedIn)
+          .sort(order);
 
         for (const person of attendees) {
           tab.addRow(person);
@@ -749,13 +772,22 @@ export async function GET(request: Request) {
 
         tab.addRow({});
 
+        const registered = (byEvent.get(String(event.event_id)) ?? [])
+          .length;
+
         const total = tab.addRow({
-          name: `${attendees.length} participant${
-            attendees.length === 1 ? "" : "s"
-          }`,
-          email: `${
-            attendees.filter((person) => person.checkedIn).length
-          } checked in`,
+          name: scannedOnly
+            ? `${attendees.length} scanned in`
+            : `${attendees.length} participant${
+                attendees.length === 1 ? "" : "s"
+              }`,
+          /* Both numbers, either way round: "35 scanned" means
+             nothing without the 51 it is out of. */
+          email: scannedOnly
+            ? `of ${registered} registered`
+            : `${
+                attendees.filter((person) => person.checkedIn).length
+              } checked in`,
         });
 
         total.font = { bold: true };
@@ -767,7 +799,9 @@ export async function GET(request: Request) {
         headers: {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename="vtapp-participants-by-event-${new Date()
+          "Content-Disposition": `attachment; filename="vtapp-${
+            scannedOnly ? "scanned" : "participants"
+          }-by-event-${new Date()
             .toISOString()
             .slice(0, 10)}.xlsx"`,
           "Cache-Control": "no-store",
